@@ -115,7 +115,8 @@ function getQueryVariables(url) {
   var vars = url.split("&");
   let pairs = {};
   for (var i = 0; i < vars.length; i++) {
-    if (vars[i]) pairs[vars[i].split("=")[0]] = vars[i].split("=")[1];
+    if (vars[i])
+      pairs[vars[i].split("=")[0]] = vars[i].split("=")[1].replace(/%20/g, " ");
   }
   return pairs;
 }
@@ -184,6 +185,11 @@ function eloMapNameCheck() {
       store.set("elo.lookupName", settings.elo.lookupName);
     } else if (settings.autoHost.mapName.match(/(pyro\s*td\s*league)/i)) {
       settings.elo.lookupName = "Pyro%20TD";
+      settings.elo.available = true;
+      store.set("elo.available", settings.elo.available);
+      store.set("elo.lookupName", settings.elo.lookupName);
+    } else if (settings.autoHost.mapName.match(/(vampirism\s*fire)/i)) {
+      settings.elo.lookupName = "Vampirism%20Fire";
       settings.elo.available = true;
       store.set("elo.available", settings.elo.available);
       store.set("elo.lookupName", settings.elo.lookupName);
