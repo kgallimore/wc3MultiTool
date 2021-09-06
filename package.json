@@ -1,0 +1,117 @@
+{
+  "name": "wc3multitool",
+  "version": "0.4.1",
+  "description": "A multi-tool for Warcraft 3",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/trenchguns/wc3multitool.git"
+  },
+  "main": "src/app.js",
+  "scripts": {
+    "start": "electron-forge start",
+    "publish": "electron-builder --publish always",
+    "lint": "echo \"No linting configured\"",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "rebuild": "electron-rebuild"
+  },
+  "build": {
+    "appId": "wc3multitool",
+    "productName": "WC3 Multi-Tool",
+    "copyright": "Trenchguns",
+    "extraFiles": [
+      {
+        "from": "./webui.html",
+        "to": "."
+      },
+      {
+        "from": "./webui.js",
+        "to": "."
+      },
+      {
+        "from": "./GlueManagerAltered.js",
+        "to": "."
+      },
+      {
+        "from": "./src/images",
+        "to": "./images"
+      },
+      {
+        "from": "./src/sounds",
+        "to": "./sounds"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "src/images/scale.png"
+    },
+    "nsis": {
+      "installerIcon": "src/images/scale.ico",
+      "uninstallerIcon": "src/images/scale.ico",
+      "uninstallDisplayName": "WC3 Multi-Tool",
+      "include": "src/installer.nsh",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://war.trenchguns.com/publish"
+      }
+    ],
+    "protocols": [{
+      "name": "wc3mt",
+      "role": "Viewer",
+      "schemes": ["wc3mt"]
+    }]
+  },
+  "author": "Trenchguns",
+  "license": "UNLICENSED",
+  "config": {
+    "forge": {
+      "packagerConfig": {},
+      "makers": [
+        {
+          "name": "@electron-forge/maker-squirrel",
+          "config": {
+            "name": "WC3 Multi Tool"
+          }
+        },
+        {
+          "name": "@electron-forge/maker-zip",
+          "platforms": [
+            "darwin"
+          ]
+        },
+        {
+          "name": "@electron-forge/maker-deb",
+          "config": {}
+        },
+        {
+          "name": "@electron-forge/maker-rpm",
+          "config": {}
+        }
+      ]
+    }
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "^6.0.0-beta.59",
+    "electron": "^13.2.1",
+    "electron-builder": "^22.11.7",
+    "electron-rebuild": "^3.1.1"
+  },
+  "dependencies": {
+    "@nut-tree/nut-js": "^1.7.0",
+    "electron-log": "^4.4.1",
+    "electron-store": "^8.0.0",
+    "electron-updater": "^4.3.9",
+    "esm": "^3.2.25",
+    "https": "^1.0.0",
+    "js-combinatorics": "^1.5.3",
+    "robotjs": "^0.6.0",
+    "sound-play": "^1.1.0",
+    "ws": "^8.2.0"
+  }
+}
