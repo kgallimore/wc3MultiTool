@@ -1,6 +1,6 @@
 {
   "name": "wc3multitool",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "A multi-tool for Warcraft 3",
   "repository": {
     "type": "git",
@@ -45,11 +45,11 @@
       "target": [
         "nsis"
       ],
-      "icon": "src/images/scale.png"
+      "icon": "src/images/wc3_auto_balancer_v2.png"
     },
     "nsis": {
-      "installerIcon": "src/images/scale.ico",
-      "uninstallerIcon": "src/images/scale.ico",
+      "installerIcon": "src/images/wc3_auto_balancer_v1.ico",
+      "uninstallerIcon": "src/images/wc3_auto_balancer_v1.ico",
       "uninstallDisplayName": "WC3 Multi-Tool",
       "include": "src/installer.nsh",
       "oneClick": false,
@@ -61,11 +61,15 @@
         "url": "https://war.trenchguns.com/publish"
       }
     ],
-    "protocols": [{
-      "name": "wc3mt",
-      "role": "Viewer",
-      "schemes": ["wc3mt"]
-    }]
+    "protocols": [
+      {
+        "name": "wc3mt",
+        "role": "Viewer",
+        "schemes": [
+          "wc3mt"
+        ]
+      }
+    ]
   },
   "author": "Trenchguns",
   "license": "UNLICENSED",
@@ -110,6 +114,7 @@
     "esm": "^3.2.25",
     "https": "^1.0.0",
     "js-combinatorics": "^1.5.3",
+    "nanoid": "^3.1.25",
     "robotjs": "^0.6.0",
     "sound-play": "^1.1.0",
     "ws": "^8.2.0"

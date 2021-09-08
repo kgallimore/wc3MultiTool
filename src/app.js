@@ -8,7 +8,6 @@ const {
   dialog,
   shell,
   Notification,
-  protocol,
 } = require("electron");
 require = require("esm")(module);
 const { Combination } = require("js-combinatorics");
@@ -21,6 +20,7 @@ const path = require("path");
 const Store = require("electron-store");
 const sound = require("sound-play");
 const robot = require("robotjs");
+const { nanoid } = require("nanoid");
 const { inRange } = require("lodash");
 
 autoUpdater.logger = log;
@@ -44,6 +44,7 @@ var menuState = "Out of Menus";
 var inGame = false;
 var wss;
 var clientWebSocket;
+var hubWebSocket;
 var warcraftInFocus = false;
 var warcraftRegion = { left: 0, top: 0, width: 0, height: 0 };
 var voteTimer;
@@ -82,6 +83,11 @@ var settings = {
     channel: store.get("discord.channel") ?? "",
   },
 };
+var identifier = store.get("anonymousIdentifier");
+if (!identifier) {
+  identifier = nanoid();
+  store.set("anonymousIdentifier", identifier);
+}
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -116,7 +122,7 @@ function getQueryVariables(url) {
   let pairs = {};
   for (var i = 0; i < vars.length; i++) {
     if (vars[i])
-      pairs[vars[i].split("=")[0]] = vars[i].split("=")[1].replace(/%20/g, " ");
+      pairs[vars[i].split("=")[0]] = decodeURI(vars[i].split("=")[1]);
   }
   return pairs;
 }
@@ -309,7 +315,7 @@ const createWindow = () => {
     height: 800,
     title: "WC3 MultiTool v" + app.getVersion(),
     show: false,
-    icon: path.join(__dirname, "images/scale.png"),
+    icon: path.join(__dirname, "images/wc3_auto_balancer_v2.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       nodeIntegration: false,
@@ -341,7 +347,7 @@ const createWindow = () => {
   });
   win.on("minimize", function (event) {
     event.preventDefault();
-    appIcon = new Tray(path.join(__dirname, "images/scale.png"));
+    appIcon = new Tray(path.join(__dirname, "images/wc3_auto_balancer_v2.png"));
 
     appIcon.setContextMenu(contextMenu);
 
@@ -376,6 +382,7 @@ app.on("ready", function () {
   globalShortcut.register("Alt+CommandOrControl+O", () => {});
   createWindow();
   autoUpdater.checkForUpdatesAndNotify();
+  connectToHub();
 });
 
 app.on("window-all-closed", () => {
@@ -391,6 +398,35 @@ app.on("activate", () => {
     createWindow();
   }
 });
+
+function connectToHub() {
+  try {
+    hubWebSocket = new WebSocket("wss://wsdev.trenchguns.com/" + identifier);
+    hubWebSocket.on("open", function open() {
+      log.info("Connected to hub");
+      if (lobby.lobbyName && !settings.autoHost.private) {
+        sendToHub("lobbyHosted", lobby.lobbyName);
+      }
+    });
+    hubWebSocket.on("message", function incoming(data) {
+      log.info("Received message from hub: " + data);
+    });
+    hubWebSocket.on("close", function close() {
+      log.warn("Disconnected from hub");
+      setTimeout(connectToHub, Math.random() * 10000 + 3000);
+      hubWebSocket = null;
+    });
+  } catch (e) {
+    log.error("Failed hub connection: " + e.error);
+  }
+}
+
+function sendToHub(messageType, data) {
+  console.log("Sending to hub: " + messageType + " " + data);
+  if (hubWebSocket && hubWebSocket.readyState === WebSocket.OPEN) {
+    hubWebSocket.send(JSON.stringify({ type: messageType, data: data }));
+  }
+}
 
 async function triggerOBS() {
   if (obsSettings.type === "hotkeys") {
@@ -465,25 +501,9 @@ async function handleWSMessage(message) {
       store.set("autoHost", autoHost);
       sendSocket("autoHost", autoHost);
       sendWindow("autoHost", autoHost);
-    case "info":
-      log.info(JSON.stringify(message.data));
-      break;
-    case "menusChange":
-      menuState = message.data;
-      sendWindow(message.messageType, message.data);
-      triggerOBS();
-      log.info(message);
-      break;
-    case "lobbyUpdate":
-      log.verbose("Lobby update:\n" + JSON.stringify(message.data));
-      processLobby(message.data);
-      break;
     case "error":
       log.error(message);
       win.webContents.send("fromMain", message);
-      break;
-    case "body":
-      log.verbose(message.data);
       break;
     case "echo":
       log.verbose(message);
@@ -512,12 +532,13 @@ function handleClientMessage(message) {
             ) {
               if (settings.autoHost.type !== "off") {
                 gameNumber += 1;
+                const lobbyName =
+                  settings.autoHost.gameName +
+                  (settings.autoHost.increment ? ` #${gameNumber}` : "");
                 const payloadData = {
                   filename: settings.autoHost.mapPath.replace(/\\/g, "/"),
                   gameSpeed: 2,
-                  gameName:
-                    settings.autoHost.gameName +
-                    (settings.autoHost.increment ? ` #${gameNumber}` : ""),
+                  gameName: lobbyName,
                   mapSettings: {
                     flagLockTeams: true,
                     flagPlaceTeamsTogether: true,
@@ -537,6 +558,7 @@ function handleClientMessage(message) {
               data.payload.screen === "SCORE_SCREEN"
             ) {
               inGame = true;
+              sendToHub("hostedLobbyClosed", lobby.lobbyName);
               if (settings.autoHost.type === "rapidHost") {
                 setTimeout(
                   quitGame,
@@ -545,8 +567,12 @@ function handleClientMessage(message) {
               }
             } else {
               inGame = false;
+              if (lobby.lobbyName) {
+                sendToHub("hostedLobbyClosed", lobby.lobbyName);
+              }
             }
             menuState = data.payload.screen;
+            console.log(menuState);
           }
           break;
         case "GameLobbySetup":
@@ -564,6 +590,9 @@ function handleClientMessage(message) {
           break;
         case "ChatMessage":
           handleChatMessage(data.payload);
+          break;
+        case "MultiplayerGameLeave":
+          sendToHub("hostedLobbyClosed", lobby.lobbyName);
           break;
         default:
           if (
@@ -745,6 +774,10 @@ function processMapData(payload) {
       lookup: {},
     },
   };
+  // TODO: !settings.autoHost.private
+  if (true) {
+    sendToHub("hostedLobby", lobby.lobbyName);
+  }
   payload.teamData.teams.forEach(function (team) {
     const teamName = team.name;
     if (testNonPlayersTeam.test(teamName)) {
