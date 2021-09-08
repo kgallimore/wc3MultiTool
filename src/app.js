@@ -401,7 +401,7 @@ app.on("activate", () => {
 
 function connectToHub() {
   try {
-    hubWebSocket = new WebSocket("wss://wsdev.trenchguns.com/" + identifier);
+    hubWebSocket = new WebSocket("wss://ws.trenchguns.com/" + identifier);
     hubWebSocket.on("open", function open() {
       log.info("Connected to hub");
       if (lobby.lobbyName && !settings.autoHost.private) {
