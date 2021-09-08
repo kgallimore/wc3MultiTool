@@ -774,8 +774,7 @@ function processMapData(payload) {
       lookup: {},
     },
   };
-  // TODO: !settings.autoHost.private
-  if (true) {
+  if (!settings.autoHost.private) {
     sendToHub("hostedLobby", lobby.lobbyName);
   }
   payload.teamData.teams.forEach(function (team) {
