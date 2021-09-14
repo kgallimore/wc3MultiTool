@@ -407,7 +407,7 @@ app.on("activate", () => {
 });
 
 function connectToHub() {
-  hubWebSocket = new WebSocket("wss://wsdev.trenchguns.com/" + identifier);
+  hubWebSocket = new WebSocket("wss://ws.trenchguns.com/" + identifier);
   hubWebSocket.onerror = function (error) {
     log.error("Failed hub connection");
   };
