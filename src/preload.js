@@ -16,6 +16,7 @@ var settings = {
     rapidHostTimer: store.get("autoHost.rapidHostTimer") || 0,
     voteStart: store.get("autoHost.voteStart") || false,
     voteStartPercent: store.get("autoHost.voteStartPercent") || 60,
+    closeSlots: store.get("autoHost.closeSlots") || [],
   },
   obs: {
     type: store.get("obs.type") || "off",
@@ -267,12 +268,25 @@ function generateTables(lobby) {
 }
 
 function updateSettingSingle(event) {
-  const value =
+  let value =
     event.target.nodeName === "INPUT" && event.target.type === "checkbox"
       ? event.target.checked
       : event.target.value;
   const key = event.target.getAttribute("data-key");
   const setting = event.target.getAttribute("data-setting");
+  if (key === "closeSlots") {
+    const slot = event.target.getAttribute("data-slot");
+    if (value === true && !settings.autoHost.closeSlots.includes(slot)) {
+      settings.autoHost.closeSlots.push(slot);
+    } else if (settings.autoHost.closeSlots.includes(slot)) {
+      settings.autoHost.closeSlots.splice(
+        settings.autoHost.closeSlots.indexOf(slot),
+        1
+      );
+    }
+    value = settings.autoHost.closeSlots;
+    console.log(value);
+  }
   ipcRenderer.send("toMain", {
     messageType: "updateSettingSingle",
     data: {
@@ -329,7 +343,13 @@ function updateSettings(setting) {
             target.key;
         }
       } else if (input.type === "checkbox") {
-        input.checked = settings[setting][input.getAttribute("data-key")];
+        if (input.getAttribute("data-key") === "closeSlots") {
+          input.checked = settings.autoHost.closeSlots.includes(
+            input.getAttribute("data-slot")
+          );
+        } else {
+          input.checked = settings[setting][input.getAttribute("data-key")];
+        }
       } else {
         input.value = settings[setting][input.getAttribute("data-key")];
       }

@@ -49,6 +49,7 @@ var warcraftInFocus = false;
 var warcraftRegion = { left: 0, top: 0, width: 0, height: 0 };
 var voteTimer;
 var openLobbyParams;
+var screenState;
 var settings = {
   autoHost: {
     type: store.get("autoHost.type") || "off",
@@ -63,6 +64,7 @@ var settings = {
     rapidHostTimer: store.get("autoHost.rapidHostTimer") || 0,
     voteStart: store.get("autoHost.voteStart") || false,
     voteStartPercent: store.get("autoHost.voteStartPercent") || 60,
+    closeSlots: store.get("autoHost.closeSlots") || [],
   },
   obs: {
     type: store.get("obs.type") || "off",
@@ -83,6 +85,7 @@ var settings = {
     channel: store.get("discord.channel") ?? "",
   },
 };
+var appVersion;
 var identifier = store.get("anonymousIdentifier");
 if (!identifier) {
   identifier = nanoid();
@@ -114,7 +117,6 @@ app.on("second-instance", (event, args) => {
 function protocolHandler(url = "") {
   openLobbyParams = getQueryVariables(url.split("?", 2)[1]);
   log.info(openLobbyParams);
-  openParamsJoin();
 }
 
 function getQueryVariables(url) {
@@ -183,7 +185,7 @@ ipcMain.on("toMain", (event, args) => {
 
 function eloMapNameCheck() {
   // Clean the name from the map name
-  if (settings.elo.type === "wc3stats") {
+  if (settings.elo.type === "wc3stats" || settings.elo.type === "off") {
     if (settings.autoHost.mapName.match(/(HLW)/i)) {
       settings.elo.lookupName = "HLW";
       settings.elo.available = true;
@@ -362,6 +364,11 @@ const createWindow = () => {
 
 app.on("ready", function () {
   log.info("App ready");
+  appVersion = app.getVersion();
+  if (process.argv[1] && process.argv[1] !== ".") {
+    console.log(process.argv[1]);
+    protocolHandler(process.argv[1]);
+  }
   wss = new WebSocket.Server({ port: 8888 });
   wss.on("connection", function connection(ws) {
     log.info("Connection");
@@ -400,75 +407,90 @@ app.on("activate", () => {
 });
 
 function connectToHub() {
-  try {
-    hubWebSocket = new WebSocket("wss://ws.trenchguns.com/" + identifier);
-    hubWebSocket.on("open", function open() {
-      log.info("Connected to hub");
-      if (lobby.lobbyName && !settings.autoHost.private) {
-        sendToHub("lobbyHosted", lobby.lobbyName);
-      }
-    });
-    hubWebSocket.on("message", function incoming(data) {
-      log.info("Received message from hub: " + data);
-    });
-    hubWebSocket.on("close", function close() {
-      log.warn("Disconnected from hub");
-      setTimeout(connectToHub, Math.random() * 10000 + 3000);
-      hubWebSocket = null;
-    });
-  } catch (e) {
-    log.error("Failed hub connection: " + e.error);
+  hubWebSocket = new WebSocket("wss://wsdev.trenchguns.com/" + identifier);
+  hubWebSocket.onerror = function (error) {
+    log.error("Failed hub connection");
+  };
+  hubWebSocket.on("open", function open() {
+    log.info("Connected to hub");
+    if (lobby.lobbyName && !settings.autoHost.private) {
+      sendToHub("hostedLobby", lobby);
+    }
+    setTimeout(hubHeartbeat, 30000);
+  });
+  hubWebSocket.on("message", function incoming(data) {
+    log.info("Received message from hub: " + data);
+  });
+  hubWebSocket.on("close", function close() {
+    log.warn("Disconnected from hub");
+    setTimeout(connectToHub, Math.random() * 10000 + 3000);
+    hubWebSocket = null;
+  });
+}
+
+function hubHeartbeat() {
+  if (hubWebSocket) {
+    sendToHub("heartbeat");
+    setTimeout(hubHeartbeat, 30000);
   }
 }
 
-function sendToHub(messageType, data) {
-  console.log("Sending to hub: " + messageType + " " + data);
+function sendToHub(messageType, data = {}) {
+  if (messageType !== "heartbeat") {
+    console.log("Sending to hub: " + messageType + " " + data);
+  }
   if (hubWebSocket && hubWebSocket.readyState === WebSocket.OPEN) {
-    hubWebSocket.send(JSON.stringify({ type: messageType, data: data }));
+    hubWebSocket.send(
+      JSON.stringify({
+        type: messageType,
+        data: data,
+        appVersion: appVersion,
+      })
+    );
   }
 }
 
 async function triggerOBS() {
-  if (obsSettings.type === "hotkeys") {
-    if (menuState === "LOADING_SCREEN" && obsSettings.inGameHotkey) {
+  if (settings.obs.type === "hotkeys") {
+    if (inGame && settings.obs.inGameHotkey) {
       let modifiers = [];
-      if (obsSettings.inGameHotkey.altKey) {
+      if (settings.obs.inGameHotkey.altKey) {
         modifiers.push("alt");
       }
-      if (obsSettings.inGameHotkey.ctrlKey) {
+      if (settings.obs.inGameHotkey.ctrlKey) {
         modifiers.push("control");
       }
-      if (obsSettings.inGameHotkey.shiftKey) {
+      if (settings.obs.inGameHotkey.shiftKey) {
         modifiers.push("shift");
       }
-      robot.keyTap(obsSettings.inGameHotkey.key, modifiers);
+      robot.keyTap(settings.obs.inGameHotkey.key, modifiers);
       /*await keyboard.type(
-          obsSettings.inGameHotkey.altKey ? Key.LeftAlt : "",
-          obsSettings.inGameHotkey.ctrlKey ? Key.LeftControl : "",
-          obsSettings.inGameHotkey.shiftKey ? Key.LeftShift : "",
-          obsSettings.inGameHotkey.key
+          obs.inGameHotkey.altKey ? Key.LeftAlt : "",
+          obs.inGameHotkey.ctrlKey ? Key.LeftControl : "",
+          obs.inGameHotkey.shiftKey ? Key.LeftShift : "",
+          obs.inGameHotkey.key
         );*/
     } else if (
       menuState === "SCORE_SCREEN" &&
       !inGame &&
-      obsSettings.outOfGameHotkey
+      settings.obs.outOfGameHotkey
     ) {
       let modifiers = [];
-      if (obsSettings.outOfGameHotkey.altKey) {
+      if (settings.obs.outOfGameHotkey.altKey) {
         modifiers.push("alt");
       }
-      if (obsSettings.outOfGameHotkey.ctrlKey) {
+      if (settings.obs.outOfGameHotkey.ctrlKey) {
         modifiers.push("control");
       }
-      if (obsSettings.outOfGameHotkey.shiftKey) {
+      if (settings.obs.outOfGameHotkey.shiftKey) {
         modifiers.push("shift");
       }
-      robot.keyTap(obsSettings.outOfGameHotkey.key, modifiers);
+      robot.keyTap(settings.obs.outOfGameHotkey.key, modifiers);
       /*await keyboard.type(
-          obsSettings.outOfGameHotkey.altKey ? Key.LeftAlt : "",
-          obsSettings.outOfGameHotkey.ctrlKey ? Key.LeftControl : "",
-          obsSettings.outOfGameHotkey.shiftKey ? Key.LeftShift : "",
-          obsSettings.outOfGameHotkey.key
+          obs.outOfGameHotkey.altKey ? Key.LeftAlt : "",
+          obs.outOfGameHotkey.ctrlKey ? Key.LeftControl : "",
+          obs.outOfGameHotkey.shiftKey ? Key.LeftShift : "",
+          obs.outOfGameHotkey.key
         );*/
     }
   }
@@ -523,6 +545,13 @@ function handleClientMessage(message) {
     clientWebSocket.on("message", function incoming(data) {
       data = JSON.parse(data.toString());
       switch (data.messageType) {
+        case "ScreenTransitionInfo":
+          screenState = data.payload.screen;
+          console.log(screenState);
+          if (screenState !== "GAME_LOBBY") {
+            clearLobby();
+          }
+          break;
         case "SetGlueScreen":
           if (data.payload.screen) {
             if (
@@ -530,7 +559,10 @@ function handleClientMessage(message) {
               (data.payload.screen === "SCORE_SCREEN" &&
                 menuState === "SCORE_SCREEN")
             ) {
-              if (settings.autoHost.type !== "off") {
+              menuState = data.payload.screen;
+              if (openLobbyParams) {
+                openParamsJoin();
+              } else if (settings.autoHost.type !== "off") {
                 gameNumber += 1;
                 const lobbyName =
                   settings.autoHost.gameName +
@@ -558,7 +590,8 @@ function handleClientMessage(message) {
               data.payload.screen === "SCORE_SCREEN"
             ) {
               inGame = true;
-              sendToHub("hostedLobbyClosed", lobby.lobbyName);
+              triggerOBS();
+              clearLobby();
               if (settings.autoHost.type === "rapidHost") {
                 setTimeout(
                   quitGame,
@@ -566,10 +599,9 @@ function handleClientMessage(message) {
                 );
               }
             } else {
+              triggerOBS();
               inGame = false;
-              if (lobby.lobbyName) {
-                sendToHub("hostedLobbyClosed", lobby.lobbyName);
-              }
+              clearLobby();
             }
             menuState = data.payload.screen;
             console.log(menuState);
@@ -580,6 +612,7 @@ function handleClientMessage(message) {
           break;
         case "GameList":
           if (openLobbyParams && openLobbyParams.lobbyName) {
+            log.info("GameList received, trying to find lobby.");
             handleGameList(data.payload);
           }
           break;
@@ -592,8 +625,11 @@ function handleClientMessage(message) {
           handleChatMessage(data.payload);
           break;
         case "MultiplayerGameLeave":
-          sendToHub("hostedLobbyClosed", lobby.lobbyName);
+          clearLobby();
           break;
+        case "OnNetProviderInitialized":
+          if (data.payload.message.isOnline && openLobbyParams) {
+          }
         default:
           if (
             [
@@ -631,13 +667,14 @@ function handleClientMessage(message) {
       }
     });
     clientWebSocket.on("close", function close() {
+      clearLobby();
       log.warn("Game client connection closed!");
     });
   }
 }
 
 function handleGameList(data) {
-  if (data.games) {
+  if (data.games && data.games.length > 0) {
     data.games.some((game) => {
       if (
         openLobbyParams.lobbyName &&
@@ -664,10 +701,23 @@ function handleGameList(data) {
   }
 }
 
+function clearLobby() {
+  if (lobby.isHost && !settings.autoHost.private) {
+    sendToHub("hostedLobbyClosed");
+  }
+  lobby = {};
+  if (!inGame) {
+    sendWindow("lobbyData", lobby);
+  }
+}
+
 function openParamsJoin() {
-  if (openLobbyParams) {
+  if (openLobbyParams && menuState === "MAIN_MENU") {
     if (openLobbyParams.lobbyName) {
-      sendMessage("GetGameList", {});
+      sendMessage("SendGameListing", {});
+      setTimeout(() => {
+        sendMessage("GetGameList", {});
+      }, 500);
     } else if (openLobbyParams.gameID && openLobbyParams.mapFile) {
       sendMessage("JoinGame", {
         gameId: openLobbyParams.gameId,
@@ -680,7 +730,7 @@ function openParamsJoin() {
 }
 
 function handleChatMessage(payload) {
-  if (menuState === "GAME_LOBBY" && payload.message.source === "gameChat") {
+  if (payload.message.source === "gameChat") {
     if (
       settings.autoHost.voteStart &&
       payload.message.content.toLowerCase() === "?votestart"
@@ -728,6 +778,12 @@ function handleChatMessage(payload) {
           });
         }
       }
+    } else if (lobby.isHost && !settings.autoHost.private) {
+      lobby.processed.chatMessages.push({
+        sender: payload.message.sender,
+        content: payload.message.content,
+      });
+      sendToHub("hostedLobby", lobby);
     }
   }
 }
@@ -766,6 +822,7 @@ function processMapData(payload) {
   lobby.mapName = payload.mapData.mapName;
   lobby.lobbyName = payload.lobbyName;
   lobby.processed = {
+    chatMessages: [],
     lookingUpELO: new Set(),
     teamList: {
       otherTeams: { data: {}, lookup: {} },
@@ -774,9 +831,6 @@ function processMapData(payload) {
       lookup: {},
     },
   };
-  if (!settings.autoHost.private) {
-    sendToHub("hostedLobby", lobby.lobbyName);
-  }
   payload.teamData.teams.forEach(function (team) {
     const teamName = team.name;
     if (testNonPlayersTeam.test(teamName)) {
@@ -898,42 +952,45 @@ function processMapData(payload) {
     lobby.lookupName = "";
     log.info("Map data received", lobby.lookupName, lobby.eloAvailable);
   }
-  let specTeams = Object.keys(lobby.processed.teamList.specTeams.data);
-  if (
-    settings.autoHost.type !== "off" &&
-    settings.autoHost.moveToSpec &&
-    specTeams.length > 0
-  ) {
-    if (
-      specTeams.some((team) => {
-        if (team.match(/host/i)) {
+  if (settings.autoHost.type !== "off") {
+    let specTeams = Object.keys(lobby.processed.teamList.specTeams.data);
+    if (settings.autoHost.moveToSpec && specTeams.length > 0) {
+      if (
+        specTeams.some((team) => {
+          if (team.match(/host/i)) {
+            if (
+              lobby.processed.teamList.specTeams.data[team].defaultOpenSlots
+                .length > 0
+            ) {
+              log.info("Found host slot to move to: " + team);
+              sendMessage("SetTeam", {
+                slot: lobby.processed.startingSlot,
+                team: lobby.processed.teamList.specTeams.data[team].number,
+              });
+              return true;
+            }
+            return false;
+          }
+        }) === false
+      ) {
+        specTeams.some((team) => {
           if (
             lobby.processed.teamList.specTeams.data[team].defaultOpenSlots
               .length > 0
           ) {
-            log.info("Found host slot to move to: " + team);
             sendMessage("SetTeam", {
               slot: lobby.processed.startingSlot,
               team: lobby.processed.teamList.specTeams.data[team].number,
             });
-            return true;
           }
-          return false;
-        }
-      }) === false
-    ) {
-      specTeams.some((team) => {
-        if (
-          lobby.processed.teamList.specTeams.data[team].defaultOpenSlots
-            .length > 0
-        ) {
-          sendMessage("SetTeam", {
-            slot: lobby.processed.startingSlot,
-            team: lobby.processed.teamList.specTeams.data[team].number,
-          });
-        }
-      });
+        });
+      }
     }
+    settings.autoHost.closeSlots.forEach((toClose) => {
+      sendMessage("CloseSlot", {
+        slot: parseInt(toClose),
+      });
+    });
   }
   sendWindow("lobbyData", lobby);
   processLobby(payload);
@@ -1071,6 +1128,9 @@ async function processLobby(payload) {
     }
   }
   sendWindow("lobbyUpdate", lobby);
+  if (!settings.autoHost.private) {
+    sendToHub("hostedLobby", lobby);
+  }
 }
 
 function lobbyIsReady() {
