@@ -53,7 +53,7 @@
                   <label for="autoHostState" class="form-label">
                     <details>
                       <summary>Auto Host</summary><strong>Lobby Host:</strong> Starts a lobby with specified
-                      settings.<br>
+                      settings. (Ignores Announce is Bot)<br>
                       <strong>Rapid Host:</strong> Hosts lobbies, auto starts, leaves the game
                       after specified timer(minutes).<br>
                       <strong>Smart Host:</strong> Hosts lobbies, auto starts, quits the game if this end screen pops
@@ -113,7 +113,7 @@
                     <div class="d-flex justify-content-center">
                       <button id="saveNameButton" style="display:none" type="button" class="btn btn-primary"
                         data-autoHost-action="save">Save
-                        Names</button>
+                        Name</button>
                     </div>
                   </div>
                 </div>
@@ -127,6 +127,14 @@
                     <label for="rapidHostTimer" class="form-label">Rapid Host Timer</label>
                     <input type="number" id="rapidHostTimer" class="form-control" data-key="rapidHostTimer"
                       data-setting="autoHost" min="0" max="360">
+                  </div>
+                </div>
+                <div class="row p-2">
+                  <div class="col">
+                    <label for="announceRestingInterval" class="form-label">Minimum seconds between
+                      announcements</label>
+                    <input type="number" id="announceRestingInterval" class="form-control"
+                      data-key="announceRestingInterval" data-setting="autoHost" min="0" max="600">
                   </div>
                 </div>
                 <div class="row p-2">
@@ -294,6 +302,9 @@
     </button>
     <button type="button" class="btn btn-primary" id="logsButton">
       Open Logs
+    </button>
+    <button type="button" class="btn btn-primary" id="warcraftButton">
+      Open Warcraft
     </button>
     <a href="https://war.trenchguns.com" type="button" class="btn btn-primary">
       Visit The Hub

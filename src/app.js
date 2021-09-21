@@ -12,7 +12,14 @@ const {
 require = require("esm")(module);
 const { Combination } = require("js-combinatorics");
 const { autoUpdater } = require("electron-updater");
-const { screen, getActiveWindow } = require("@nut-tree/nut-js");
+const {
+  screen,
+  getActiveWindow,
+  mouse,
+  getWindows,
+  getWindowTitle,
+  centerOf,
+} = require("@nut-tree/nut-js");
 const log = require("electron-log");
 const https = require("https");
 const WebSocket = require("ws");
@@ -21,7 +28,7 @@ const Store = require("electron-store");
 const sound = require("sound-play");
 const robot = require("robotjs");
 const { nanoid } = require("nanoid");
-const { inRange } = require("lodash");
+const fs = require("fs");
 
 autoUpdater.logger = log;
 autoUpdater.logger.transports.file.level = "info";
@@ -46,10 +53,13 @@ var wss;
 var clientWebSocket;
 var hubWebSocket;
 var warcraftInFocus = false;
+var warcraftIsOpen = false;
 var warcraftRegion = { left: 0, top: 0, width: 0, height: 0 };
 var voteTimer;
 var openLobbyParams;
 var screenState;
+var selfBattleTag;
+var selfRegion;
 var settings = {
   autoHost: {
     type: store.get("autoHost.type") || "off",
@@ -60,6 +70,7 @@ var settings = {
     gameName: store.get("autoHost.gameName") || "",
     mapPath: store.get("autoHost.mapPath") || "N/A",
     announceIsBot: store.get("autoHost.announceIsBot") || false,
+    announceRestingInterval: store.get("autoHost.announceRestingInterval") || 30,
     moveToSpec: store.get("autoHost.moveToSpec") || false,
     rapidHostTimer: store.get("autoHost.rapidHostTimer") || 0,
     voteStart: store.get("autoHost.voteStart") || false,
@@ -92,12 +103,33 @@ if (!identifier) {
   store.set("anonymousIdentifier", identifier);
 }
 
+var warInstallLoc = store.get("warInstallLoc");
+if (!warInstallLoc) {
+  fs.readFile("warInstallLoc.txt", (err, data) => {
+    if (err) {
+      console.error(err);
+      return;
+    }
+    warInstallLoc = data.toString();
+    store.set("warInstallLoc", warInstallLoc);
+  });
+}
+
+var lastAnnounceTime = 0;
+var sentMessages = [];
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
   return;
 }
 
 app.setAsDefaultProtocolClient("wc3mt");
+
+if (!app.isPackaged) {
+  screen.config.resourceDirectory = path.join(__dirname, "images");
+} else {
+  screen.config.resourceDirectory = path.join(app.getAppPath(), "\\..\\..\\images");
+}
 
 app.on("open-url", function (event, url) {
   if (url.substring(0, 5) === "wc3mt") {
@@ -117,14 +149,24 @@ app.on("second-instance", (event, args) => {
 function protocolHandler(url = "") {
   openLobbyParams = getQueryVariables(url.split("?", 2)[1]);
   log.info(openLobbyParams);
+  isWarcraftOpen().then((isOpen) => {
+    warcraftIsOpen = isOpen;
+    if (!isOpen) {
+      log.info("Warcraft is not open, opening.");
+      openWarcraft().catch((err) => {
+        log.error(err);
+      });
+    } else {
+      openParamsJoin();
+    }
+  });
 }
 
 function getQueryVariables(url) {
   var vars = url.split("&");
   let pairs = {};
   for (var i = 0; i < vars.length; i++) {
-    if (vars[i])
-      pairs[vars[i].split("=")[0]] = decodeURI(vars[i].split("=")[1]);
+    if (vars[i]) pairs[vars[i].split("=")[0]] = decodeURI(vars[i].split("=")[1]);
   }
   return pairs;
 }
@@ -133,6 +175,9 @@ ipcMain.on("toMain", (event, args) => {
   switch (args.messageType) {
     case "openLogs":
       shell.openPath(log.transports.file.getFile().path);
+      break;
+    case "openWar":
+      openWarcraft();
       break;
     case "getMapPath":
       dialog
@@ -172,10 +217,7 @@ ipcMain.on("toMain", (event, args) => {
         value: args.data.value,
       });
       store.set(args.data.setting, settings[args.data.setting]);
-      log.info(
-        args.data.setting + " settings changed:",
-        settings[args.data.setting]
-      );
+      log.info(args.data.setting + " settings changed:", settings[args.data.setting]);
       break;
     default:
       log.info("Unknown ipcMain message:", args);
@@ -213,34 +255,31 @@ function eloMapNameCheck() {
         );
         log.info(`https://api.wc3stats.com/maps/${settings.elo.lookupName}`);
         https
-          .get(
-            `https://api.wc3stats.com/maps/${settings.elo.lookupName}`,
-            (resp) => {
-              let dataChunks = "";
-              resp.on("data", (chunk) => {
-                dataChunks += chunk;
-              });
-              resp.on("end", () => {
-                const jsonData = JSON.parse(dataChunks);
-                settings.elo.available = jsonData.status === "OK";
-                log.info("Elo data available: " + settings.elo.available);
-                if (!settings.elo.available) {
-                  sendWindow(
-                    "error",
-                    "We couldn't find any ELO data for your map. Please raise an issue on <a href='https://github.com/trenchguns/wc3multitool/issues/new?title=Map%20Request&body=Map%20Name%3A%0A&labels=Map%20Request' class='alert-link'> Github</a> if you think there should be."
-                  );
-                }
-                store.set("elo.available", settings.elo.available);
-                store.set("elo.lookupName", settings.elo.lookupName);
-                // TODO check variants, seasons, modes, and ladders
-                /*if (lobbyData.eloAvailable) {
+          .get(`https://api.wc3stats.com/maps/${settings.elo.lookupName}`, (resp) => {
+            let dataChunks = "";
+            resp.on("data", (chunk) => {
+              dataChunks += chunk;
+            });
+            resp.on("end", () => {
+              const jsonData = JSON.parse(dataChunks);
+              settings.elo.available = jsonData.status === "OK";
+              log.info("Elo data available: " + settings.elo.available);
+              if (!settings.elo.available) {
+                sendWindow(
+                  "error",
+                  "We couldn't find any ELO data for your map. Please raise an issue on <a href='https://github.com/trenchguns/wc3multitool/issues/new?title=Map%20Request&body=Map%20Name%3A%0A&labels=Map%20Request' class='alert-link'> Github</a> if you think there should be."
+                );
+              }
+              store.set("elo.available", settings.elo.available);
+              store.set("elo.lookupName", settings.elo.lookupName);
+              // TODO check variants, seasons, modes, and ladders
+              /*if (lobbyData.eloAvailable) {
                 jsonData.body.variants.forEach((variant) => {
                   variant.stats.forEach((stats) => {});
                 });
               }*/
-              });
-            }
-          )
+            });
+          })
           .on("error", (err) => {
             settings.elo.available = false;
             log.error("Error: " + err.message);
@@ -289,12 +328,7 @@ autoUpdater.on("download-progress", (progressObj) => {
   let log_message = "Download speed: " + progressObj.bytesPerSecond;
   log_message = log_message + " - Downloaded " + progressObj.percent + "%";
   log_message =
-    log_message +
-    " (" +
-    progressObj.transferred +
-    "/" +
-    progressObj.total +
-    ")";
+    log_message + " (" + progressObj.transferred + "/" + progressObj.total + ")";
   win.webContents.send("fromMain", {
     messageType: "updater",
     data: log_message,
@@ -365,10 +399,6 @@ const createWindow = () => {
 app.on("ready", function () {
   log.info("App ready");
   appVersion = app.getVersion();
-  if (process.argv[1] && process.argv[1] !== ".") {
-    console.log(process.argv[1]);
-    protocolHandler(process.argv[1]);
-  }
   wss = new WebSocket.Server({ port: 8888 });
   wss.on("connection", function connection(ws) {
     log.info("Connection");
@@ -390,6 +420,11 @@ app.on("ready", function () {
   createWindow();
   autoUpdater.checkForUpdatesAndNotify();
   connectToHub();
+  if (process.argv[1] && process.argv[1] !== ".") {
+    setTimeout(() => {
+      protocolHandler(process.argv[1]);
+    }, 3000);
+  }
 });
 
 app.on("window-all-closed", () => {
@@ -407,13 +442,17 @@ app.on("activate", () => {
 });
 
 function connectToHub() {
-  hubWebSocket = new WebSocket("wss://ws.trenchguns.com/" + identifier);
+  if (app.isPackaged) {
+    hubWebSocket = new WebSocket("wss://ws.trenchguns.com/" + identifier);
+  } else {
+    hubWebSocket = new WebSocket("wss://wsdev.trenchguns.com/" + identifier);
+  }
   hubWebSocket.onerror = function (error) {
     log.error("Failed hub connection");
   };
   hubWebSocket.on("open", function open() {
     log.info("Connected to hub");
-    if (lobby.lobbyName && !settings.autoHost.private) {
+    if (lobby.lobbyName && (!settings.autoHost.private || !app.isPackaged)) {
       sendToHub("hostedLobby", lobby);
     }
     setTimeout(hubHeartbeat, 30000);
@@ -436,10 +475,10 @@ function hubHeartbeat() {
 }
 
 function sendToHub(messageType, data = {}) {
-  if (messageType !== "heartbeat") {
-    console.log("Sending to hub: " + messageType + " " + data);
-  }
   if (hubWebSocket && hubWebSocket.readyState === WebSocket.OPEN) {
+    //if (messageType !== "heartbeat") {
+    //console.log("Sending to hub: " + messageType + " ", data);
+    //}
     hubWebSocket.send(
       JSON.stringify({
         type: messageType,
@@ -470,11 +509,7 @@ async function triggerOBS() {
           obs.inGameHotkey.shiftKey ? Key.LeftShift : "",
           obs.inGameHotkey.key
         );*/
-    } else if (
-      menuState === "SCORE_SCREEN" &&
-      !inGame &&
-      settings.obs.outOfGameHotkey
-    ) {
+    } else if (menuState === "SCORE_SCREEN" && !inGame && settings.obs.outOfGameHotkey) {
       let modifiers = [];
       if (settings.obs.outOfGameHotkey.altKey) {
         modifiers.push("alt");
@@ -556,8 +591,7 @@ function handleClientMessage(message) {
           if (data.payload.screen) {
             if (
               data.payload.screen === "MAIN_MENU" ||
-              (data.payload.screen === "SCORE_SCREEN" &&
-                menuState === "SCORE_SCREEN")
+              (data.payload.screen === "SCORE_SCREEN" && menuState === "SCORE_SCREEN")
             ) {
               menuState = data.payload.screen;
               if (openLobbyParams) {
@@ -593,10 +627,7 @@ function handleClientMessage(message) {
               triggerOBS();
               clearLobby();
               if (settings.autoHost.type === "rapidHost") {
-                setTimeout(
-                  quitGame,
-                  settings.autoHost.rapidHostTimer * 1000 * 60 + 250
-                );
+                setTimeout(quitGame, settings.autoHost.rapidHostTimer * 1000 * 60 + 250);
               }
             } else {
               triggerOBS();
@@ -627,9 +658,9 @@ function handleClientMessage(message) {
         case "MultiplayerGameLeave":
           clearLobby();
           break;
-        case "OnNetProviderInitialized":
-          if (data.payload.message.isOnline && openLobbyParams) {
-          }
+        case "UpdateUserInfo":
+          selfBattleTag = data.payload.user.battleTag;
+          selfRegion = data.payload.user.userRegion;
         default:
           if (
             [
@@ -676,10 +707,7 @@ function handleClientMessage(message) {
 function handleGameList(data) {
   if (data.games && data.games.length > 0) {
     data.games.some((game) => {
-      if (
-        openLobbyParams.lobbyName &&
-        game.name === openLobbyParams.lobbyName
-      ) {
+      if (openLobbyParams.lobbyName && game.name === openLobbyParams.lobbyName) {
         log.info("Found game by name");
         sendMessage("JoinGame", {
           gameId: game.id,
@@ -702,7 +730,7 @@ function handleGameList(data) {
 }
 
 function clearLobby() {
-  if (lobby.isHost && !settings.autoHost.private) {
+  if (lobby.isHost && (!settings.autoHost.private || !app.isPackaged)) {
     sendToHub("hostedLobbyClosed");
   }
   lobby = {};
@@ -731,6 +759,9 @@ function openParamsJoin() {
 
 function handleChatMessage(payload) {
   if (payload.message.source === "gameChat") {
+    var sender = payload.message.sender.includes("#")
+      ? payload.message.sender
+      : selfBattleTag;
     if (
       settings.autoHost.voteStart &&
       payload.message.content.toLowerCase() === "?votestart"
@@ -739,51 +770,49 @@ function handleChatMessage(payload) {
         const emptyPlayerTeam = Object.keys(
           lobby.processed.teamList.playerTeams.data
         ).some(function (team) {
-          if (
-            lobby.processed.teamList.playerTeams.data[team].players.length === 0
-          ) {
+          if (lobby.processed.teamList.playerTeams.data[team].players.length === 0) {
             return true;
           }
         });
         if (!emptyPlayerTeam) {
           voteTimer = setTimeout(cancelVote, 60000);
-          sendMessage("SendGameChatMessage", {
-            content: "You have 60 seconds to ?votestart.",
-          });
+          sendChatMessage("You have 60 seconds to ?votestart.");
         } else {
-          sendMessage("SendGameChatMessage", {
-            content: "Unavailable. Not all teams have players.",
-          });
+          sendChatMessage("Unavailable. Not all teams have players.");
         }
       }
-      if (
-        !lobby.processed.voteStartVotes.has(payload.message.sender) &&
-        voteTimer
-      ) {
-        lobby.processed.voteStartVotes.add(payload.message.sender);
+      if (!lobby.processed.voteStartVotes.has(sender) && voteTimer) {
+        lobby.processed.voteStartVotes.add(sender);
         if (
           lobby.processed.voteStartVotes.size >=
-          lobby.processed.allPlayers.size *
-            (settings.autoHost.voteStartPercent / 100)
+          lobby.processed.allPlayers.length * (settings.autoHost.voteStartPercent / 100)
         ) {
           startGame();
         } else {
-          sendMessage("SendGameChatMessage", {
-            content:
-              Math.ceil(
-                lobby.processed.allPlayers.size *
-                  (settings.autoHost.voteStartPercent / 100) -
-                  lobby.processed.voteStartVotes.size
-              ).toString() + " more vote(s) required.",
-          });
+          sendChatMessage(
+            Math.ceil(
+              lobby.processed.allPlayers.length *
+                (settings.autoHost.voteStartPercent / 100) -
+                lobby.processed.voteStartVotes.size
+            ).toString() + " more vote(s) required."
+          );
         }
       }
-    } else if (lobby.isHost && !settings.autoHost.private) {
-      lobby.processed.chatMessages.push({
+    } else if (payload.message.content.toLowerCase() === "?elo" && lobby.eloAvailable) {
+      if (lobby.processed.eloList[sender]) {
+        sendChatMessage(sender + " ELO: " + lobby.processed.eloList[sender]);
+      } else {
+        sendChatMessage("ELO not available");
+      }
+    } else if (
+      lobby.isHost &&
+      (!settings.autoHost.private || !app.isPackaged) &&
+      !sentMessages.includes(payload.message.content)
+    ) {
+      lobbyProcessedUpdate("chatMessages", {
         sender: payload.message.sender,
         content: payload.message.content,
       });
-      sendToHub("hostedLobby", lobby);
     }
   }
 }
@@ -792,13 +821,9 @@ function cancelVote() {
   if (voteTimer) {
     clearTimeout(voteTimer);
     voteTimer = null;
-    sendMessage("SendGameChatMessage", {
-      content: "Vote canceled.",
-    });
+    sendChatMessage("Vote cancelled.");
   } else {
-    sendMessage("SendGameChatMessage", {
-      content: "Vote timed out.",
-    });
+    sendChatMessage("Vote timed out.");
   }
   lobby.processed.voteStartVotes.clear();
 }
@@ -809,9 +834,10 @@ function handleLobbyUpdate(payload) {
     if (lobby.lobbyName !== payload.lobbyName) {
       lobby = {};
       processMapData(payload);
+    } else {
+      lobby.teamData = payload.teamData;
+      lobby.availableTeamColors = payload.availableTeamColors;
     }
-    lobby.teamData = payload.teamData;
-    lobby.availableTeamColors = payload.availableTeamColors;
     processLobby(payload);
   }
 }
@@ -821,17 +847,26 @@ function processMapData(payload) {
   lobby.playerHost = payload.playerHost;
   lobby.mapName = payload.mapData.mapName;
   lobby.lobbyName = payload.lobbyName;
+  lobby.region = selfRegion;
   lobby.processed = {
     chatMessages: [],
     lookingUpELO: new Set(),
+    eloList: {},
     teamList: {
+      lookup: {},
       otherTeams: { data: {}, lookup: {} },
       specTeams: { data: {}, lookup: {} },
       playerTeams: { data: {}, lookup: {} },
-      lookup: {},
     },
+    teamListLookup: {},
+    allPlayers: [],
+    allLobby: [],
+    openPlayerSlots: 0,
   };
-  payload.teamData.teams.forEach(function (team) {
+  lobby.teamData = payload.teamData;
+  lobby.availableTeamColors = payload.availableTeamColors;
+
+  lobby.teamData.teams.forEach(function (team) {
     const teamName = team.name;
     if (testNonPlayersTeam.test(teamName)) {
       lobby.processed.teamList.otherTeams.data[teamName] = {
@@ -840,7 +875,7 @@ function processMapData(payload) {
         defaultOpenSlots: [],
       };
       lobby.processed.teamList.otherTeams.lookup[team.team] = teamName;
-      lobby.processed.teamList.lookup[team.team] = {
+      lobby.processed.teamListLookup[team.team] = {
         type: "otherTeams",
         name: teamName,
       };
@@ -851,7 +886,7 @@ function processMapData(payload) {
         defaultOpenSlots: [],
       };
       lobby.processed.teamList.specTeams.lookup[team.team] = teamName;
-      lobby.processed.teamList.lookup[team.team] = {
+      lobby.processed.teamListLookup[team.team] = {
         type: "specTeams",
         name: teamName,
       };
@@ -862,15 +897,15 @@ function processMapData(payload) {
         defaultOpenSlots: [],
       };
       lobby.processed.teamList.playerTeams.lookup[team.team] = teamName;
-      lobby.processed.teamList.lookup[team.team] = {
+      lobby.processed.teamListLookup[team.team] = {
         type: "playerTeams",
         name: teamName,
       };
     }
   });
   payload.players.forEach((player) => {
-    const teamType = lobby.processed.teamList.lookup[player.team].type;
-    const teamName = lobby.processed.teamList.lookup[player.team].name;
+    const teamType = lobby.processed.teamListLookup[player.team].type;
+    const teamName = lobby.processed.teamListLookup[player.team].name;
     if (player.slotStatus === 0) {
       lobby.processed.teamList[teamType].data[teamName].defaultOpenSlots.push(
         player.slot
@@ -905,31 +940,27 @@ function processMapData(payload) {
                 lobby.lookupName
             );
             https
-              .get(
-                `https://api.wc3stats.com/maps/${lobby.lookupName}`,
-                (resp) => {
-                  let dataChunks = "";
-                  resp.on("data", (chunk) => {
-                    dataChunks += chunk;
-                  });
-                  resp.on("end", () => {
-                    const jsonData = JSON.parse(dataChunks);
-                    lobby.eloAvailable = jsonData.status === "OK";
-                    log.info(
-                      "Autohost disabled. Map queried. Returned: " +
-                        lobby.eloAvailable
-                    );
-                    processLobby(payload);
-                    sendWindow("lobbyData", lobby);
-                    // TODO check variants, seasons, modes, and ladders
-                    /*if (lobbyData.eloAvailable) {
+              .get(`https://api.wc3stats.com/maps/${lobby.lookupName}`, (resp) => {
+                let dataChunks = "";
+                resp.on("data", (chunk) => {
+                  dataChunks += chunk;
+                });
+                resp.on("end", () => {
+                  const jsonData = JSON.parse(dataChunks);
+                  lobby.eloAvailable = jsonData.status === "OK";
+                  log.info(
+                    "Autohost disabled. Map queried. Returned: " + lobby.eloAvailable
+                  );
+                  processLobby(payload);
+                  sendWindow("lobbyData", lobby);
+                  // TODO check variants, seasons, modes, and ladders
+                  /*if (lobbyData.eloAvailable) {
                         jsonData.body.variants.forEach((variant) => {
                           variant.stats.forEach((stats) => {});
                         });
                       }*/
-                  });
-                }
-              )
+                });
+              })
               .on("error", (err) => {
                 log.error("Error: " + err.message);
               });
@@ -959,8 +990,7 @@ function processMapData(payload) {
         specTeams.some((team) => {
           if (team.match(/host/i)) {
             if (
-              lobby.processed.teamList.specTeams.data[team].defaultOpenSlots
-                .length > 0
+              lobby.processed.teamList.specTeams.data[team].defaultOpenSlots.length > 0
             ) {
               log.info("Found host slot to move to: " + team);
               sendMessage("SetTeam", {
@@ -974,10 +1004,7 @@ function processMapData(payload) {
         }) === false
       ) {
         specTeams.some((team) => {
-          if (
-            lobby.processed.teamList.specTeams.data[team].defaultOpenSlots
-              .length > 0
-          ) {
+          if (lobby.processed.teamList.specTeams.data[team].defaultOpenSlots.length > 0) {
             sendMessage("SetTeam", {
               slot: lobby.processed.startingSlot,
               team: lobby.processed.teamList.specTeams.data[team].number,
@@ -993,50 +1020,106 @@ function processMapData(payload) {
     });
   }
   sendWindow("lobbyData", lobby);
-  processLobby(payload);
+  processLobby(payload, true);
 }
 
-async function processLobby(payload) {
-  lobby.processed.allPlayers = new Set();
-  lobby.processed.openPlayerSlots = 0;
+async function processLobby(payload, sendFull = false) {
+  let newAllPlayers = [];
+  let newAllLobby = [];
+  let newOpenPlayerSlots = 0;
+  let newTeamData = {};
   ["otherTeams", "specTeams", "playerTeams"].forEach(function (type) {
+    newTeamData[type] = {};
     Object.keys(lobby.processed.teamList[type].data).forEach(function (name) {
-      lobby.processed.teamList[type].data[name].players = [];
-      lobby.processed.teamList[type].data[name].slots = [];
+      newTeamData[type][name] = {
+        players: [],
+        slots: [],
+      };
     });
   });
   payload.players.forEach((player) => {
-    const teamType = lobby.processed.teamList.lookup[player.team].type;
-    const teamName = lobby.processed.teamList.lookup[player.team].name;
+    const teamType = lobby.processed.teamListLookup[player.team].type;
+    const teamName = lobby.processed.teamListLookup[player.team].name;
     if (player.playerRegion !== "" && teamType === "playerTeams") {
-      lobby.processed.allPlayers.add(player.name);
+      newAllPlayers.push(player.name);
+    }
+    if (player.playerRegion !== "") {
+      newAllLobby.push(player.name);
     }
     if (player.name !== "") {
-      lobby.processed.teamList[teamType].data[teamName].players.push(
-        player.name
-      );
-      lobby.processed.teamList[teamType].data[teamName].slots.push(player.name);
+      newTeamData[teamType][teamName].players.push(player.name);
+      newTeamData[teamType][teamName].slots.push(player.name);
     } else if (player.slotStatus === 0) {
-      lobby.processed.teamList[teamType].data[teamName].slots.push("OPEN SLOT");
+      newTeamData[teamType][teamName].slots.push("OPEN SLOT");
       if (teamType === "playerTeams") {
-        lobby.processed.openPlayerSlots += 1;
+        newOpenPlayerSlots += 1;
       }
     } else {
-      lobby.processed.teamList[teamType].data[teamName].slots.push(
-        "CLOSED SLOT"
-      );
+      newTeamData[teamType][teamName].slots.push("OPEN SLOT");
     }
 
     //player.name.replace(/#\d+$/g, "");
   });
+  newAllPlayers.sort();
+  newAllLobby.sort();
+  if (!sendFull) {
+    if (
+      newAllPlayers.length !== lobby.processed.allPlayers.length &&
+      JSON.stringify(newAllPlayers) !== JSON.stringify(lobby.processed.allPlayers)
+    ) {
+      lobbyProcessedUpdate("allPlayers", newAllPlayers);
+    }
+    if (
+      newAllLobby.length !== lobby.processed.allLobby.length &&
+      JSON.stringify(newAllLobby) !== JSON.stringify(lobby.processed.allLobby)
+    ) {
+      lobbyProcessedUpdate("allLobby", newAllLobby);
+    }
+    if (lobby.processed.openPlayerSlots !== newOpenPlayerSlots) {
+      lobbyProcessedUpdate("openPlayerSlots", newOpenPlayerSlots);
+    }
+
+    Object.entries(newTeamData).forEach(([type, team]) => {
+      Object.entries(team).forEach(([name, data]) => {
+        if (
+          !lobby.processed.teamList[type].data[name].players ||
+          !lobby.processed.teamList[type].data[name].slots ||
+          lobby.processed.teamList[type].data[name].players.length !==
+            data.players.length ||
+          JSON.stringify(lobby.processed.teamList[type].data[name].players) !==
+            JSON.stringify(data.players) ||
+          JSON.stringify(lobby.processed.teamList[type].data[name].slots) !==
+            JSON.stringify(data.slots)
+        ) {
+          lobbyProcessedUpdate(type, data, name);
+        }
+      });
+    });
+  } else {
+    lobby.processed.allPlayers = newAllPlayers;
+    lobby.processed.allLobby = newAllLobby;
+    lobby.processed.openPlayerSlots = newOpenPlayerSlots;
+    Object.entries(newTeamData).forEach(([type, team]) => {
+      Object.entries(team).forEach(([name, data]) => {
+        lobby.processed.teamList[type].data[name].players = data.players;
+        lobby.processed.teamList[type].data[name].slots = data.slots;
+      });
+    });
+  }
+
   if (lobby.eloAvailable) {
     const mapName = lobby.lookupName;
+    let eloUpdated = false;
     Object.keys(lobby.processed.eloList).forEach((user) => {
-      if (!lobby.processed.allPlayers.has(user)) {
+      if (!lobby.processed.allPlayers.includes(user)) {
         delete lobby.processed.eloList[user];
+        eloUpdated = true;
       }
       lobby.processed.lookingUpELO.delete(user);
     });
+    if (eloUpdated && !sendFull) {
+      lobbyProcessedUpdate("eloList", lobby.processed.eloList);
+    }
     lobby.processed.allPlayers.forEach(function (user) {
       if (
         !Object.keys(lobby.processed.eloList).includes(user) &&
@@ -1063,13 +1146,16 @@ async function processLobby(payload) {
                     elo = jsonData.body[0].rating;
                   }
                   // If they haven't left, set real ELO
-                  if (lobby.processed.allPlayers.has(user)) {
-                    lobby.processed.eloList[user] = elo;
+                  if (lobby.processed.allPlayers.includes(user)) {
+                    lobbyProcessedUpdate("eloList", {
+                      [user]: elo,
+                      ...lobby.processed.eloList,
+                    });
                     // Math needs work
                     sendProgress(
                       "Got ELO for " + user,
                       (Object.keys(lobby.processed.eloList).length /
-                        (lobby.processed.allPlayers.size +
+                        (lobby.processed.allPlayers.length +
                           lobby.processed.openPlayerSlots)) *
                         90 +
                         10
@@ -1081,9 +1167,7 @@ async function processLobby(payload) {
                     });
                     log.verbose(user + " ELO: " + elo.toString());
                     if (settings.elo.announce) {
-                      sendMessage("SendGameChatMessage", {
-                        content: user + " ELO: " + elo.toString(),
-                      });
+                      sendChatMessage(user + " ELO: " + elo.toString());
                     }
                     // If the lobby is full, and we have the ELO for everyone,
                     if (lobbyIsReady()) {
@@ -1105,30 +1189,34 @@ async function processLobby(payload) {
 
   if (
     lobby.isHost &&
-    (settings.autoHost.type === "smartHost" ||
-      settings.autoHost.type === "rapidHost")
+    (settings.autoHost.type === "smartHost" || settings.autoHost.type === "rapidHost")
   ) {
     if (settings.autoHost.voteStart && voteTimer) {
       cancelVote();
     }
-    if (settings.autoHost.announceIsBot) {
-      lobby.processed.allPlayers.forEach(function (user) {
+    if (settings.autoHost.announceIsBot && lobby.processed.allLobby.length > 1) {
+      let currentTime = Date.now();
+      lobby.processed.allLobby.some(function (user) {
         if (
-          !lobby.processed.playerSet ||
-          !lobby.processed.playerSet.has(user)
+          lobby.processed.playerSet &&
+          !lobby.processed.playerSet.includes(user) &&
+          currentTime >
+            lastAnnounceTime + 1000 * settings.autoHost.announceRestingInterval
         ) {
+          console.log("Announcing");
+          lastAnnounceTime = currentTime;
           announceBot();
           return;
         }
       });
-      lobby.processed.playerSet = lobby.processed.allPlayers;
+      lobby.processed.playerSet = lobby.processed.allLobby;
     }
     if (lobbyIsReady()) {
       finalizeLobby();
     }
   }
   sendWindow("lobbyUpdate", lobby);
-  if (!settings.autoHost.private) {
+  if (sendFull) {
     sendToHub("hostedLobby", lobby);
   }
 }
@@ -1136,8 +1224,7 @@ async function processLobby(payload) {
 function lobbyIsReady() {
   return (
     (lobby.eloAvailable &&
-      Object.keys(lobby.processed.eloList).length ===
-        lobby.processed.allPlayers.size &&
+      Object.keys(lobby.processed.eloList).length === lobby.processed.allPlayers.length &&
       lobby.processed.openPlayerSlots === 0) ||
     (!lobby.eloAvailable && lobby.processed.openPlayerSlots === 0)
   );
@@ -1169,14 +1256,10 @@ async function finalizeLobby() {
     lobby.processed.bestCombo = bestCombo;
     lobby.processed.eloDiff = smallestEloDiff;
     swapHelper(lobby);
-    sendMessage("SendGameChatMessage", {
-      content: "ELO data provided by: " + settings.elo.type,
-    });
+    sendChatMessage("ELO data provided by: " + settings.elo.type);
+
     if (!lobby.isHost) {
-      sendMessage("SendGameChatMessage", {
-        content:
-          lobby.processed.leastSwap + " should be: " + bestCombo.join(", "),
-      });
+      sendChatMessage(lobby.processed.leastSwap + " should be: " + bestCombo.join(", "));
     } else {
       for (let i = 0; i < lobby.processed.swaps[0].length; i++) {
         if (!lobbyIsReady()) {
@@ -1189,13 +1272,9 @@ async function finalizeLobby() {
             lobby.processed.swaps[1][i],
           100
         );
-        sendMessage("SendGameChatMessage", {
-          content:
-            "!swap " +
-            lobby.processed.swaps[0][i] +
-            " " +
-            lobby.processed.swaps[1][i],
-        });
+        sendChatMessage(
+          "!swap " + lobby.processed.swaps[0][i] + " " + lobby.processed.swaps[1][i]
+        );
       }
     }
   }
@@ -1211,19 +1290,14 @@ async function finalizeLobby() {
           startGame();
         }
       }, 250);
-    } else if (
-      settings.autoHost.type === "lobbyHost" &&
-      settings.autoHost.sounds
-    ) {
+    } else if (settings.autoHost.type === "lobbyHost" && settings.autoHost.sounds) {
       playSound("ready.wav");
     }
   }
 }
 
 function startGame() {
-  sendMessage("SendGameChatMessage", {
-    content: "AutoHost functionality provided by WC3 MultiTool.",
-  });
+  sendChatMessage("AutoHost functionality provided by WC3 MultiTool.");
   if (settings.autoHost.sounds) {
     playSound("ready.wav");
   }
@@ -1295,9 +1369,7 @@ async function announceBot() {
     if (settings.autoHost.voteStart) {
       text += " You can vote start with ?votestart";
     }
-    sendMessage("SendGameChatMessage", {
-      content: text,
-    });
+    sendChatMessage(text);
   }
 }
 
@@ -1338,9 +1410,7 @@ async function findQuit() {
       if (
         ["quitNormal.png", "quitHLW.png"].some(async (file) => {
           try {
-            const foundImage = await screen.find(
-              "src/images/" + targetRes + file
-            );
+            const foundImage = await screen.find(`${targetRes + file}`);
             if (foundImage) {
               return true;
             }
@@ -1407,13 +1477,33 @@ async function analyzeGame() {
 
 function sendMessage(message, payload) {
   if (clientWebSocket) {
-    clientWebSocket.send(
-      JSON.stringify({ message: message, payload: payload })
-    );
+    clientWebSocket.send(JSON.stringify({ message: message, payload: payload }));
   }
 }
 
+function sendChatMessage(content) {
+  sentMessages.push(content);
+  if (sentMessages.length > 3) {
+    sentMessages.shift();
+  }
+  sendMessage("SendGameChatMessage", {
+    content,
+  });
+}
+
 async function activeWindowWar() {
+  const warcraftOpenCheck = await isWarcraftOpen();
+  if (warcraftIsOpen && !warcraftOpenCheck) {
+    warcraftIsOpen = warcraftOpenCheck;
+    new Notification({
+      title: "Warcraft is not open",
+      body: "An action was attempted but Warcraft was not open",
+    }).show();
+    return;
+  } else {
+    warcraftIsOpen = warcraftOpenCheck;
+  }
+
   let activeWindow = await getActiveWindow();
   let title = await activeWindow.title;
   const focused = title === "Warcraft III";
@@ -1430,10 +1520,69 @@ async function activeWindowWar() {
   }
 }
 
+async function isWarcraftOpen() {
+  let windows = await getWindows();
+  for (let window of windows) {
+    title = await window.title;
+    if (title === "Warcraft III") return true;
+  }
+  return false;
+}
+
 function getFile(relativePath = "") {
   if (!app.isPackaged) {
-    return path.join(__dirname, relativePath);
+    //return path.join(__dirname, relativePath);
+    return "src/" + relativePath;
   } else {
-    return path.join(app.getAppPath(), "\\..\\..\\" + relativePath);
+    return relativePath;
+    //return path.join(app.getAppPath(), "\\..\\..\\" + relativePath);
   }
+}
+
+function lobbyProcessedUpdate(key = "", value, teamName = "") {
+  if (["otherTeams", "playerTeams", "specTeams"].includes(key)) {
+    lobby.processed.teamList[key].data[teamName].slots = value.slots;
+    lobby.processed.teamList[key].data[teamName].players = value.players;
+    sendToHub("lobbyUpdate", { key, value, teamName });
+  } else if (key === "chatMessages") {
+    if (!sentMessages.includes(value.content)) {
+      lobby.processed.chatMessages.push(value);
+      sendToHub("lobbyUpdate", { key, value });
+    }
+  } else if (lobby.processed[key] !== value) {
+    lobby.processed[key] = value;
+    sendToHub("lobbyUpdate", { key, value });
+  }
+  sendWindow("lobbyUpdate", lobby);
+}
+
+async function openWarcraft2() {
+  warcraftIsOpen = await isWarcraftOpen();
+  if (!warcraftIsOpen) {
+    shell.openPath(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe");
+    let playPosition = await centerOf(
+      screen.waitFor("2160/play.png", 15000, {
+        confidence: 0.9,
+      })
+    );
+    await mouse.setPosition(playPosition);
+    await mouse.leftClick();
+  }
+}
+
+function openWarcraft() {
+  shell.openPath(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe");
+  screen
+    .waitFor("2160/play.png", 10000, {
+      confidence: 0.9,
+    })
+    .then((result) => {
+      centerOf(result).then((position) => {
+        mouse.setPosition(position).then(mouse.leftClick());
+      });
+    })
+    .catch((e) => {
+      log.error(e);
+      //setTimeout(openWarcraft, 5000);
+    });
 }

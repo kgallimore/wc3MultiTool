@@ -12,6 +12,7 @@ var settings = {
     gameName: store.get("autoHost.gameName") || "",
     mapPath: store.get("autoHost.mapPath") || "N/A",
     announceIsBot: store.get("autoHost.announceIsBot") || false,
+    announceRestingInterval: store.get("autoHost.announceRestingInterval") || 30,
     moveToSpec: store.get("autoHost.moveToSpec") || false,
     rapidHostTimer: store.get("autoHost.rapidHostTimer") || 0,
     voteStart: store.get("autoHost.voteStart") || false,
@@ -100,21 +101,22 @@ function init() {
     }
   });
 
-  document
-    .getElementById("saveNameButton")
-    .addEventListener("click", sendNames);
+  document.getElementById("saveNameButton").addEventListener("click", sendNames);
 
   // Prompt node to open file dialog
-  document
-    .getElementById("autoHostMapPath")
-    .addEventListener("click", function () {
-      ipcRenderer.send("toMain", { messageType: "getMapPath" });
-    });
+  document.getElementById("autoHostMapPath").addEventListener("click", function () {
+    ipcRenderer.send("toMain", { messageType: "getMapPath" });
+  });
 
   // Open logs externally
   document.getElementById("logsButton").addEventListener("click", function () {
     ipcRenderer.send("toMain", {
       messageType: "openLogs",
+    });
+  });
+  document.getElementById("warcraftButton").addEventListener("click", function () {
+    ipcRenderer.send("toMain", {
+      messageType: "openWar",
     });
   });
 
@@ -144,6 +146,7 @@ function init() {
         updateSettings(data.data.setting);
         break;
       case "lobbyUpdate":
+        console.log(data.data);
         generateTables(data.data);
         break;
       case "lobbyData":
@@ -235,33 +238,29 @@ function generateTables(lobby) {
   try {
     document.getElementById("tablesDiv").innerHTML = "";
     let tbl;
-    Object.keys(lobby.processed.teamList.playerTeams.data).forEach(
-      (playerTeam) => {
-        tbl = document.createElement("table");
-        tbl.classList.add("table", "table-hover", "table-striped", "table-sm");
-        let trow = tbl.createTHead().insertRow();
-        [`${playerTeam} Players`, "ELO"].forEach((label) => {
-          let th = document.createElement("th");
-          th.appendChild(document.createTextNode(label));
-          trow.appendChild(th);
-        });
-        let tBody = tbl.createTBody();
-        lobby.processed.teamList.playerTeams.data[playerTeam].slots.forEach(
-          (player) => {
-            let row = tBody.insertRow();
-            row.insertCell().appendChild(document.createTextNode(player));
-            let cell = row.insertCell();
-            let text = document.createTextNode(
-              lobby.processed.eloList && lobby.processed.eloList[player]
-                ? lobby.processed.eloList[player]
-                : "N/A"
-            );
-            cell.appendChild(text);
-          }
+    Object.keys(lobby.processed.teamList.playerTeams.data).forEach((playerTeam) => {
+      tbl = document.createElement("table");
+      tbl.classList.add("table", "table-hover", "table-striped", "table-sm");
+      let trow = tbl.createTHead().insertRow();
+      [`${playerTeam} Players`, "ELO"].forEach((label) => {
+        let th = document.createElement("th");
+        th.appendChild(document.createTextNode(label));
+        trow.appendChild(th);
+      });
+      let tBody = tbl.createTBody();
+      lobby.processed.teamList.playerTeams.data[playerTeam].slots.forEach((player) => {
+        let row = tBody.insertRow();
+        row.insertCell().appendChild(document.createTextNode(player));
+        let cell = row.insertCell();
+        let text = document.createTextNode(
+          lobby.processed.eloList && lobby.processed.eloList[player]
+            ? lobby.processed.eloList[player]
+            : "N/A"
         );
-        document.getElementById("tablesDiv").appendChild(tbl);
-      }
-    );
+        cell.appendChild(text);
+      });
+      document.getElementById("tablesDiv").appendChild(tbl);
+    });
   } catch (e) {
     console.error(e.message, e.stack);
   }
@@ -279,10 +278,7 @@ function updateSettingSingle(event) {
     if (value === true && !settings.autoHost.closeSlots.includes(slot)) {
       settings.autoHost.closeSlots.push(slot);
     } else if (settings.autoHost.closeSlots.includes(slot)) {
-      settings.autoHost.closeSlots.splice(
-        settings.autoHost.closeSlots.indexOf(slot),
-        1
-      );
+      settings.autoHost.closeSlots.splice(settings.autoHost.closeSlots.indexOf(slot), 1);
     }
     value = settings.autoHost.closeSlots;
     console.log(value);
@@ -324,8 +320,7 @@ function sendNames() {
 
 function updateSettings(setting) {
   if (setting === "autoHost") {
-    document.getElementById("mapPathSpan").innerText =
-      settings.autoHost.mapPath;
+    document.getElementById("mapPathSpan").innerText = settings.autoHost.mapPath;
   }
   document.forms[setting].querySelectorAll("input, select").forEach((input) => {
     if (input.getAttribute("data-key")) {
