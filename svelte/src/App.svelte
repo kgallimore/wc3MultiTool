@@ -70,64 +70,62 @@
         require("electron").shell.openExternal((event.target as HTMLAnchorElement).href);
       }
     });
-
-    // @ts-ignore
-    window.api.receive("fromMain", (data: WindowReceive) => {
-      let newData = data.data;
-      switch (data.messageType) {
-        case "statusChange":
-          currentStatus.connected = newData.connected;
-          break;
-        case "updateSettings":
-          settings = newData.settings;
-          console.log(settings);
-          break;
-        case "updateSettingSingle":
-          let update = newData.update;
-          if (update) {
-            // @ts-ignore
-            settings[update.setting][update.key] = update.value;
-          }
-          break;
-        case "lobbyUpdate":
-        case "lobbyData":
-          let newLobby = newData.lobby;
-          if (newLobby) {
-            currentStatus.lobby = newLobby;
-          }
-          break;
-        case "processing":
-          let progress = newData.progress;
-          if (progress) {
-            currentStatus.progress.step = progress.step;
-            currentStatus.progress.percent = progress.progress;
-          }
-          break;
-        case "menusChange":
-          currentStatus.menu = newData.value ?? "Out of Menuts";
-          break;
-        case "error":
-          let alertDiv = document.createElement("div");
-          alertDiv.classList.add(
-            "alert",
-            "alert-danger",
-            "alert-dismissible",
-            "fade",
-            "show"
-          );
-          alertDiv.setAttribute("role", "alert");
-          alertDiv.innerHTML = `<strong>Error!</strong> ${data.data} <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>`;
-          document.body.prepend(alertDiv);
-          break;
-        case "gotMapPath":
-          settings.autoHost.mapPath = newData.value;
-          break;
-        default:
-          console.log("Unknown:", data);
-      }
-    });
   }
-
+  // @ts-ignore
+  window.api.receive("fromMain", (data: WindowReceive) => {
+    let newData = data.data;
+    switch (data.messageType) {
+      case "statusChange":
+        currentStatus.connected = newData.connected;
+        break;
+      case "updateSettings":
+        settings = newData.settings;
+        console.log(settings);
+        break;
+      case "updateSettingSingle":
+        let update = newData.update;
+        if (update) {
+          // @ts-ignore
+          settings[update.setting][update.key] = update.value;
+        }
+        break;
+      case "lobbyData":
+        console.dir(newData.lobby);
+        let newLobby = newData.lobby;
+        if (newLobby) {
+          currentStatus.lobby = newLobby;
+        }
+        break;
+      case "progress":
+        let progress = newData.progress;
+        if (progress) {
+          currentStatus.progress.step = progress.step;
+          currentStatus.progress.percent = progress.progress;
+        }
+        break;
+      case "menusChange":
+        currentStatus.menu = newData.value ?? "Out of Menuts";
+        break;
+      case "error":
+        let alertDiv = document.createElement("div");
+        alertDiv.classList.add(
+          "alert",
+          "alert-danger",
+          "alert-dismissible",
+          "fade",
+          "show"
+        );
+        alertDiv.setAttribute("role", "alert");
+        alertDiv.innerHTML = `<strong>Error!</strong> ${data.data} <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>`;
+        document.body.prepend(alertDiv);
+        break;
+      case "gotMapPath":
+        settings.autoHost.mapPath = newData.value;
+        break;
+      default:
+        console.log("Unknown:", data);
+    }
+  });
   function generateHotkeys(e: KeyboardEvent) {
     e.preventDefault();
     let newValue:
@@ -171,19 +169,6 @@
           },
         });
       }
-    }
-  }
-
-  function generateLobbyData(data: Lobby) {
-    try {
-      (document.getElementById("mapName") as HTMLElement).innerText = data.mapName;
-      (document.getElementById("gameName") as HTMLElement).innerText = data.lobbyName;
-      (document.getElementById("gameHost") as HTMLElement).innerText = data.playerHost;
-      (
-        document.getElementById("eloAvailable") as HTMLElement
-      ).innerText = `${data.eloAvailable}. (${data.lookupName})`;
-    } catch (e: any) {
-      console.log(e.message, e.stack);
     }
   }
 
@@ -897,10 +882,32 @@
       </tr>
     </tbody>
   </table>
-  <div class="p-2" id="tablesDiv" />
-  <script
-    src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"
-    integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM"
-    crossorigin="anonymous">
-  </script>
+  <div class="p-2" id="tablesDiv">
+    {#if currentStatus.lobby?.processed?.teamList?.playerTeams?.data}
+      {#each Object.entries(currentStatus.lobby.processed.teamList.playerTeams.data) as [teamName, teamData]}
+        <table class="table table-hover table-striped table-sm">
+          <thead>
+            <tr>
+              <th>{teamName} Players</th>
+              <th>ELO</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each teamData.slots as player}
+              <tr>
+                <td>{player}</td>
+                <td>{currentStatus.lobby.processed.eloList[player] ?? "N/A"}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      {/each}
+    {/if}
+
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM"
+      crossorigin="anonymous">
+    </script>
+  </div>
 </main>

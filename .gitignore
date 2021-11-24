@@ -107,3 +107,4 @@ screenshots
 public/build
 
 src/*.js
+src/*.map

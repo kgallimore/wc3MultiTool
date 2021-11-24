@@ -54,9 +54,7 @@ export interface WindowReceive {
   messageType:
     | "statusChange"
     | "updateSettingSingle"
-    | "lobbyUpdate"
     | "lobbyData"
-    | "processing"
     | "menusChange"
     | "error"
     | "progress"
@@ -120,7 +118,7 @@ export interface TeamData {
     [key: string]: {
       players: Array<string>;
       number: string;
-      slots?: Array<string>;
+      slots: Array<string>;
       totalSlots: number;
       defaultOpenSlots: Array<number>;
     };

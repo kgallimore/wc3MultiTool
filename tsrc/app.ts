@@ -659,7 +659,7 @@ function handleClientMessage(message: { data: string }) {
         switch (data.messageType) {
           case "ScreenTransitionInfo":
             screenState = data.payload.screen;
-            console.log(screenState);
+            console.log("Screenstate", screenState);
             if (screenState !== "GAME_LOBBY") {
               clearLobby();
             }
@@ -715,7 +715,7 @@ function handleClientMessage(message: { data: string }) {
                 clearLobby();
               }
               menuState = data.payload.screen;
-              console.log(menuState);
+              console.log("MenuState", menuState);
             }
             break;
           case "GameLobbySetup":
@@ -976,6 +976,7 @@ function processMapData(payload: GameClientLobbyPayload) {
         totalSlots: team.totalSlots,
         defaultOpenSlots: [],
         players: [],
+        slots: [],
       };
       lobby.processed.teamList.otherTeams.lookup[team.team] = teamName;
       lobby.processed.teamListLookup[team.team] = {
@@ -988,6 +989,7 @@ function processMapData(payload: GameClientLobbyPayload) {
         totalSlots: team.totalSlots,
         defaultOpenSlots: [],
         players: [],
+        slots: [],
       };
       lobby.processed.teamList.specTeams.lookup[team.team] = teamName;
       lobby.processed.teamListLookup[team.team] = {
@@ -1000,6 +1002,7 @@ function processMapData(payload: GameClientLobbyPayload) {
         totalSlots: team.totalSlots,
         defaultOpenSlots: [],
         players: [],
+        slots: [],
       };
       lobby.processed.teamList.playerTeams.lookup[team.team] = teamName;
       lobby.processed.teamListLookup[team.team] = {
@@ -1155,7 +1158,9 @@ async function processLobby(payload: GameClientLobbyPayload, sendFull = false) {
     if (player.name) {
       db.open;
       const row = db.prepare("SELECT * FROM banList WHERE username = ?").get(player.name);
-      console.log(row);
+      if (row) {
+        console.log("dbrow", row);
+      }
     }
     if (player.playerRegion !== "" && teamType === "playerTeams") {
       newAllPlayers.push(player.name);
@@ -1279,10 +1284,7 @@ async function processLobby(payload: GameClientLobbyPayload, sendFull = false) {
                         10
                     );
                     // Send new step to GUI
-                    win.webContents.send("fromMain", {
-                      messageType: "lobbyUpdate",
-                      data: lobby,
-                    });
+                    sendWindow("lobbyData", { lobby });
                     log.verbose(user + " ELO: " + elo.toString());
                     if (settings.elo.announce) {
                       sendChatMessage(user + " ELO: " + elo.toString());
@@ -1333,7 +1335,7 @@ async function processLobby(payload: GameClientLobbyPayload, sendFull = false) {
       finalizeLobby();
     }
   }
-  sendWindow("lobbyUpdate", { lobby });
+  sendWindow("lobbyData", { lobby });
   if (sendFull) {
     sendToHub("hostedLobby", lobby);
   }
@@ -1665,7 +1667,7 @@ function lobbyProcessedUpdate(key = "", value: any, teamName = "") {
     lobby.processed[key as keyof LobbyProcessed] = value;
     sendToHub("lobbyUpdate", { key, value });
   }
-  sendWindow("lobbyUpdate", { lobby });
+  sendWindow("lobbyData", { lobby });
 }
 
 async function openWarcraft2() {
