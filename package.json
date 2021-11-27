@@ -1,6 +1,6 @@
 {
   "name": "wc3multitool",
-  "version": "0.4.6",
+  "version": "0.5.0",
   "description": "A multi-tool for Warcraft 3",
   "repository": {
     "type": "git",
@@ -9,6 +9,7 @@
   "main": "src/app.js",
   "scripts": {
     "compile": "tsc -w",
+    "build": "concurrently \"tsc\" \"npm:svelte-build\"",
     "start": "concurrently \"npm:compile\" \"npm:svelte-dev\" \"electron-forge start\"",
     "publish": "electron-builder --publish always",
     "lint": "echo \"No linting configured\"",
@@ -17,7 +18,8 @@
     "rebuild": "electron-rebuild",
     "svelte-build": "rollup -c",
     "svelte-dev": "rollup -c -w",
-    "svelte-start": "sirv public"
+    "svelte-start": "sirv public",
+    "postinstall": "electron-builder install-app-deps"
   },
   "build": {
     "appId": "wc3multitool",
@@ -35,6 +37,10 @@
       {
         "from": "./GlueManagerAltered.js",
         "to": "."
+      },
+      {
+        "from": "./public",
+        "to": "./public"
       },
       {
         "from": "./src/images",
@@ -59,6 +65,11 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
     },
+    "portable": {
+      "artifactName": "WC3_Multi-Tool_Setup_portable.exe",
+        "unpackDirName": "wc3MultiTool_portable"
+      
+  },
     "publish": [
       {
         "provider": "generic",

@@ -21,14 +21,14 @@ import fs from "fs";
 import WebSocket from "ws";
 import { play } from "sound-play";
 import sqlite3 from "better-sqlite3";
-const db = new sqlite3(path.join(__dirname, "wc3mt.db"));
 
-/*
-require("electron-reload")(__dirname, {
-  electron: path.join(__dirname, "../node_modules", ".bin", "electron.cmd"),
-  awaitWriteFinish: true,
-  hardResetMethod: "exit",
-});*/
+if (!app.isPackaged) {
+  require("electron-reload")(__dirname, {
+    electron: path.join(__dirname, "../node_modules", ".bin", "electron.cmd"),
+    awaitWriteFinish: true,
+    hardResetMethod: "exit",
+  });
+}
 
 require = require("esm")(module);
 var { Combination } = require("js-combinatorics");
@@ -43,6 +43,7 @@ import type {
   LobbyProcessed,
   WindowReceive,
 } from "./utility";
+const db = new sqlite3(app.getPath("userData") + "/wc3mt.db");
 
 autoUpdater.logger = log;
 
@@ -76,7 +77,7 @@ var selfBattleTag: string;
 var selfRegion: string;
 var appVersion: string;
 
-var settings = <AppSettings>{
+var settings: AppSettings = <AppSettings>{
   autoHost: {
     type: store.get("autoHost.type") ?? "off",
     private: store.get("autoHost.private") ?? false,
@@ -92,6 +93,8 @@ var settings = <AppSettings>{
     voteStart: store.get("autoHost.voteStart") ?? false,
     voteStartPercent: store.get("autoHost.voteStartPercent") ?? 60,
     closeSlots: store.get("autoHost.closeSlots") ?? [],
+    customAnnouncement: store.get("autoHost.customAnnouncement") ?? "",
+    observers: store.get("autoHost.observers") ?? false,
   },
   obs: {
     type: store.get("obs.type") ?? "off",
@@ -364,26 +367,15 @@ function eloMapNameCheck() {
 }
 
 autoUpdater.on("checking-for-update", () => {
-  win.webContents.send("fromMain", {
-    messageType: "updater",
-    data: "Checking for update...",
-  });
+  // Do nothing for now
+  log.info("checking-for-update");
 });
 autoUpdater.on("update-available", (info) => {
-  new Notification({
-    title: "Update Available",
-    body: "An update is available!",
-  }).show();
-  win.webContents.send("fromMain", {
-    messageType: "updater",
-    data: "Update available.",
-  });
+  // Do nothing for now since update is immediately downloaded
+  log.info("Update available");
 });
 autoUpdater.on("update-not-available", (info) => {
-  win.webContents.send("fromMain", {
-    messageType: "updater",
-    data: "Update not available.",
-  });
+  // Do nothing for now
 });
 autoUpdater.on("error", (err) => {
   new Notification({
@@ -391,30 +383,22 @@ autoUpdater.on("error", (err) => {
     body: "There was an error with the auto updater!",
   }).show();
   log.error(err);
-  win.webContents.send("fromMain", {
-    messageType: "updater",
-    data: "Error in auto-updater. " + err,
-  });
+  sendWindow("updater", { value: "Update error! Check logs." });
 });
 autoUpdater.on("download-progress", (progressObj) => {
   let log_message = "Download speed: " + progressObj.bytesPerSecond;
   log_message = log_message + " - Downloaded " + progressObj.percent + "%";
   log_message =
     log_message + " (" + progressObj.transferred + "/" + progressObj.total + ")";
-  win.webContents.send("fromMain", {
-    messageType: "updater",
-    data: log_message,
-  });
+  sendWindow("updater", { value: log_message });
 });
 autoUpdater.on("update-downloaded", (info) => {
   new Notification({
     title: "Update Downloaded",
     body: "The latest version has been downloaded. Please restart the app",
   }).show();
-  win.webContents.send("fromMain", {
-    messageType: "updater",
-    data: "Update downloaded",
-  });
+  log.info("Update downloaded");
+  sendWindow("updater", { value: "Update downloaded. Please restart the app." });
 });
 
 const createWindow = () => {
@@ -688,7 +672,7 @@ function handleClientMessage(message: { data: string }) {
                       flagFullSharedUnitControl: false,
                       flagRandomRaces: false,
                       flagRandomHero: false,
-                      settingObservers: 0,
+                      settingObservers: settings.autoHost.observers ? 3 : 0,
                       settingVisibility: 0,
                     },
                     privateGame: settings.autoHost.private,
@@ -1486,10 +1470,17 @@ async function announceBot() {
         text += " I will try to balance teams before we start.";
       }
     }
+    if (["smartHost", "rapidHost".includes(settings.autoHost.type)]) {
+      text += " I will start when slots are full.";
+    }
     if (settings.autoHost.voteStart) {
       text += " You can vote start with ?votestart";
     }
+    text += settings.autoHost.customAnnouncement;
     sendChatMessage(text);
+    if (settings.autoHost.customAnnouncement.length > 0) {
+      sendChatMessage(settings.autoHost.customAnnouncement);
+    }
   }
 }
 

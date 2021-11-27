@@ -23,6 +23,8 @@
       voteStart: false,
       voteStartPercent: 60,
       closeSlots: [],
+      customAnnouncement: "",
+      observers: false,
     },
     obs: {
       type: "off",
@@ -48,7 +50,19 @@
     menu: "Out of menus",
     progress: { percent: 0, step: "Waiting" },
     lobby: {} as Lobby,
+    updater: "Up to date",
   };
+  $: botAnnouncement = `Welcome. I am a bot. ${
+    settings.elo.available && settings.elo.type !== "off"
+      ? `I will fetch ELO from ${settings.elo.type}. ${
+          settings.elo.balanceTeams ? "I will try to balance teams before we start." : ""
+        }`
+      : ""
+  } ${
+    ["smartHost", "rapidHost"].includes(settings.autoHost.type)
+      ? "I will start when slots are full."
+      : ""
+  } ${settings.autoHost.voteStart ? " You can vote start with ?votestart" : ""}`;
 
   if (document.readyState !== "loading") {
     console.log("document is ready");
@@ -75,6 +89,10 @@
   window.api.receive("fromMain", (data: WindowReceive) => {
     let newData = data.data;
     switch (data.messageType) {
+      case "updater":
+        console.log("updater", newData);
+        currentStatus.updater = newData.value;
+        break;
       case "statusChange":
         currentStatus.connected = newData.connected;
         break;
@@ -172,40 +190,6 @@
     }
   }
 
-  // This is going to be a very messy function,placeholder to just get it started
-  function generateTables(lobby: Lobby) {
-    try {
-      (document.getElementById("tablesDiv") as HTMLElement).innerHTML = "";
-      let tbl;
-      Object.keys(lobby.processed.teamList.playerTeams.data).forEach((playerTeam) => {
-        tbl = document.createElement("table");
-        tbl.classList.add("table", "table-hover", "table-striped", "table-sm");
-        let trow = tbl.createTHead().insertRow();
-        [`${playerTeam} Players`, "ELO"].forEach((label) => {
-          let th = document.createElement("th");
-          th.appendChild(document.createTextNode(label));
-          trow.appendChild(th);
-        });
-        let tBody = tbl.createTBody();
-        lobby.processed.teamList.playerTeams.data[playerTeam].slots?.forEach((player) => {
-          let row = tBody.insertRow();
-          row.insertCell().appendChild(document.createTextNode(player));
-          let cell = row.insertCell();
-          let text = document.createTextNode(
-            lobby.processed.eloList && lobby.processed.eloList[player]
-              ? lobby.processed.eloList[player].toString()
-              : "N/A"
-          );
-          cell.appendChild(text);
-        });
-
-        (document.getElementById("tablesDiv") as HTMLElement).appendChild(tbl);
-      });
-    } catch (e: any) {
-      console.error(e.message, e.stack);
-    }
-  }
-
   function updateSettingSingle(
     setting: keyof AppSettings,
     key: SettingsKeys,
@@ -234,25 +218,6 @@
         },
       },
     });
-  }
-
-  function sendNames() {
-    const autoHostGameName = (
-      document.getElementById("autoHostGameName") as HTMLInputElement
-    ).value;
-    if (autoHostGameName !== settings.autoHost.gameName) {
-      toMain({
-        messageType: "updateSettingSingle",
-        data: {
-          update: {
-            setting: "autoHost",
-            key: "gameName",
-            value: autoHostGameName,
-          },
-        },
-      });
-    }
-    (document.getElementById("saveNameButton") as HTMLElement).style.display = "none";
   }
 
   function toMain(args: WindowSend) {
@@ -285,7 +250,7 @@
                     class="form-select"
                     data-key="type"
                     data-setting="elo"
-                    bind:value={settings.elo.type}
+                    value={settings.elo.type}
                     on:change={(e) =>
                       // @ts-ignore
                       updateSettingSingle("elo", "type", e.target.value)}
@@ -364,17 +329,16 @@
                 <div class="col">
                   <label for="autoHostState" class="form-label">
                     <details>
-                      <summary>Auto Host</summary><strong>Lobby Host:</strong> Starts a
-                      lobby with specified settings. (Ignores Announce is Bot)<br />
+                      <summary>Auto Host (click to expand)</summary><strong
+                        >Lobby Host:</strong
+                      >
+                      Starts a lobby with specified settings. (Ignores Announce is Bot)<br
+                      />
                       <strong>Rapid Host:</strong> Hosts lobbies, auto starts, leaves the
                       game after specified timer(minutes).<br />
                       <strong>Smart Host:</strong> Hosts lobbies, auto starts, quits the
                       game if this end screen pops up:
-                      <img
-                        class="img-fluid"
-                        src="images/1080/quitNormal.png"
-                        alt="Quit Normal"
-                      />
+                      <img class="img-fluid" src="quitNormal.png" alt="Quit Normal" />
                     </details>
                   </label>
                   <select
@@ -382,7 +346,7 @@
                     class="form-select"
                     data-key="type"
                     data-setting="autoHost"
-                    bind:value={settings.autoHost.type}
+                    value={settings.autoHost.type}
                     on:change={(e) =>
                       updateSettingSingle(
                         "autoHost",
@@ -504,6 +468,24 @@
                       <input
                         type="checkbox"
                         class="btn-check"
+                        id="enbaleObservers"
+                        data-key="observers"
+                        data-setting="autoHost"
+                        bind:checked={settings.autoHost.observers}
+                        on:change={(e) =>
+                          updateSettingSingle(
+                            "autoHost",
+                            "observers",
+                            // @ts-ignore
+                            e.target.checked
+                          )}
+                      />
+                      <label for="enbaleObservers" class="btn btn-outline-primary"
+                        >Create Observer Slots</label
+                      >
+                      <input
+                        type="checkbox"
+                        class="btn-check"
                         id="voteStartCheck"
                         data-key="voteStart"
                         data-setting="autoHost"
@@ -544,7 +526,7 @@
                         minlength="3"
                         data-key="gameName"
                         data-setting="autoHost"
-                        bind:value={settings.autoHost.gameName}
+                        value={settings.autoHost.gameName}
                         on:keydown={(e) => {
                           if (e.key === "Enter") {
                             updateSettingSingle(
@@ -559,76 +541,6 @@
                           updateSettingSingle(
                             "autoHost",
                             "gameName",
-                            // @ts-ignore
-                            e.target.value
-                          )}
-                      />
-                    </div>
-                  </div>
-                  <div class="row p-2">
-                    <div class="col">
-                      <label for="voteStartPercent" class="form-label"
-                        >Vote Start Percentage</label
-                      >
-                      <input
-                        type="number"
-                        id="voteStartPercent"
-                        class="form-control"
-                        data-key="voteStartPercent"
-                        data-setting="autoHost"
-                        min="5"
-                        max="100"
-                        bind:value={settings.autoHost.voteStartPercent}
-                        on:change={(e) =>
-                          updateSettingSingle(
-                            "autoHost",
-                            "voteStartPercent",
-                            // @ts-ignore
-                            e.target.value
-                          )}
-                      />
-                    </div>
-                    <div class="col">
-                      <label for="rapidHostTimer" class="form-label"
-                        >Rapid Host Timer</label
-                      >
-                      <input
-                        type="number"
-                        id="rapidHostTimer"
-                        class="form-control"
-                        data-key="rapidHostTimer"
-                        data-setting="autoHost"
-                        min="0"
-                        max="360"
-                        bind:value={settings.autoHost.rapidHostTimer}
-                        on:change={(e) =>
-                          updateSettingSingle(
-                            "autoHost",
-                            "rapidHostTimer",
-                            // @ts-ignore
-                            e.target.value
-                          )}
-                      />
-                    </div>
-                  </div>
-                  <div class="row p-2">
-                    <div class="col">
-                      <label for="announceRestingInterval" class="form-label"
-                        >Minimum seconds between announcements</label
-                      >
-                      <input
-                        type="number"
-                        id="announceRestingInterval"
-                        class="form-control"
-                        data-key="announceRestingInterval"
-                        data-setting="autoHost"
-                        min="0"
-                        max="600"
-                        bind:value={settings.autoHost.announceRestingInterval}
-                        on:change={(e) =>
-                          updateSettingSingle(
-                            "autoHost",
-                            "announceRestingInterval",
                             // @ts-ignore
                             e.target.value
                           )}
@@ -675,6 +587,115 @@
                       </div>
                     </div>
                   </div>
+
+                  <div class="row p-2">
+                    {#if settings.autoHost.voteStart}
+                      <div class="col">
+                        <label for="voteStartPercent" class="form-label"
+                          >Vote Start Percentage</label
+                        >
+                        <input
+                          type="number"
+                          id="voteStartPercent"
+                          class="form-control"
+                          data-key="voteStartPercent"
+                          data-setting="autoHost"
+                          min="5"
+                          max="100"
+                          value={settings.autoHost.voteStartPercent}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "autoHost",
+                              "voteStartPercent",
+                              // @ts-ignore
+                              e.target.value
+                            )}
+                        />
+                      </div>
+                    {/if}
+                    {#if settings.autoHost.type === "rapidHost"}
+                      <div class="col">
+                        <label for="rapidHostTimer" class="form-label"
+                          >Rapid Host Timer</label
+                        >
+                        <input
+                          type="number"
+                          id="rapidHostTimer"
+                          class="form-control"
+                          data-key="rapidHostTimer"
+                          data-setting="autoHost"
+                          min="0"
+                          max="360"
+                          value={settings.autoHost.rapidHostTimer}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "autoHost",
+                              "rapidHostTimer",
+                              // @ts-ignore
+                              e.target.value
+                            )}
+                        />
+                      </div>
+                    {/if}
+                  </div>
+
+                  {#if settings.autoHost.announceIsBot}
+                    <div class="row p-2">
+                      <div class="col">
+                        <h4>Bot Announcement:</h4>
+                        <span>{botAnnouncement}</span>
+                        <p>{settings.autoHost.customAnnouncement}</p>
+                      </div>
+                    </div>
+                    <div class="row p-2">
+                      <div class="col">
+                        <label for="customAnnouncement" class="form-label"
+                          >Custom Announcement</label
+                        >
+                        <input
+                          type="text"
+                          id="customAnnouncement"
+                          class="form-control"
+                          data-key="customAnnouncement"
+                          data-setting="autoHost"
+                          maxlength="120"
+                          placeholder="120 Character Max"
+                          value={settings.autoHost.customAnnouncement}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "autoHost",
+                              "customAnnouncement",
+                              // @ts-ignore
+                              e.target.value
+                            )}
+                        />
+                      </div>
+                    </div>
+                    <div class="row p-2">
+                      <div class="col">
+                        <label for="announceRestingInterval" class="form-label"
+                          >Minimum seconds between announcements</label
+                        >
+                        <input
+                          type="number"
+                          id="announceRestingInterval"
+                          class="form-control"
+                          data-key="announceRestingInterval"
+                          data-setting="autoHost"
+                          min="0"
+                          max="600"
+                          value={settings.autoHost.announceRestingInterval}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "autoHost",
+                              "announceRestingInterval",
+                              // @ts-ignore
+                              e.target.value
+                            )}
+                        />
+                      </div>
+                    </div>
+                  {/if}
                 </div>
               {/if}
             </form>
@@ -687,7 +708,7 @@
                     class="form-select"
                     data-key="type"
                     data-setting="obs"
-                    bind:value={settings.obs.type}
+                    value={settings.obs.type}
                     on:change={(e) =>
                       updateSettingSingle(
                         "obs",
@@ -820,6 +841,11 @@
         <h2 id="statusText">Waiting for Connection</h2>
       </span>
     {/if}
+  </div>
+  <div class="d-flex justify-content-center p-2">
+    <span class="badge bg-primary" id="mainStatus">
+      {currentStatus.updater}
+    </span>
   </div>
   <div class="d-flex justify-content-center pt-1">
     <button

@@ -19,6 +19,8 @@ export interface AutoHostSettings {
   voteStart: boolean;
   voteStartPercent: number;
   closeSlots: Array<number>;
+  customAnnouncement: string;
+  observers: boolean;
 }
 export interface ObsSettings {
   type: string;
@@ -59,7 +61,8 @@ export interface WindowReceive {
     | "error"
     | "progress"
     | "gotMapPath"
-    | "updateSettings";
+    | "updateSettings"
+    | "updater";
   data: {
     update?: { setting: keyof AppSettings; key: SettingsKeys; value: any };
     settings?: AppSettings;
