@@ -21,6 +21,13 @@ export interface AutoHostSettings {
   closeSlots: Array<number>;
   customAnnouncement: string;
   observers: boolean;
+  advancedMapOptions: boolean;
+  flagLockTeams: boolean;
+  flagPlaceTeamsTogether: boolean;
+  flagFullSharedUnitControl: boolean;
+  flagRandomRaces: boolean;
+  flagRandomHero: boolean;
+  settingVisibility: "0" | "1" | "2" | "3";
 }
 export interface ObsSettings {
   type: string;

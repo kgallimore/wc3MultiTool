@@ -1,6 +1,6 @@
 {
   "name": "wc3multitool",
-  "version": "0.5.0",
+  "version": "0.5.2",
   "description": "A multi-tool for Warcraft 3",
   "repository": {
     "type": "git",
@@ -9,12 +9,12 @@
   "main": "src/app.js",
   "scripts": {
     "compile": "tsc -w",
-    "build": "concurrently \"tsc\" \"npm:svelte-build\"",
+    "build": "tsc && npm run svelte-build",
     "start": "concurrently \"npm:compile\" \"npm:svelte-dev\" \"electron-forge start\"",
     "publish": "electron-builder --publish always",
     "lint": "echo \"No linting configured\"",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder",
+    "dist": "npm run build && electron-builder",
     "rebuild": "electron-rebuild",
     "svelte-build": "rollup -c",
     "svelte-dev": "rollup -c -w",

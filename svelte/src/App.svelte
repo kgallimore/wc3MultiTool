@@ -7,6 +7,7 @@
     WindowSend,
   } from "../../tsrc/utility";
   import CloseSlot from "./components/CloseSlot.svelte";
+  import SettingsCheckbox from "./components/SettingsCheckbox.svelte";
   let settings: AppSettings = {
     autoHost: {
       type: "off",
@@ -25,6 +26,13 @@
       closeSlots: [],
       customAnnouncement: "",
       observers: false,
+      advancedMapOptions: false,
+      flagLockTeams: true,
+      flagPlaceTeamsTogether: true,
+      flagFullSharedUnitControl: false,
+      flagRandomRaces: false,
+      flagRandomHero: false,
+      settingVisibility: "0",
     },
     obs: {
       type: "off",
@@ -274,7 +282,7 @@
                         id="balanceTeamsCheck"
                         data-key="balanceTeams"
                         data-setting="elo"
-                        bind:checked={settings.elo.balanceTeams}
+                        checked={settings.elo.balanceTeams}
                         on:change={(e) =>
                           // @ts-ignore
                           updateSettingSingle("elo", "balanceTeams", e.target.checked)}
@@ -288,7 +296,7 @@
                         id="excludeHostFromSwapCheck"
                         data-key="excludeHostFromSwap"
                         data-setting="elo"
-                        bind:checked={settings.elo.excludeHostFromSwap}
+                        checked={settings.elo.excludeHostFromSwap}
                         on:change={(e) =>
                           updateSettingSingle(
                             "elo",
@@ -307,7 +315,7 @@
                         id="announceELOCheck"
                         data-key="announce"
                         data-setting="elo"
-                        bind:checked={settings.elo.announce}
+                        checked={settings.elo.announce}
                         on:change={(e) =>
                           updateSettingSingle(
                             "elo",
@@ -370,138 +378,231 @@
                     </div>
                   </div>
                   <div class="row p-2">
-                    <div
-                      class="btn-group btn-group-sm"
-                      style="flex-wrap: wrap;"
-                      role="group"
-                    >
-                      <input
-                        type="checkbox"
-                        class="btn-check"
-                        id="autoHostPrivateCheck"
-                        data-key="private"
-                        data-setting="autoHost"
-                        bind:checked={settings.autoHost.private}
-                        on:change={(e) =>
-                          updateSettingSingle(
-                            "autoHost",
-                            "private",
-                            // @ts-ignore
-                            e.target.checked
-                          )}
-                      />
-                      <label for="autoHostPrivateCheck" class="btn btn-outline-primary"
-                        >Private Lobbies</label
+                    <div class="col">
+                      <div
+                        class="btn-group btn-group-sm"
+                        style="flex-wrap: wrap;"
+                        role="group"
                       >
-                      <input
-                        type="checkbox"
-                        class="btn-check"
-                        id="autoHostIncrementCheck"
-                        data-key="increment"
-                        data-setting="autoHost"
-                        bind:checked={settings.autoHost.increment}
-                        on:change={(e) =>
-                          updateSettingSingle(
-                            "autoHost",
-                            "increment",
-                            // @ts-ignore
-                            e.target.checked
-                          )}
-                      />
-                      <label for="autoHostIncrementCheck" class="btn btn-outline-primary"
-                        >Incremental Lobbies</label
-                      >
-                      <input
-                        type="checkbox"
-                        class="btn-check"
-                        id="autoHostSoundsCheck"
-                        data-key="sounds"
-                        data-setting="autoHost"
-                        bind:checked={settings.autoHost.sounds}
-                        on:change={(e) =>
-                          updateSettingSingle(
-                            "autoHost",
-                            "sounds",
-                            // @ts-ignore
-                            e.target.checked
-                          )}
-                      />
-                      <label for="autoHostSoundsCheck" class="btn btn-outline-primary"
-                        >Sound Notifications</label
-                      >
-                      <input
-                        type="checkbox"
-                        class="btn-check"
-                        id="announceIsBotCheck"
-                        data-key="announceIsBot"
-                        data-setting="autoHost"
-                        bind:checked={settings.autoHost.announceIsBot}
-                        on:change={(e) =>
-                          updateSettingSingle(
-                            "autoHost",
-                            "announceIsBot",
-                            // @ts-ignore
-                            e.target.checked
-                          )}
-                      />
-                      <label for="announceIsBotCheck" class="btn btn-outline-primary"
-                        >Announce Is Bot</label
-                      >
-                      <input
-                        type="checkbox"
-                        class="btn-check"
-                        id="moveToSpecCheck"
-                        data-key="moveToSpec"
-                        data-setting="autoHost"
-                        bind:checked={settings.autoHost.moveToSpec}
-                        on:change={(e) =>
-                          updateSettingSingle(
-                            "autoHost",
-                            "moveToSpec",
-                            // @ts-ignore
-                            e.target.checked
-                          )}
-                      />
-                      <label for="moveToSpecCheck" class="btn btn-outline-primary"
-                        >Move to Spec/Host</label
-                      >
-                      <input
-                        type="checkbox"
-                        class="btn-check"
-                        id="enbaleObservers"
-                        data-key="observers"
-                        data-setting="autoHost"
-                        bind:checked={settings.autoHost.observers}
-                        on:change={(e) =>
-                          updateSettingSingle(
-                            "autoHost",
-                            "observers",
-                            // @ts-ignore
-                            e.target.checked
-                          )}
-                      />
-                      <label for="enbaleObservers" class="btn btn-outline-primary"
-                        >Create Observer Slots</label
-                      >
-                      <input
-                        type="checkbox"
-                        class="btn-check"
-                        id="voteStartCheck"
-                        data-key="voteStart"
-                        data-setting="autoHost"
-                        bind:checked={settings.autoHost.voteStart}
-                        on:change={(e) =>
-                          updateSettingSingle(
-                            "autoHost",
-                            "voteStart",
-                            // @ts-ignore
-                            e.target.checked
-                          )}
-                      />
-                      <label for="voteStartCheck" class="btn btn-outline-primary"
-                        >Vote start</label
-                      >
+                        <input
+                          type="checkbox"
+                          class="btn-check"
+                          id="autoHostPrivateCheck"
+                          data-key="private"
+                          data-setting="autoHost"
+                          bind:checked={settings.autoHost.private}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "autoHost",
+                              "private",
+                              // @ts-ignore
+                              e.target.checked
+                            )}
+                        />
+                        <label for="autoHostPrivateCheck" class="btn btn-outline-primary"
+                          >Private Lobbies</label
+                        >
+                        <input
+                          type="checkbox"
+                          class="btn-check"
+                          id="autoHostIncrementCheck"
+                          data-key="increment"
+                          data-setting="autoHost"
+                          bind:checked={settings.autoHost.increment}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "autoHost",
+                              "increment",
+                              // @ts-ignore
+                              e.target.checked
+                            )}
+                        />
+                        <label
+                          for="autoHostIncrementCheck"
+                          class="btn btn-outline-primary">Incremental Lobbies</label
+                        >
+                        <input
+                          type="checkbox"
+                          class="btn-check"
+                          id="autoHostSoundsCheck"
+                          data-key="sounds"
+                          data-setting="autoHost"
+                          bind:checked={settings.autoHost.sounds}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "autoHost",
+                              "sounds",
+                              // @ts-ignore
+                              e.target.checked
+                            )}
+                        />
+                        <label for="autoHostSoundsCheck" class="btn btn-outline-primary"
+                          >Sound Notifications</label
+                        >
+                        <input
+                          type="checkbox"
+                          class="btn-check"
+                          id="announceIsBotCheck"
+                          data-key="announceIsBot"
+                          data-setting="autoHost"
+                          bind:checked={settings.autoHost.announceIsBot}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "autoHost",
+                              "announceIsBot",
+                              // @ts-ignore
+                              e.target.checked
+                            )}
+                        />
+                        <label for="announceIsBotCheck" class="btn btn-outline-primary"
+                          >Announce Is Bot</label
+                        >
+                        <input
+                          type="checkbox"
+                          class="btn-check"
+                          id="moveToSpecCheck"
+                          data-key="moveToSpec"
+                          data-setting="autoHost"
+                          bind:checked={settings.autoHost.moveToSpec}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "autoHost",
+                              "moveToSpec",
+                              // @ts-ignore
+                              e.target.checked
+                            )}
+                        />
+                        <label for="moveToSpecCheck" class="btn btn-outline-primary"
+                          >Move to Spec/Host</label
+                        >
+                        <input
+                          type="checkbox"
+                          class="btn-check"
+                          id="enbaleObservers"
+                          data-key="observers"
+                          data-setting="autoHost"
+                          bind:checked={settings.autoHost.observers}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "autoHost",
+                              "observers",
+                              // @ts-ignore
+                              e.target.checked
+                            )}
+                        />
+                        <label for="enbaleObservers" class="btn btn-outline-primary"
+                          >Create Observer Slots</label
+                        >
+                        <input
+                          type="checkbox"
+                          class="btn-check"
+                          id="voteStartCheck"
+                          data-key="voteStart"
+                          data-setting="autoHost"
+                          bind:checked={settings.autoHost.voteStart}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "autoHost",
+                              "voteStart",
+                              // @ts-ignore
+                              e.target.checked
+                            )}
+                        />
+                        <label for="voteStartCheck" class="btn btn-outline-primary"
+                          >Vote start</label
+                        >
+                        <SettingsCheckbox
+                          setting="autoHost"
+                          key="advancedMapOptions"
+                          checked={settings.autoHost.advancedMapOptions}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "autoHost",
+                              "advancedMapOptions",
+                              // @ts-ignore
+                              e.target.checked
+                            )}
+                        />
+                      </div>
                     </div>
+
+                    {#if settings.autoHost.advancedMapOptions}
+                      <div class="col">
+                        <div
+                          class="btn-group btn-group-sm"
+                          style="flex-wrap: wrap;"
+                          role="group"
+                        >
+                          <SettingsCheckbox
+                            setting="autoHost"
+                            key="flagLockTeams"
+                            checked={settings.autoHost.flagLockTeams}
+                            on:change={(e) =>
+                              updateSettingSingle(
+                                "autoHost",
+                                "flagLockTeams",
+                                // @ts-ignore
+                                e.target.checked
+                              )}
+                          />
+                          <SettingsCheckbox
+                            setting="autoHost"
+                            key="flagFullSharedUnitControl"
+                            checked={settings.autoHost.flagFullSharedUnitControl}
+                            on:change={(e) =>
+                              updateSettingSingle(
+                                "autoHost",
+                                "flagFullSharedUnitControl",
+                                // @ts-ignore
+                                e.target.checked
+                              )}
+                          />
+                          <SettingsCheckbox
+                            setting="autoHost"
+                            key="flagPlaceTeamsTogether"
+                            checked={settings.autoHost.flagPlaceTeamsTogether}
+                            on:change={(e) =>
+                              updateSettingSingle(
+                                "autoHost",
+                                "flagPlaceTeamsTogether",
+                                // @ts-ignore
+                                e.target.checked
+                              )}
+                          />
+                          <SettingsCheckbox
+                            setting="autoHost"
+                            key="flagRandomRaces"
+                            checked={settings.autoHost.flagRandomRaces}
+                            on:change={(e) =>
+                              updateSettingSingle(
+                                "autoHost",
+                                "flagRandomRaces",
+                                // @ts-ignore
+                                e.target.checked
+                              )}
+                          />
+                        </div>
+                        <select
+                          class="form-control form-control-sm"
+                          id="autoHostsettingVisibility"
+                          data-key="map"
+                          data-setting="autoHost"
+                          value={settings.autoHost.settingVisibility}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "autoHost",
+                              "settingVisibility",
+                              // @ts-ignore
+                              e.target.value
+                            )}
+                        >
+                          <option value="0">Public</option>
+                          <option value="1">Hide Terrain</option>
+                          <option value="2">Map Explored</option>
+                          <option value="3">Always Visible</option>
+                        </select>
+                      </div>
+                    {/if}
                   </div>
                   <div class="row p-2">
                     <div class="col">
@@ -570,7 +671,7 @@
                       <div class="btn-group btn-group-sm w-100 py-1" role="group">
                         {#each Array.from(Array(12).keys()) as i}
                           <CloseSlot
-                            checked={settings.autoHost.closeSlots.includes(i + 13) ??
+                            checked={settings.autoHost.closeSlots.includes(i + 12) ??
                               false}
                             on:change={(e) => {
                               updateSettingSingle(
@@ -578,7 +679,7 @@
                                 "closeSlots",
                                 // @ts-ignore
                                 e.target.checked,
-                                i + 13
+                                i + 12
                               );
                             }}
                             number={(i + 13).toString()}
