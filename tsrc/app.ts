@@ -95,6 +95,13 @@ var settings: AppSettings = <AppSettings>{
     closeSlots: store.get("autoHost.closeSlots") ?? [],
     customAnnouncement: store.get("autoHost.customAnnouncement") ?? "",
     observers: store.get("autoHost.observers") ?? false,
+    advancedMapOptions: store.get("autoHost.advancedMapOptions") ?? false,
+    flagLockTeams: store.get("autoHost.flagLockTeams") ?? true,
+    flagPlaceTeamsTogether: store.get("autoHost.flagPlaceTeamsTogether") ?? true,
+    flagFullSharedUnitControl: store.get("autoHost.flagFullSharedUnitControl") ?? false,
+    flagRandomRaces: store.get("autoHost.flagRandomRaces") ?? false,
+    flagRandomHero: store.get("autoHost.flagRandomHero") ?? false,
+    settingVisibility: store.get("autoHost.settingVisibility") ?? "0",
   },
   obs: {
     type: store.get("obs.type") ?? "off",
@@ -655,7 +662,7 @@ function handleClientMessage(message: { data: string }) {
                 (data.payload.screen === "SCORE_SCREEN" && menuState === "SCORE_SCREEN")
               ) {
                 menuState = data.payload.screen;
-                if (openLobbyParams) {
+                if (openLobbyParams?.lobbyName) {
                   openParamsJoin();
                 } else if (settings.autoHost.type !== "off") {
                   gameNumber += 1;
@@ -667,16 +674,18 @@ function handleClientMessage(message: { data: string }) {
                     gameSpeed: 2,
                     gameName: lobbyName,
                     mapSettings: {
-                      flagLockTeams: true,
-                      flagPlaceTeamsTogether: true,
-                      flagFullSharedUnitControl: false,
-                      flagRandomRaces: false,
-                      flagRandomHero: false,
+                      flagLockTeams: settings.autoHost.flagLockTeams,
+                      flagPlaceTeamsTogether: settings.autoHost.flagPlaceTeamsTogether,
+                      flagFullSharedUnitControl:
+                        settings.autoHost.flagFullSharedUnitControl,
+                      flagRandomRaces: settings.autoHost.flagRandomRaces,
+                      flagRandomHero: settings.autoHost.flagRandomHero,
                       settingObservers: settings.autoHost.observers ? 3 : 0,
-                      settingVisibility: 0,
+                      settingVisibility: parseInt(settings.autoHost.settingVisibility),
                     },
                     privateGame: settings.autoHost.private,
                   };
+                  log.info("Sending autoHost payload", payloadData);
                   sendMessage("CreateLobby", payloadData);
                 }
               }
@@ -1315,7 +1324,7 @@ async function processLobby(payload: GameClientLobbyPayload, sendFull = false) {
       });
       lobby.processed.playerSet = lobby.processed.allLobby;
     }
-    if (lobbyIsReady()) {
+    if (!lobby.eloAvailable && lobbyIsReady()) {
       finalizeLobby();
     }
   }
@@ -1393,7 +1402,7 @@ async function finalizeLobby() {
         if (lobbyIsReady()) {
           startGame();
         }
-      }, 250);
+      }, 150);
     } else if (settings.autoHost.type === "lobbyHost" && settings.autoHost.sounds) {
       playSound("ready.wav");
     }
@@ -1476,7 +1485,6 @@ async function announceBot() {
     if (settings.autoHost.voteStart) {
       text += " You can vote start with ?votestart";
     }
-    text += settings.autoHost.customAnnouncement;
     sendChatMessage(text);
     if (settings.autoHost.customAnnouncement.length > 0) {
       sendChatMessage(settings.autoHost.customAnnouncement);
@@ -1529,18 +1537,18 @@ async function findQuit() {
               return true;
             }
           } catch (e) {
-            log.error(e);
+            //log.error(e);
             return false;
           }
         })
       ) {
-        log.verbose("Found quit. Press q");
+        //log.verbose("Found quit. Press q");
         await robot.keyTap("q");
         if (settings.autoHost.sounds) {
           playSound("quit.wav");
         }
       } else {
-        log.verbose("Did not find quit, try again in 5 seconds");
+        //log.verbose("Did not find quit, try again in 5 seconds");
       }
     }
     setTimeout(findQuit, 5000);
