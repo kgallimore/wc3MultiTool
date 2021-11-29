@@ -1,7 +1,10 @@
-const { app, contextBridge, ipcRenderer } = require("electron");
+const { app, contextBridge, ipcRenderer, shell } = require("electron");
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
 contextBridge.exposeInMainWorld("api", {
+  shell: (url: string) => {
+    shell.openExternal(url);
+  },
   send: (channel: string, data: any) => {
     // whitelist channels
     let validChannels = ["toMain"];

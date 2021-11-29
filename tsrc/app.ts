@@ -21,6 +21,7 @@ import fs from "fs";
 import WebSocket from "ws";
 import { play } from "sound-play";
 import sqlite3 from "better-sqlite3";
+import { DisClient } from "./disc";
 
 if (!app.isPackaged) {
   require("electron-reload")(__dirname, {
@@ -42,12 +43,13 @@ import type {
   TeamTypes,
   LobbyProcessed,
   WindowReceive,
+  SettingsKeys,
 } from "./utility";
 const db = new sqlite3(app.getPath("userData") + "/wc3mt.db");
 
 autoUpdater.logger = log;
 
-screen.config.confidence = 0.65;
+screen.config.confidence = 0.85;
 
 log.info("App starting...");
 
@@ -76,6 +78,7 @@ var screenState: string;
 var selfBattleTag: string;
 var selfRegion: string;
 var appVersion: string;
+var discClient: DisClient | null = null;
 
 var settings: AppSettings = <AppSettings>{
   autoHost: {
@@ -87,9 +90,11 @@ var settings: AppSettings = <AppSettings>{
     gameName: store.get("autoHost.gameName") ?? "",
     mapPath: store.get("autoHost.mapPath") ?? "N/A",
     announceIsBot: store.get("autoHost.announceIsBot") ?? false,
+    announceCustom: store.get("autoHost.announceCustom") ?? false,
     announceRestingInterval: store.get("autoHost.announceRestingInterval") ?? 30,
     moveToSpec: store.get("autoHost.moveToSpec") ?? false,
     rapidHostTimer: store.get("autoHost.rapidHostTimer") ?? 0,
+    smartHostTimeout: store.get("autoHost.smartHostTimeout") ?? 0,
     voteStart: store.get("autoHost.voteStart") ?? false,
     voteStartPercent: store.get("autoHost.voteStartPercent") ?? 60,
     closeSlots: store.get("autoHost.closeSlots") ?? [],
@@ -115,6 +120,7 @@ var settings: AppSettings = <AppSettings>{
     excludeHostFromSwap: store.get("elo.excludeHostFromSwap") ?? true,
     lookupName: store.get("elo.lookupName") ?? "",
     available: store.get("elo.available") ?? false,
+    wc3statsVariant: store.get("elo.wc3statsVariant") ?? "",
   },
   discord: {
     type: store.get("discord.type") ?? "off",
@@ -129,7 +135,7 @@ if (!identifier) {
 }
 
 var warInstallLoc: string = store.get("warInstallLoc") as string;
-if (!warInstallLoc || warInstallLoc === "" || warInstallLoc.includes(".exe")) {
+if (!warInstallLoc || warInstallLoc.includes(".exe")) {
   fs.readFile("warInstallLoc.txt", (err, data) => {
     if (err) {
       console.error(err);
@@ -197,7 +203,7 @@ app.on("second-instance", (event, args) => {
 });
 
 function protocolHandler(url: string) {
-  if (url && url !== "") {
+  if (url) {
     openLobbyParams = getQueryVariables(url.split("?", 2)[1]);
     if (openLobbyParams.lobbyName || openLobbyParams.gameId) {
       log.info(openLobbyParams);
@@ -276,29 +282,8 @@ ipcMain.on("toMain", (event, args: WindowSend) => {
       break;
     case "updateSettingSingle":
       let update = args.data?.update;
-      if (
-        update &&
-        settings[update.setting] !== undefined &&
-        // @ts-ignore
-        settings[update.setting][update.key] !== undefined &&
-        // @ts-ignore
-        (typeof settings[update.setting][update.key] === typeof update.value ||
-          // @ts-ignore
-          ((update.key === "inGameHotkey" || update.key === "outOfGameHotkey") &&
-            (typeof update.value === "boolean" || Array.isArray(update.value))))
-      ) {
-        // @ts-ignore
-        settings[update.setting][update.key] = update.value;
-        sendSocket(update.setting + "Settings", settings[update.setting]);
-        sendWindow("updateSettingSingle", {
-          update: {
-            setting: update.setting,
-            key: update.key,
-            value: update.value,
-          },
-        });
-        store.set(update.setting, settings[update.setting]);
-        log.info(update.setting + " settings changed:", settings[update.setting]);
+      if (update) {
+        updateSetting(update.setting, update.key, update.value);
       }
       break;
     default:
@@ -307,24 +292,63 @@ ipcMain.on("toMain", (event, args: WindowSend) => {
   }
 });
 
+function updateSetting(setting: keyof AppSettings, key: SettingsKeys, value: any) {
+  if (
+    settings[setting] !== undefined &&
+    // @ts-ignore
+    settings[setting][key] !== undefined &&
+    // @ts-ignore
+    (typeof settings[setting][key] === typeof value ||
+      // @ts-ignore
+      ((key === "inGameHotkey" || key === "outOfGameHotkey") &&
+        (typeof value === "boolean" || Array.isArray(value)))) &&
+    // @ts-ignore
+    settings[setting][key] !== value
+  ) {
+    // @ts-ignore
+    settings[setting][key] = value;
+    if (setting === "discord") {
+      if (settings.discord.type !== "off") {
+        if (settings.discord.token.length > 10 && settings.discord.channel) {
+          discClient = new DisClient(
+            settings.discord.token,
+            settings.discord.channel,
+            !app.isPackaged
+          );
+        }
+      } else {
+        discClient = null;
+      }
+    }
+    sendSocket(setting + "Settings", settings[setting]);
+    sendWindow("updateSettingSingle", {
+      update: {
+        setting,
+        key,
+        value,
+      },
+    });
+    store.set(setting, settings[setting]);
+    log.info(setting + " settings changed:", settings[setting]);
+  }
+  // @ts-ignore
+}
+
 function eloMapNameCheck() {
   // Clean the name from the map name
   if (settings.elo.type === "wc3stats" || settings.elo.type === "off") {
     if (settings.autoHost.mapName.match(/(HLW)/i)) {
-      settings.elo.lookupName = "HLW";
-      settings.elo.available = true;
-      store.set("elo.available", settings.elo.available);
-      store.set("elo.lookupName", settings.elo.lookupName);
+      updateSetting("elo", "lookupName", "HLW");
+      updateSetting("elo", "available", true);
     } else if (settings.autoHost.mapName.match(/(pyro\s*td\s*league)/i)) {
-      settings.elo.lookupName = "Pyro%20TD";
-      settings.elo.available = true;
-      store.set("elo.available", settings.elo.available);
-      store.set("elo.lookupName", settings.elo.lookupName);
+      updateSetting("elo", "lookupName", "Pyro%20TD");
+      updateSetting("elo", "available", true);
     } else if (settings.autoHost.mapName.match(/(vampirism\s*fire)/i)) {
-      settings.elo.lookupName = "Vampirism%20Fire";
-      settings.elo.available = true;
-      store.set("elo.available", settings.elo.available);
-      store.set("elo.lookupName", settings.elo.lookupName);
+      updateSetting("elo", "lookupName", "Vampirism%20Fire");
+      updateSetting("elo", "available", true);
+    } else if (settings.autoHost.mapName.match(/(footmen.?vs.?grunts)/i)) {
+      updateSetting("elo", "lookupName", "Footmen%20Vs%20Grunts");
+      updateSetting("elo", "available", true);
     } else {
       const newName = settings.autoHost.mapName
         .trim()
@@ -352,8 +376,8 @@ function eloMapNameCheck() {
                     "We couldn't find any ELO data for your map. Please raise an issue on <a href='https://github.com/trenchguns/wc3multitool/issues/new?title=Map%20Request&body=Map%20Name%3A%0A&labels=Map%20Request' class='alert-link'> Github</a> if you think there should be.",
                 });
               }
-              store.set("elo.available", settings.elo.available);
-              store.set("elo.lookupName", settings.elo.lookupName);
+              updateSetting("elo", "lookupName", newName);
+              updateSetting("elo", "available", jsonData.status === "OK");
               // TODO check variants, seasons, modes, and ladders
               /*if (lobbyData.eloAvailable) {
                 jsonData.body.variants.forEach((variant) => {
@@ -363,10 +387,9 @@ function eloMapNameCheck() {
             });
           })
           .on("error", (err) => {
-            settings.elo.available = false;
             log.error("Error: " + err.message);
-            store.set("elo.available", settings.elo.available);
-            store.set("elo.lookupName", settings.elo.lookupName);
+            updateSetting("elo", "lookupName", newName);
+            updateSetting("elo", "available", false);
           });
       }
     }
@@ -468,6 +491,17 @@ app.on("ready", function () {
   db.exec(
     "CREATE TABLE IF NOT EXISTS lobbyEvents(id INTEGER PRIMARY KEY AUTOINCREMENT, event TEXT NOT NULL, time DATETIME default current_timestamp NOT NULL, data TEXT, username TEXT)"
   );
+  if (
+    settings.discord.type !== "off" &&
+    settings.discord.token.length > 10 &&
+    settings.discord.channel
+  ) {
+    discClient = new DisClient(
+      settings.discord.token,
+      settings.discord.channel,
+      !app.isPackaged
+    );
+  }
   appVersion = app.getVersion();
   wss = new WebSocket.Server({ port: 8888 });
   wss.on("connection", function connection(ws) {
@@ -674,19 +708,31 @@ function handleClientMessage(message: { data: string }) {
                     gameSpeed: 2,
                     gameName: lobbyName,
                     mapSettings: {
-                      flagLockTeams: settings.autoHost.flagLockTeams,
-                      flagPlaceTeamsTogether: settings.autoHost.flagPlaceTeamsTogether,
-                      flagFullSharedUnitControl:
-                        settings.autoHost.flagFullSharedUnitControl,
-                      flagRandomRaces: settings.autoHost.flagRandomRaces,
-                      flagRandomHero: settings.autoHost.flagRandomHero,
+                      flagLockTeams: settings.autoHost.advancedMapOptions
+                        ? settings.autoHost.flagLockTeams
+                        : true,
+                      flagPlaceTeamsTogether: settings.autoHost.advancedMapOptions
+                        ? settings.autoHost.flagPlaceTeamsTogether
+                        : true,
+                      flagFullSharedUnitControl: settings.autoHost.advancedMapOptions
+                        ? settings.autoHost.flagFullSharedUnitControl
+                        : false,
+                      flagRandomRaces: settings.autoHost.advancedMapOptions
+                        ? settings.autoHost.flagRandomRaces
+                        : false,
+                      flagRandomHero: settings.autoHost.advancedMapOptions
+                        ? settings.autoHost.flagRandomHero
+                        : false,
                       settingObservers: settings.autoHost.observers ? 3 : 0,
-                      settingVisibility: parseInt(settings.autoHost.settingVisibility),
+                      settingVisibility: settings.autoHost.advancedMapOptions
+                        ? parseInt(settings.autoHost.settingVisibility)
+                        : 0,
                     },
                     privateGame: settings.autoHost.private,
                   };
                   log.info("Sending autoHost payload", payloadData);
                   sendMessage("CreateLobby", payloadData);
+                  discClient?.sendNewLobby(lobbyName);
                 }
               }
               if (
@@ -694,6 +740,7 @@ function handleClientMessage(message: { data: string }) {
                 data.payload.screen === "SCORE_SCREEN"
               ) {
                 inGame = true;
+                discClient?.sendMessage("Game has started.");
                 triggerOBS();
                 clearLobby();
                 if (settings.autoHost.type === "rapidHost") {
@@ -835,7 +882,7 @@ function openParamsJoin() {
 }
 
 function handleChatMessage(payload: GameClientMessage) {
-  if (payload.message) {
+  if (payload.message && lobby) {
     if (payload.message.source === "gameChat") {
       var sender = payload.message.sender.includes("#")
         ? payload.message.sender
@@ -882,18 +929,27 @@ function handleChatMessage(payload: GameClientMessage) {
             }
           }
         }
-      } else if (
-        payload.message.content.toLowerCase() === "?elo" &&
-        lobby &&
-        lobby.eloAvailable
-      ) {
-        if (lobby.processed.eloList[sender]) {
-          sendChatMessage(sender + " ELO: " + lobby.processed.eloList[sender]);
+      } else if (payload.message.content.toLowerCase() === "?elo") {
+        if (lobby.eloAvailable) {
+          if (lobby.processed.eloList[sender]) {
+            sendChatMessage(sender + " ELO: " + lobby.processed.eloList[sender]);
+          } else {
+            sendChatMessage("ELO pending");
+          }
         } else {
           sendChatMessage("ELO not available");
         }
+      } else if (["?help", "?commands"].includes(payload.message.content.toLowerCase())) {
+        if (lobby.eloAvailable) {
+          sendChatMessage("?elo: Return back your elo");
+        }
+        if (
+          ["rapidHost", "smartHost"].includes(settings.autoHost.type) &&
+          settings.autoHost.voteStart
+        ) {
+          sendChatMessage("?voteStart: Starts or accepts a vote to start");
+        }
       } else if (
-        lobby &&
         lobby.isHost &&
         (!settings.autoHost.private || !app.isPackaged) &&
         !sentMessages.includes(payload.message.content)
@@ -1155,13 +1211,13 @@ async function processLobby(payload: GameClientLobbyPayload, sendFull = false) {
         console.log("dbrow", row);
       }
     }
-    if (player.playerRegion !== "" && teamType === "playerTeams") {
+    if (player.playerRegion && teamType === "playerTeams") {
       newAllPlayers.push(player.name);
     }
-    if (player.playerRegion !== "") {
+    if (player.playerRegion) {
       newAllLobby.push(player.name);
     }
-    if (player.name !== "") {
+    if (player.name) {
       newTeamData[teamType][teamName].players.push(player.name);
       newTeamData[teamType][teamName].slots.push(player.name);
     } else if (player.slotStatus === 0) {
@@ -1243,9 +1299,15 @@ async function processLobby(payload: GameClientLobbyPayload, sendFull = false) {
       ) {
         lobby.processed.lookingUpELO?.add(user);
         if (settings.elo.type === "wc3stats") {
+          let buildVariant = "";
+          Object.entries(JSON.parse(settings.elo.wc3statsVariant)).forEach(
+            ([key, value]) => {
+              if (value) buildVariant += "&" + key + "=" + value;
+            }
+          );
           https
             .get(
-              `https://api.wc3stats.com/leaderboard&map=${mapName}&search=${user
+              `https://api.wc3stats.com/leaderboard&map=${mapName}${buildVariant}&search=${user
                 .trim()
                 .replace(/\s/g, "%20")}`,
               (resp) => {
@@ -1258,6 +1320,9 @@ async function processLobby(payload: GameClientLobbyPayload, sendFull = false) {
                   const jsonData = JSON.parse(dataChunks);
                   lobby.processed.lookingUpELO?.delete(user);
                   let elo = 500;
+                  if (mapName === "Footmen%20Vs%20Grunts") {
+                    elo = 1000;
+                  }
                   if (jsonData.body.length > 0) {
                     elo = jsonData.body[0].rating;
                   }
@@ -1299,32 +1364,28 @@ async function processLobby(payload: GameClientLobbyPayload, sendFull = false) {
       }
     });
   }
-
-  if (
-    lobby.isHost &&
-    (settings.autoHost.type === "smartHost" || settings.autoHost.type === "rapidHost")
-  ) {
-    if (settings.autoHost.voteStart && voteTimer) {
-      cancelVote();
-    }
-    if (settings.autoHost.announceIsBot && lobby.processed.allLobby.length > 1) {
-      let currentTime = Date.now();
+  if (lobby.isHost) {
+    if (
+      (settings.autoHost.announceIsBot || settings.autoHost.announceCustom) &&
+      lobby.processed.allLobby.length > 1
+    ) {
       lobby.processed.allLobby.some(function (user) {
-        if (
-          lobby.processed.playerSet &&
-          !lobby.processed.playerSet.includes(user) &&
-          currentTime >
-            lastAnnounceTime + 1000 * settings.autoHost.announceRestingInterval
-        ) {
-          console.log("Announcing");
-          lastAnnounceTime = currentTime;
-          announceBot();
+        if (lobby.processed.playerSet && !lobby.processed.playerSet.includes(user)) {
+          announcement();
           return;
         }
       });
       lobby.processed.playerSet = lobby.processed.allLobby;
     }
-    if (!lobby.eloAvailable && lobbyIsReady()) {
+    if (settings.autoHost.voteStart && voteTimer) {
+      cancelVote();
+    }
+    if (
+      (settings.autoHost.type === "smartHost" ||
+        settings.autoHost.type === "rapidHost") &&
+      !lobby.eloAvailable &&
+      lobbyIsReady()
+    ) {
       finalizeLobby();
     }
   }
@@ -1470,24 +1531,41 @@ function swapHelper() {
   lobby.processed.swaps = [swapsFromTeam1, swapsFromTeam2];
 }
 
-async function announceBot() {
+function announcement() {
   if (menuState === "GAME_LOBBY") {
-    let text = "Welcome. I am a bot.";
-    if (lobby.eloAvailable) {
-      text += " I will fetch ELO from " + settings.elo.type + ".";
-      if (settings.elo.balanceTeams) {
-        text += " I will try to balance teams before we start.";
+    let currentTime = Date.now();
+    if (
+      currentTime >
+      lastAnnounceTime + 1000 * settings.autoHost.announceRestingInterval
+    ) {
+      lastAnnounceTime = currentTime;
+      if (
+        ["rapidHost", "smartHost"].includes(settings.autoHost.type) &&
+        settings.autoHost.announceIsBot
+      ) {
+        let text = "Welcome. I am a bot.";
+        if (lobby.eloAvailable) {
+          text += " I will fetch ELO from " + settings.elo.type + ".";
+          if (settings.elo.balanceTeams) {
+            text += " I will try to balance teams before we start.";
+          }
+        }
+        if (["smartHost", "rapidHost".includes(settings.autoHost.type)]) {
+          text += " I will start when slots are full.";
+        }
+        if (settings.autoHost.voteStart) {
+          text += " You can vote start with ?votestart";
+        }
+        sendChatMessage(text);
+        if (settings.autoHost.announceCustom) {
+          sendChatMessage(settings.autoHost.customAnnouncement);
+        }
+      } else if (
+        settings.autoHost.type === "lobbyHost" &&
+        settings.autoHost.announceCustom
+      ) {
+        sendChatMessage(settings.autoHost.customAnnouncement);
       }
-    }
-    if (["smartHost", "rapidHost".includes(settings.autoHost.type)]) {
-      text += " I will start when slots are full.";
-    }
-    if (settings.autoHost.voteStart) {
-      text += " You can vote start with ?votestart";
-    }
-    sendChatMessage(text);
-    if (settings.autoHost.customAnnouncement.length > 0) {
-      sendChatMessage(settings.autoHost.customAnnouncement);
     }
   }
 }
@@ -1570,8 +1648,8 @@ async function quitGame() {
     }
   }
 }
-/*
-async function analyzeGame() {
+
+/*async function analyzeGame() {
   let data = new Set();
   let dataTypes = new Set();
   parser.on("gamedatablock", (block) => {
@@ -1604,13 +1682,15 @@ function sendMessage(message: string, payload: any) {
 }
 
 function sendChatMessage(content: string) {
-  sentMessages.push(content);
-  if (sentMessages.length > 3) {
-    sentMessages.shift();
+  if (typeof content === "string" && content.length > 0 && content.length <= 255) {
+    sentMessages.push(content);
+    if (sentMessages.length > 3) {
+      sentMessages.shift();
+    }
+    sendMessage("SendGameChatMessage", {
+      content,
+    });
   }
-  sendMessage("SendGameChatMessage", {
-    content,
-  });
 }
 
 async function activeWindowWar() {

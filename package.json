@@ -1,6 +1,6 @@
 {
   "name": "wc3multitool",
-  "version": "0.5.2",
+  "version": "0.5.4",
   "description": "A multi-tool for Warcraft 3",
   "repository": {
     "type": "git",
@@ -67,9 +67,8 @@
     },
     "portable": {
       "artifactName": "WC3_Multi-Tool_Setup_portable.exe",
-        "unpackDirName": "wc3MultiTool_portable"
-      
-  },
+      "unpackDirName": "wc3MultiTool_portable"
+    },
     "publish": [
       {
         "provider": "generic",
@@ -142,6 +141,7 @@
     "@types/better-sqlite3": "^7.4.1",
     "@types/ws": "^8.2.0",
     "better-sqlite3": "^7.4.4",
+    "discord.js": "^12.5.3",
     "electron-log": "^4.4.1",
     "electron-store": "^8.0.0",
     "electron-updater": "^4.3.9",

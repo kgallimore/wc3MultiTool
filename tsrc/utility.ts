@@ -13,9 +13,11 @@ export interface AutoHostSettings {
   gameName: string;
   mapPath: string;
   announceIsBot: boolean;
+  announceCustom: boolean;
   announceRestingInterval: number;
   moveToSpec: boolean;
   rapidHostTimer: number;
+  smartHostTimeout: number;
   voteStart: boolean;
   voteStartPercent: number;
   closeSlots: Array<number>;
@@ -57,6 +59,7 @@ export interface EloSettings {
   excludeHostFromSwap: boolean;
   lookupName: string;
   available: boolean;
+  wc3statsVariant: string;
 }
 
 export interface WindowReceive {

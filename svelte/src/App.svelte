@@ -18,9 +18,11 @@
       gameName: "",
       mapPath: "N/A",
       announceIsBot: false,
+      announceCustom: false,
       announceRestingInterval: 30,
       moveToSpec: false,
       rapidHostTimer: 0,
+      smartHostTimeout: 0,
       voteStart: false,
       voteStartPercent: 60,
       closeSlots: [],
@@ -46,6 +48,7 @@
       excludeHostFromSwap: true,
       lookupName: "",
       available: false,
+      wc3statsVariant: "",
     },
     discord: {
       type: "off",
@@ -60,6 +63,7 @@
     lobby: {} as Lobby,
     updater: "Up to date",
   };
+  let wc3statsOptions = wc3EloModes(settings.elo.lookupName);
   $: botAnnouncement = `Welcome. I am a bot. ${
     settings.elo.available && settings.elo.type !== "off"
       ? `I will fetch ELO from ${settings.elo.type}. ${
@@ -82,6 +86,12 @@
     });
   }
 
+  async function wc3EloModes(lookupName: string) {
+    let stats = await fetch("https://api.wc3stats.com/maps/" + lookupName);
+    let data = await stats.json();
+    return data.body.variants[0].stats;
+  }
+
   function init() {
     toMain({ messageType: "init" });
 
@@ -89,7 +99,8 @@
     document.body.addEventListener("click", (event) => {
       if ((event.target as HTMLElement).tagName.toLowerCase() === "a") {
         event.preventDefault();
-        require("electron").shell.openExternal((event.target as HTMLAnchorElement).href);
+        //@ts-ignore
+        window.api.shell((event.target as HTMLAnchorElement).href);
       }
     });
   }
@@ -106,11 +117,14 @@
         break;
       case "updateSettings":
         settings = newData.settings;
-        console.log(settings);
+        wc3statsOptions = wc3EloModes(settings.elo.lookupName);
         break;
       case "updateSettingSingle":
         let update = newData.update;
         if (update) {
+          if (update.key === "lookupName") {
+            wc3statsOptions = wc3EloModes(settings.elo.lookupName);
+          }
           // @ts-ignore
           settings[update.setting][update.key] = update.value;
         }
@@ -142,7 +156,7 @@
           "show"
         );
         alertDiv.setAttribute("role", "alert");
-        alertDiv.innerHTML = `<strong>Error!</strong> ${data.data} <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>`;
+        alertDiv.innerHTML = `<strong>Error!</strong> ${data.data.error} <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>`;
         document.body.prepend(alertDiv);
         break;
       case "gotMapPath":
@@ -215,17 +229,18 @@
         );
       }
       (value as any) = settings.autoHost.closeSlots;
-    }
-    toMain({
-      messageType: "updateSettingSingle",
-      data: {
-        update: {
-          setting: setting,
-          key,
-          value: value,
+    } else if (settings[setting][key] !== value) {
+      toMain({
+        messageType: "updateSettingSingle",
+        data: {
+          update: {
+            setting: setting,
+            key,
+            value: value,
+          },
         },
-      },
-    });
+      });
+    }
   }
 
   function toMain(args: WindowSend) {
@@ -272,6 +287,21 @@
                 <div id="eloSettings" class="row border m-2">
                   <div class="col">
                     <div class="d-flex justify-content-center">ELO Settings</div>
+                    <div class="d-flex justify-content-center">
+                      {#if settings.elo.available}
+                        <div class="badge bg-success">
+                          <a
+                            href="https://api.wc3stats.com/maps/{settings.elo.lookupName}"
+                            >ELO Available!</a
+                          >
+                        </div>
+                      {:else}
+                        <div class="badge bg-danger">
+                          ELO not found! Reach out to me on discord
+                        </div>
+                      {/if}
+                    </div>
+
                     <div
                       class="d-flex justify-content-center btn-group pb-2"
                       role="group"
@@ -328,6 +358,35 @@
                         >Announce ELO</label
                       >
                     </div>
+                    {#if settings.elo.type === "wc3stats" && settings.elo.available}
+                      <div class="d-flex justify-content-center">
+                        <label for="wc3statsOptions">Wc3stats Variant</label>
+                        <select
+                          class="form-select"
+                          id="wc3statsOptions"
+                          value={settings.elo.wc3statsVariant}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "elo",
+                              "wc3statsVariant",
+                              // @ts-ignore
+                              e.target.value
+                            )}
+                        >
+                          {#await wc3statsOptions}
+                            <option>Fetching options...</option>
+                          {:then value}
+                            <option>Select a value</option>
+                            {#each value as option}
+                              <option value={JSON.stringify(option.key)}
+                                >{option.key.ladder}, {option.key.mode}, {option.key
+                                  .round}, {option.key.season}</option
+                              >
+                            {/each}
+                          {/await}
+                        </select>
+                      </div>
+                    {/if}
                   </div>
                 </div>
               {/if}
@@ -340,8 +399,7 @@
                       <summary>Auto Host (click to expand)</summary><strong
                         >Lobby Host:</strong
                       >
-                      Starts a lobby with specified settings. (Ignores Announce is Bot)<br
-                      />
+                      Starts a lobby with specified settings.<br />
                       <strong>Rapid Host:</strong> Hosts lobbies, auto starts, leaves the
                       game after specified timer(minutes).<br />
                       <strong>Smart Host:</strong> Hosts lobbies, auto starts, quits the
@@ -390,7 +448,7 @@
                           id="autoHostPrivateCheck"
                           data-key="private"
                           data-setting="autoHost"
-                          bind:checked={settings.autoHost.private}
+                          checked={settings.autoHost.private}
                           on:change={(e) =>
                             updateSettingSingle(
                               "autoHost",
@@ -408,7 +466,7 @@
                           id="autoHostIncrementCheck"
                           data-key="increment"
                           data-setting="autoHost"
-                          bind:checked={settings.autoHost.increment}
+                          checked={settings.autoHost.increment}
                           on:change={(e) =>
                             updateSettingSingle(
                               "autoHost",
@@ -427,7 +485,7 @@
                           id="autoHostSoundsCheck"
                           data-key="sounds"
                           data-setting="autoHost"
-                          bind:checked={settings.autoHost.sounds}
+                          checked={settings.autoHost.sounds}
                           on:change={(e) =>
                             updateSettingSingle(
                               "autoHost",
@@ -442,28 +500,10 @@
                         <input
                           type="checkbox"
                           class="btn-check"
-                          id="announceIsBotCheck"
-                          data-key="announceIsBot"
-                          data-setting="autoHost"
-                          bind:checked={settings.autoHost.announceIsBot}
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "autoHost",
-                              "announceIsBot",
-                              // @ts-ignore
-                              e.target.checked
-                            )}
-                        />
-                        <label for="announceIsBotCheck" class="btn btn-outline-primary"
-                          >Announce Is Bot</label
-                        >
-                        <input
-                          type="checkbox"
-                          class="btn-check"
                           id="moveToSpecCheck"
                           data-key="moveToSpec"
                           data-setting="autoHost"
-                          bind:checked={settings.autoHost.moveToSpec}
+                          checked={settings.autoHost.moveToSpec}
                           on:change={(e) =>
                             updateSettingSingle(
                               "autoHost",
@@ -481,7 +521,7 @@
                           id="enbaleObservers"
                           data-key="observers"
                           data-setting="autoHost"
-                          bind:checked={settings.autoHost.observers}
+                          checked={settings.autoHost.observers}
                           on:change={(e) =>
                             updateSettingSingle(
                               "autoHost",
@@ -496,21 +536,60 @@
                         <input
                           type="checkbox"
                           class="btn-check"
-                          id="voteStartCheck"
-                          data-key="voteStart"
+                          id="announceCustom"
+                          data-key="announceCustom"
                           data-setting="autoHost"
-                          bind:checked={settings.autoHost.voteStart}
+                          checked={settings.autoHost.announceCustom}
                           on:change={(e) =>
                             updateSettingSingle(
                               "autoHost",
-                              "voteStart",
+                              "announceCustom",
                               // @ts-ignore
                               e.target.checked
                             )}
                         />
-                        <label for="voteStartCheck" class="btn btn-outline-primary"
-                          >Vote start</label
+                        <label for="announceCustom" class="btn btn-outline-primary"
+                          >Custom Announcement</label
                         >
+                        {#if ["rapidHost", "smartHost"].includes(settings.autoHost.type)}
+                          <input
+                            type="checkbox"
+                            class="btn-check"
+                            id="announceIsBotCheck"
+                            data-key="announceIsBot"
+                            data-setting="autoHost"
+                            checked={settings.autoHost.announceIsBot}
+                            on:change={(e) =>
+                              updateSettingSingle(
+                                "autoHost",
+                                "announceIsBot",
+                                // @ts-ignore
+                                e.target.checked
+                              )}
+                          />
+                          <label for="announceIsBotCheck" class="btn btn-outline-primary"
+                            >Announce Is Bot</label
+                          >
+                          <input
+                            type="checkbox"
+                            class="btn-check"
+                            id="voteStartCheck"
+                            data-key="voteStart"
+                            data-setting="autoHost"
+                            checked={settings.autoHost.voteStart}
+                            on:change={(e) =>
+                              updateSettingSingle(
+                                "autoHost",
+                                "voteStart",
+                                // @ts-ignore
+                                e.target.checked
+                              )}
+                          />
+                          <label for="voteStartCheck" class="btn btn-outline-primary"
+                            >Vote start</label
+                          >
+                        {/if}
+
                         <SettingsCheckbox
                           setting="autoHost"
                           key="advancedMapOptions"
@@ -582,6 +661,7 @@
                               )}
                           />
                         </div>
+                        <label for="autoHostsettingVisibility">Visibility:</label>
                         <select
                           class="form-control form-control-sm"
                           id="autoHostsettingVisibility"
@@ -596,7 +676,7 @@
                               e.target.value
                             )}
                         >
-                          <option value="0">Public</option>
+                          <option value="0">Default</option>
                           <option value="1">Hide Terrain</option>
                           <option value="2">Map Explored</option>
                           <option value="3">Always Visible</option>
@@ -612,7 +692,8 @@
                         class="btn btn-primary"
                         id="autoHostMapPath"
                         >Current Map:
-                      </button><span>{settings.autoHost.mapPath}</span>
+                      </button>
+                      <span>{settings.autoHost.mapPath}</span>
                     </div>
                   </div>
                   <div class="row p-2">
@@ -690,7 +771,7 @@
                   </div>
 
                   <div class="row p-2">
-                    {#if settings.autoHost.voteStart}
+                    {#if settings.autoHost.voteStart && ["rapidHost", "smartHost"].includes(settings.autoHost.type)}
                       <div class="col">
                         <label for="voteStartPercent" class="form-label"
                           >Vote Start Percentage</label
@@ -739,15 +820,20 @@
                       </div>
                     {/if}
                   </div>
-
-                  {#if settings.autoHost.announceIsBot}
+                  {#if (settings.autoHost.announceIsBot && ["rapidHost", "smartHost"].includes(settings.autoHost.type)) || settings.autoHost.announceCustom}
                     <div class="row p-2">
                       <div class="col">
                         <h4>Bot Announcement:</h4>
-                        <span>{botAnnouncement}</span>
-                        <p>{settings.autoHost.customAnnouncement}</p>
+                        {#if settings.autoHost.announceIsBot && ["rapidHost", "smartHost"].includes(settings.autoHost.type)}
+                          <span>{botAnnouncement}</span>
+                        {/if}
+                        {#if settings.autoHost.announceCustom}
+                          <p>{settings.autoHost.customAnnouncement}</p>
+                        {/if}
                       </div>
                     </div>
+                  {/if}
+                  {#if settings.autoHost.announceCustom}
                     <div class="row p-2">
                       <div class="col">
                         <label for="customAnnouncement" class="form-label"
@@ -772,6 +858,8 @@
                         />
                       </div>
                     </div>
+                  {/if}
+                  {#if (settings.autoHost.announceIsBot && ["rapidHost", "smartHost"].includes(settings.autoHost.type)) || settings.autoHost.announceCustom}
                     <div class="row p-2">
                       <div class="col">
                         <label for="announceRestingInterval" class="form-label"
@@ -885,7 +973,13 @@
                     class="form-select"
                     data-key="type"
                     data-setting="discord"
-                    disabled
+                    value={settings.discord.type}
+                    on:change={(e) =>
+                      updateSettingSingle(
+                        "discord",
+                        "type", // @ts-ignore
+                        e.target.value
+                      )}
                   >
                     <option value="off" selected>Disabled</option>
                     <option value="on">Enabled</option>
@@ -906,6 +1000,13 @@
                           placeholder="Token"
                           data-key="token"
                           data-setting="discord"
+                          value={settings.discord.token}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "discord",
+                              "token", // @ts-ignore
+                              e.target.value
+                            )}
                         />
                       </div>
                     </div>
@@ -919,6 +1020,13 @@
                           placeholder="Channel"
                           data-key="channel"
                           data-setting="discord"
+                          value={settings.discord.channel}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "discord",
+                              "channel", // @ts-ignore
+                              e.target.value
+                            )}
                         />
                       </div>
                     </div>
