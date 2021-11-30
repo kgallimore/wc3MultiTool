@@ -5,7 +5,7 @@ export interface AppSettings {
   elo: EloSettings;
 }
 export interface AutoHostSettings {
-  type: string;
+  type: "off" | "lobbyHost" | "rapidHost" | "smartHost";
   private: boolean;
   sounds: boolean;
   increment: boolean;
@@ -48,12 +48,14 @@ export interface ObsHotkeys {
   shiftKey: boolean;
 }
 export interface DiscordSettings {
-  type: string;
+  type: "off" | "on";
   token: string;
-  channel: string;
+  announceChannel: string;
+  chatChannel: string;
+  bidirectionalChat: boolean;
 }
 export interface EloSettings {
-  type: string;
+  type: "off" | "wc3stats" | "pyroTD";
   balanceTeams: boolean;
   announce: boolean;
   excludeHostFromSwap: boolean;
@@ -122,7 +124,7 @@ export interface Lobby {
   availableTeamColors: any;
   playerHost: string;
   mapName: string;
-  region: string;
+  region: "us" | "eu";
   processed: LobbyProcessed;
 }
 export type TeamTypes = "otherTeams" | "specTeams" | "playerTeams";

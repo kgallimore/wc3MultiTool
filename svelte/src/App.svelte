@@ -53,7 +53,9 @@
     discord: {
       type: "off",
       token: "",
-      channel: "",
+      announceChannel: "",
+      chatChannel: "",
+      bidirectionalChat: true,
     },
   };
   let currentStatus = {
@@ -229,7 +231,8 @@
         );
       }
       (value as any) = settings.autoHost.closeSlots;
-    } else if (settings[setting][key] !== value) {
+    }
+    if (settings[setting][key] !== value) {
       toMain({
         messageType: "updateSettingSingle",
         data: {
@@ -287,20 +290,51 @@
                 <div id="eloSettings" class="row border m-2">
                   <div class="col">
                     <div class="d-flex justify-content-center">ELO Settings</div>
-                    <div class="d-flex justify-content-center">
-                      {#if settings.elo.available}
-                        <div class="badge bg-success">
-                          <a
-                            href="https://api.wc3stats.com/maps/{settings.elo.lookupName}"
-                            >ELO Available!</a
+                    {#if settings.autoHost.type !== "off"}
+                      <div class="d-flex justify-content-center">
+                        {#if settings.elo.available}
+                          <div class="badge bg-success">
+                            <a
+                              href="https://api.wc3stats.com/maps/{settings.elo
+                                .lookupName}">ELO Available!</a
+                            >
+                          </div>
+                        {:else}
+                          <div class="badge bg-danger">
+                            ELO not found! Reach out to me on discord
+                          </div>
+                        {/if}
+                      </div>
+                      {#if settings.elo.type === "wc3stats" && settings.elo.available}
+                        <div class="d-flex justify-content-center">
+                          <label for="wc3statsOptions">Wc3stats Variant</label>
+                          <select
+                            class="form-select"
+                            id="wc3statsOptions"
+                            value={settings.elo.wc3statsVariant}
+                            on:change={(e) =>
+                              updateSettingSingle(
+                                "elo",
+                                "wc3statsVariant",
+                                // @ts-ignore
+                                e.target.value
+                              )}
                           >
-                        </div>
-                      {:else}
-                        <div class="badge bg-danger">
-                          ELO not found! Reach out to me on discord
+                            {#await wc3statsOptions}
+                              <option>Fetching options...</option>
+                            {:then value}
+                              <option>Select a value</option>
+                              {#each value as option}
+                                <option value={JSON.stringify(option.key)}
+                                  >{option.key.ladder}, {option.key.mode}, {option.key
+                                    .round}, {option.key.season}</option
+                                >
+                              {/each}
+                            {/await}
+                          </select>
                         </div>
                       {/if}
-                    </div>
+                    {/if}
 
                     <div
                       class="d-flex justify-content-center btn-group pb-2"
@@ -358,35 +392,6 @@
                         >Announce ELO</label
                       >
                     </div>
-                    {#if settings.elo.type === "wc3stats" && settings.elo.available}
-                      <div class="d-flex justify-content-center">
-                        <label for="wc3statsOptions">Wc3stats Variant</label>
-                        <select
-                          class="form-select"
-                          id="wc3statsOptions"
-                          value={settings.elo.wc3statsVariant}
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "elo",
-                              "wc3statsVariant",
-                              // @ts-ignore
-                              e.target.value
-                            )}
-                        >
-                          {#await wc3statsOptions}
-                            <option>Fetching options...</option>
-                          {:then value}
-                            <option>Select a value</option>
-                            {#each value as option}
-                              <option value={JSON.stringify(option.key)}
-                                >{option.key.ladder}, {option.key.mode}, {option.key
-                                  .round}, {option.key.season}</option
-                              >
-                            {/each}
-                          {/await}
-                        </select>
-                      </div>
-                    {/if}
                   </div>
                 </div>
               {/if}
@@ -994,7 +999,7 @@
                       <div class="col">
                         <label for="discordToken">Token</label>
                         <input
-                          type="text"
+                          type="password"
                           class="form-control"
                           id="discordToken"
                           placeholder="Token"
@@ -1012,20 +1017,58 @@
                     </div>
                     <div class="row">
                       <div class="col">
-                        <label for="discordChannel">Channel</label>
+                        <label for="discordChannel">New Lobby Announce Channel</label>
                         <input
                           type="text"
                           class="form-control"
-                          id="discordChannel"
-                          placeholder="Channel"
-                          data-key="channel"
+                          id="discordAnnounceChannel"
+                          placeholder="Name or ID"
+                          data-key="announceChannel"
                           data-setting="discord"
-                          value={settings.discord.channel}
+                          value={settings.discord.announceChannel}
                           on:change={(e) =>
                             updateSettingSingle(
                               "discord",
-                              "channel", // @ts-ignore
+                              "announceChannel", // @ts-ignore
                               e.target.value
+                            )}
+                        />
+                      </div>
+                    </div>
+                    <div class="row">
+                      <div class="col">
+                        <label for="discordChannel">Lobby Chat Channel</label>
+                        <input
+                          type="text"
+                          class="form-control"
+                          id="discordChatChannel"
+                          placeholder="Name or ID"
+                          data-key="chatChannel"
+                          data-setting="discord"
+                          value={settings.discord.chatChannel}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "discord",
+                              "chatChannel", // @ts-ignore
+                              e.target.value
+                            )}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div class="row">
+                    <div class="col">
+                      <div class="d-flex justify-content-center">
+                        <SettingsCheckbox
+                          setting="discord"
+                          key="bidirectionalChat"
+                          checked={settings.discord.bidirectionalChat}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "discord",
+                              "bidirectionalChat",
+                              // @ts-ignore
+                              e.target.checked
                             )}
                         />
                       </div>
