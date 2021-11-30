@@ -317,6 +317,8 @@ function updateSetting(setting: keyof AppSettings, key: SettingsKeys, value: any
         discordSetup();
       } else if (key === "announceChannel" || key === "chatChannel") {
         discClient?.updateChannel(value, key);
+      } else if (key === "bidirectionalChat" && discClient) {
+        discClient.bidirectionalChat = value;
       }
     }
     sendSocket(setting + "Settings", settings[setting]);
@@ -550,6 +552,7 @@ function discordSetup() {
       settings.discord.token,
       settings.discord.announceChannel,
       settings.discord.chatChannel,
+      settings.discord.bidirectionalChat,
       !app.isPackaged
     );
     discClient.on("chatMessage", (author, message) => {
@@ -886,7 +889,11 @@ function handleChatMessage(payload: GameClientMessage) {
       var superAdmin = true;
     }
     if (payload.message.content.match(/^\?votestart/i)) {
-      if (settings.autoHost.voteStart && lobby.processed) {
+      if (
+        settings.autoHost.voteStart &&
+        lobby.processed &&
+        ["rapidHost", "smartHost"].includes(settings.autoHost.type)
+      ) {
         if (lobby.processed.voteStartVotes.length === 0) {
           const emptyPlayerTeam = Object.keys(
             lobby.processed.teamList.playerTeams.data

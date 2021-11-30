@@ -7,12 +7,20 @@ export class DisClient extends EventEmitter {
   dev: boolean;
   #embed: Discord.MessageEmbed | null;
   #sentEmbed: Discord.Message | null;
+  bidirectionalChat: boolean;
   _events: { [key: string]: any };
-  constructor(token: string, announceChannel: string, chatChannel: string, dev = false) {
+  constructor(
+    token: string,
+    announceChannel: string,
+    chatChannel: string,
+    bidirectionalChat = true,
+    dev = false
+  ) {
     super();
     this.dev = dev;
     this.#embed = null;
     this.#sentEmbed = null;
+    this.bidirectionalChat = bidirectionalChat;
     if (!token) {
       throw new Error("Token is empty");
     }
@@ -48,7 +56,9 @@ export class DisClient extends EventEmitter {
 
     this.client.on("message", (msg) => {
       if (msg.channel === this.chatChannel && !msg.author.bot) {
-        this.emit("chatMessage", msg.author.username, msg.content);
+        if (this.bidirectionalChat) {
+          this.emit("chatMessage", msg.author.username, msg.content);
+        }
       }
     });
 
