@@ -2,6 +2,7 @@ let webSocket;
 let autoHost = {
   type: "off",
 };
+let state = {};
 let addedHtml;
 const version = "1.0.0";
 
@@ -9,6 +10,9 @@ function wsSetup() {
   webSocket = new WebSocket("ws://127.0.0.1:8888");
   webSocket.onopen = function (event) {
     sendSocket("info", "Connected. Hello! I am version: " + version);
+    if (state) {
+      sendSocket("state", state);
+    }
     if (websocketLocation !== "") {
       sendSocket("clientWebSocket", websocketLocation);
     }
@@ -39,11 +43,12 @@ function wsSetup() {
           buttonColor.classList.toggle("Primary-Button-Green");
           buttonColor.querySelector(
             "div:not([class]), div[class='']"
-          ).innerHTML = `Toggle Auto Host ${
-            autoHost.type === "off" ? "On" : "Off"
-          }`;
+          ).innerHTML = `Toggle Auto Host ${autoHost.type === "off" ? "On" : "Off"}`;
         }
         sendSocket("info", autoHost);
+        break;
+      case "stateUpdate":
+        state = data.data;
         break;
       default:
         sendSocket("echo", event.data);
