@@ -52,7 +52,12 @@ console.log(app.getPath("userData"));
 
 autoUpdater.logger = log;
 
-screen.config.confidence = 0.85;
+screen.config.confidence = 0.8;
+if (!app.isPackaged) {
+  screen.config.autoHighlight = true;
+  screen.config.highlightDurationMs = 1500;
+  screen.config.highlightOpacity = 0.75;
+}
 
 log.info("App starting...");
 
@@ -66,7 +71,6 @@ var currentStatus = false;
 var gameNumber = 0;
 // @ts-ignore
 var lobby: Lobby = {};
-var menuState = "Out of Menus";
 var inGame = false;
 var wss: WebSocket.Server | null = null;
 var socket: WebSocket | null = null;
@@ -77,9 +81,19 @@ var warcraftIsOpen = false;
 var warcraftRegion = { left: 0, top: 0, width: 0, height: 0 };
 var voteTimer: any;
 var openLobbyParams: { lobbyName?: string; gameId?: string; mapFile?: string } | null;
-var screenState: string;
-var selfBattleTag: string;
-var selfRegion: "us" | "eu";
+var state: {
+  selfRegion: "us" | "eu";
+  menuState: string;
+  screenState: string;
+  selfBattleTag: string;
+  inGame: boolean;
+} = {
+  menuState: "Out of Menus",
+  screenState: "",
+  selfBattleTag: "",
+  selfRegion: "eu",
+  inGame: false,
+};
 var appVersion: string;
 var discClient: DisClient | null = null;
 
@@ -110,6 +124,7 @@ var settings: AppSettings = <AppSettings>{
     flagRandomRaces: store.get("autoHost.flagRandomRaces") ?? false,
     flagRandomHero: store.get("autoHost.flagRandomHero") ?? false,
     settingVisibility: store.get("autoHost.settingVisibility") ?? "0",
+    leaveAlternate: store.get("autoHost.leaveAlternate") ?? false,
   },
   obs: {
     type: store.get("obs.type") ?? "off",
@@ -598,7 +613,11 @@ async function triggerOBS() {
           obs.inGameHotkey.shiftKey ? Key.LeftShift : "",
           obs.inGameHotkey.key
         );*/
-    } else if (menuState === "SCORE_SCREEN" && !inGame && settings.obs.outOfGameHotkey) {
+    } else if (
+      state.menuState === "SCORE_SCREEN" &&
+      !inGame &&
+      settings.obs.outOfGameHotkey
+    ) {
       let modifiers = [];
       if (settings.obs.outOfGameHotkey.altKey) {
         modifiers.push("alt");
@@ -639,6 +658,9 @@ function banSlot(slot: number) {
 async function handleWSMessage(message: any) {
   message = JSON.parse(message) as { messageType: string; data: string };
   switch (message.messageType) {
+    case "state":
+      state = message.data;
+      break;
     case "sendMessage":
       //console.log(message.data);
       break;
@@ -676,9 +698,9 @@ function handleClientMessage(message: { data: string }) {
         data = JSON.parse(data.toString());
         switch (data.messageType) {
           case "ScreenTransitionInfo":
-            screenState = data.payload.screen;
-            console.log("Screenstate", screenState);
-            if (screenState !== "GAME_LOBBY") {
+            state.screenState = data.payload.screen;
+            console.log("Screenstate", state.screenState);
+            if (state.screenState !== "GAME_LOBBY") {
               clearLobby();
             }
             break;
@@ -686,9 +708,10 @@ function handleClientMessage(message: { data: string }) {
             if (data.payload.screen) {
               if (
                 data.payload.screen === "MAIN_MENU" ||
-                (data.payload.screen === "SCORE_SCREEN" && menuState === "SCORE_SCREEN")
+                (data.payload.screen === "SCORE_SCREEN" &&
+                  state.menuState === "SCORE_SCREEN")
               ) {
-                menuState = data.payload.screen;
+                state.menuState = data.payload.screen;
                 if (openLobbyParams?.lobbyName) {
                   openParamsJoin();
                 } else if (settings.autoHost.type !== "off") {
@@ -728,10 +751,13 @@ function handleClientMessage(message: { data: string }) {
                 }
               }
               if (
-                menuState === "LOADING_SCREEN" &&
+                state.menuState === "LOADING_SCREEN" &&
                 data.payload.screen === "SCORE_SCREEN"
               ) {
                 inGame = true;
+                if (settings.autoHost.type === "smartHost") {
+                  setTimeout(findQuit, 15000);
+                }
                 discClient?.lobbyStarted();
                 triggerOBS();
                 clearLobby();
@@ -746,8 +772,7 @@ function handleClientMessage(message: { data: string }) {
                 inGame = false;
                 clearLobby();
               }
-              menuState = data.payload.screen;
-              console.log("MenuState", menuState);
+              state.menuState = data.payload.screen;
             }
             break;
           case "GameLobbySetup":
@@ -771,8 +796,8 @@ function handleClientMessage(message: { data: string }) {
             clearLobby();
             break;
           case "UpdateUserInfo":
-            selfBattleTag = data.payload.user.battleTag;
-            selfRegion = data.payload.user.userRegion;
+            state.selfBattleTag = data.payload.user.battleTag;
+            state.selfRegion = data.payload.user.userRegion;
           default:
             if (
               [
@@ -856,7 +881,9 @@ function clearLobby() {
 }
 
 function openParamsJoin() {
-  if (openLobbyParams && menuState === "MAIN_MENU") {
+  if (openLobbyParams && state.menuState === "MAIN_MENU") {
+    updateSetting("autoHost", "type", "off");
+
     if (openLobbyParams.lobbyName) {
       sendMessage("SendGameListing", {});
       setTimeout(() => {
@@ -883,9 +910,9 @@ function handleChatMessage(payload: GameClientMessage) {
   ) {
     if (payload.message.sender.includes("#")) {
       var sender = payload.message.sender;
-      var superAdmin = payload.message.sender === selfBattleTag;
+      var superAdmin = payload.message.sender === state.selfBattleTag;
     } else {
-      var sender = selfBattleTag;
+      var sender = state.selfBattleTag;
       var superAdmin = true;
     }
     if (payload.message.content.match(/^\?votestart/i)) {
@@ -945,15 +972,20 @@ function handleChatMessage(payload: GameClientMessage) {
         var banTarget = payload.message.content.split(" ")[1];
         if (banTarget) {
           var banReason = payload.message.content.split(" ").slice(2).join(" ") || "";
-          let targets = lobby.processed.allLobby.filter((user) =>
-            user.match(new RegExp(banTarget, "i"))
-          );
-          if (targets.length === 1) {
-            banPlayer(targets[0], sender, lobby.region, banReason);
-          } else if (targets.length > 1) {
-            sendChatMessage("Multiple matches found. Please be more specific.");
+          if (banTarget.match(/^\D\S{2,11}#\d{4,8}$/)) {
+            sendChatMessage("Banning out of lobby player.");
+            banPlayer(banTarget, sender, lobby.region, banReason, false);
           } else {
-            sendChatMessage("No matches found.");
+            let targets = lobby.processed.allLobby.filter((user) =>
+              user.match(new RegExp(banTarget, "i"))
+            );
+            if (targets.length === 1) {
+              banPlayer(targets[0], sender, lobby.region, banReason);
+            } else if (targets.length > 1) {
+              sendChatMessage("Multiple matches found. Please be more specific.");
+            } else {
+              sendChatMessage("No matches found.");
+            }
           }
         } else {
           sendChatMessage("Ban target required");
@@ -988,14 +1020,22 @@ function handleChatMessage(payload: GameClientMessage) {
   }
 }
 
-function banPlayer(player: string, admin: string, region: "us" | "eu", reason = "") {
+function banPlayer(
+  player: string,
+  admin: string,
+  region: "us" | "eu",
+  reason = "",
+  banNow = true
+) {
   if (lobby.processed && lobby.processed.allPlayers.includes(player)) {
     ("CREATE TABLE IF NOT EXISTS banList(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, ban_date DATETIME default current_timestamp NOT NULL, admin TEXT NOT NULL, region TEXT NOT NULL, reason TEXT, unban_date DATETIME)");
     db.prepare(
       "INSERT INTO banList (username, admin, region, reason) VALUES (?, ?, ?, ?)"
     ).run(player, admin, region, reason);
-    sendChatMessage("!ban " + player);
-    sendChatMessage("!kick " + player);
+    if (banNow) {
+      sendChatMessage("!ban " + player);
+      sendChatMessage("!kick " + player);
+    }
     sendChatMessage(player + " banned");
   }
 }
@@ -1032,7 +1072,7 @@ async function processMapData(payload: GameClientLobbyPayload) {
   lobby.playerHost = payload.playerHost;
   lobby.mapName = payload.mapData.mapName;
   lobby.lobbyName = payload.lobbyName;
-  lobby.region = selfRegion;
+  lobby.region = state.selfRegion;
   lobby.processed = {
     allLobby: [],
     allPlayers: [],
@@ -1175,7 +1215,7 @@ async function processMapData(payload: GameClientLobbyPayload) {
   }
   if (lobby.isHost && discClient) {
     discClient.sendNewLobby(
-      selfRegion,
+      state.selfRegion,
       lobby.lobbyName,
       settings.autoHost.mapName,
       settings.autoHost.type !== "off" && settings.autoHost.private,
@@ -1514,9 +1554,6 @@ function startGame() {
   }
   log.info("Starting game");
   sendMessage("LobbyStart", {});
-  if (settings.autoHost.type === "smartHost") {
-    setTimeout(findQuit, 15000);
-  }
 }
 
 function swapHelper() {
@@ -1569,7 +1606,7 @@ function swapHelper() {
 }
 
 function announcement() {
-  if (menuState === "GAME_LOBBY") {
+  if (state.menuState === "GAME_LOBBY") {
     let currentTime = Date.now();
     if (
       currentTime >
@@ -1637,32 +1674,69 @@ function playSound(file: string) {
 }
 
 async function findQuit() {
-  if (inGame || menuState === "LOADING_SCREEN") {
+  if ((inGame || state.menuState === "LOADING_SCREEN") && socket?.OPEN) {
     await activeWindowWar();
     if (warcraftInFocus) {
       let targetRes = "1080/";
       if (warcraftRegion.height > 1440) {
         targetRes = "2160/";
       }
-      if (
-        ["quitNormal.png", "quitHLW.png"].some(async (file) => {
-          try {
-            const foundImage = await screen.find(`${targetRes + file}`);
-            if (foundImage) {
-              return true;
-            }
-          } catch (e) {
-            //log.error(e);
-            return false;
+      let foundTarget = false;
+      let searchFiles = ["quitNormal.png", "quitHLW.png"];
+
+      for (const file of searchFiles) {
+        try {
+          const foundImage = await screen.find(`${targetRes + file}`);
+          if (foundImage) {
+            foundTarget = true;
+            break;
           }
-        })
-      ) {
-        //log.verbose("Found quit. Press q");
-        await robot.keyTap("q");
+        } catch (e) {
+          console.log(e);
+        }
+      }
+      if (foundTarget) {
+        console.log("Found quit. Press q");
+        robot.keyTap("q");
         if (settings.autoHost.sounds) {
           playSound("quit.wav");
         }
-      } else {
+      } else if (settings.autoHost.leaveAlternate) {
+        foundTarget = false;
+        console.log("Found no quit. Press f12");
+        robot.keyTap("f12");
+        console.log("f12");
+        try {
+          const foundImage = await screen.find(`${targetRes}closeScoreboard.png`, {
+            confidence: 0.8,
+          });
+          if (foundImage) {
+            mouse.setPosition(await centerOf(foundImage));
+            mouse.leftClick();
+          }
+        } catch (e) {
+          console.log(e);
+          //log.error(e);
+        }
+        try {
+          const foundImage = await screen.find(`${targetRes}soloObserver.png`, {
+            confidence: 0.8,
+          });
+          if (foundImage) {
+            foundTarget = true;
+          }
+        } catch (e) {
+          console.log(e);
+          //log.error(e);
+        }
+        robot.keyTap("escape");
+        console.log("esc");
+        if (foundTarget) {
+          console.log("nowQuit!");
+          quitGame(false);
+        } else {
+          console.log("nothing!");
+        }
         //log.verbose("Did not find quit, try again in 5 seconds");
       }
     }
@@ -1670,7 +1744,7 @@ async function findQuit() {
   }
 }
 
-async function quitGame() {
+async function quitGame(searchAgain = true) {
   if (inGame) {
     await activeWindowWar();
     if (warcraftInFocus) {
@@ -1680,7 +1754,7 @@ async function quitGame() {
       if (settings.autoHost.sounds) {
         playSound("quit.wav");
       }
-    } else {
+    } else if (searchAgain) {
       setTimeout(findQuit, 5000);
     }
   }
@@ -1795,11 +1869,7 @@ async function openWarcraft2() {
     if (screenHeight > 1440) {
       targetRes = "2160/";
     }
-    let playPosition = await centerOf(
-      screen.waitFor(targetRes + "play.png", 15000, {
-        confidence: 0.95,
-      })
-    );
+    let playPosition = await centerOf(screen.waitFor(targetRes + "play.png", 15000));
     await mouse.setPosition(playPosition);
     await mouse.leftClick();
   }

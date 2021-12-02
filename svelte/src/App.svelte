@@ -35,6 +35,7 @@
       flagRandomRaces: false,
       flagRandomHero: false,
       settingVisibility: "0",
+      leaveAlternate: false,
     },
     obs: {
       type: "off",
@@ -410,6 +411,7 @@
                       <strong>Smart Host:</strong> Hosts lobbies, auto starts, quits the
                       game if this end screen pops up:
                       <img class="img-fluid" src="quitNormal.png" alt="Quit Normal" />
+                      Intrusive Check will check the chat menu to see if anyone else is left.
                     </details>
                   </label>
                   <select
@@ -465,12 +467,10 @@
                         <label for="autoHostPrivateCheck" class="btn btn-outline-primary"
                           >Private Lobbies</label
                         >
-                        <input
-                          type="checkbox"
-                          class="btn-check"
-                          id="autoHostIncrementCheck"
-                          data-key="increment"
-                          data-setting="autoHost"
+                        <SettingsCheckbox
+                          key="increment"
+                          setting="autoHost"
+                          frontFacingName="Incremental Lobbies"
                           checked={settings.autoHost.increment}
                           on:change={(e) =>
                             updateSettingSingle(
@@ -480,16 +480,10 @@
                               e.target.checked
                             )}
                         />
-                        <label
-                          for="autoHostIncrementCheck"
-                          class="btn btn-outline-primary">Incremental Lobbies</label
-                        >
-                        <input
-                          type="checkbox"
-                          class="btn-check"
-                          id="autoHostSoundsCheck"
-                          data-key="sounds"
-                          data-setting="autoHost"
+                        <SettingsCheckbox
+                          frontFacingName="Sound Notifications"
+                          key="sounds"
+                          setting="autoHost"
                           checked={settings.autoHost.sounds}
                           on:change={(e) =>
                             updateSettingSingle(
@@ -499,9 +493,6 @@
                               e.target.checked
                             )}
                         />
-                        <label for="autoHostSoundsCheck" class="btn btn-outline-primary"
-                          >Sound Notifications</label
-                        >
                         <input
                           type="checkbox"
                           class="btn-check"
@@ -557,12 +548,10 @@
                           >Custom Announcement</label
                         >
                         {#if ["rapidHost", "smartHost"].includes(settings.autoHost.type)}
-                          <input
-                            type="checkbox"
-                            class="btn-check"
-                            id="announceIsBotCheck"
-                            data-key="announceIsBot"
-                            data-setting="autoHost"
+                          <SettingsCheckbox
+                            frontFacingName="Announce Is Bot"
+                            key="announceIsBot"
+                            setting="autoHost"
                             checked={settings.autoHost.announceIsBot}
                             on:change={(e) =>
                               updateSettingSingle(
@@ -572,15 +561,10 @@
                                 e.target.checked
                               )}
                           />
-                          <label for="announceIsBotCheck" class="btn btn-outline-primary"
-                            >Announce Is Bot</label
-                          >
-                          <input
-                            type="checkbox"
-                            class="btn-check"
-                            id="voteStartCheck"
-                            data-key="voteStart"
-                            data-setting="autoHost"
+                          <SettingsCheckbox
+                            frontFacingName="Vote start"
+                            key="voteStart"
+                            setting="autoHost"
                             checked={settings.autoHost.voteStart}
                             on:change={(e) =>
                               updateSettingSingle(
@@ -590,14 +574,26 @@
                                 e.target.checked
                               )}
                           />
-                          <label for="voteStartCheck" class="btn btn-outline-primary"
-                            >Vote start</label
-                          >
+                          {#if settings.autoHost.type === "smartHost" && settings.autoHost.observers}
+                            <SettingsCheckbox
+                              frontFacingName="Intrusive check"
+                              key="leaveAlternate"
+                              setting="autoHost"
+                              checked={settings.autoHost.leaveAlternate}
+                              on:change={(e) =>
+                                updateSettingSingle(
+                                  "autoHost",
+                                  "leaveAlternate",
+                                  // @ts-ignore
+                                  e.target.checked
+                                )}
+                            />
+                          {/if}
                         {/if}
-
                         <SettingsCheckbox
                           setting="autoHost"
                           key="advancedMapOptions"
+                          frontFacingName="Advanced Map Options"
                           checked={settings.autoHost.advancedMapOptions}
                           on:change={(e) =>
                             updateSettingSingle(
@@ -620,6 +616,7 @@
                           <SettingsCheckbox
                             setting="autoHost"
                             key="flagLockTeams"
+                            frontFacingName="Lock Teams"
                             checked={settings.autoHost.flagLockTeams}
                             on:change={(e) =>
                               updateSettingSingle(
@@ -632,6 +629,7 @@
                           <SettingsCheckbox
                             setting="autoHost"
                             key="flagFullSharedUnitControl"
+                            frontFacingName="Full Shared Unit Control"
                             checked={settings.autoHost.flagFullSharedUnitControl}
                             on:change={(e) =>
                               updateSettingSingle(
@@ -644,6 +642,7 @@
                           <SettingsCheckbox
                             setting="autoHost"
                             key="flagPlaceTeamsTogether"
+                            frontFacingName="Place Teams Together"
                             checked={settings.autoHost.flagPlaceTeamsTogether}
                             on:change={(e) =>
                               updateSettingSingle(
@@ -656,6 +655,7 @@
                           <SettingsCheckbox
                             setting="autoHost"
                             key="flagRandomRaces"
+                            frontFacingName="Random Races"
                             checked={settings.autoHost.flagRandomRaces}
                             on:change={(e) =>
                               updateSettingSingle(

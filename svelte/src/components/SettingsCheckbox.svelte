@@ -3,6 +3,7 @@
   export let setting: keyof AppSettings;
   export let key: string;
   export let checked: boolean = false;
+  export let frontFacingName: string = key;
 </script>
 
 <input
@@ -14,4 +15,4 @@
   bind:checked
   on:change
 />
-<label for={setting + key} class="btn btn-outline-primary">{key}</label>
+<label for={setting + key} class="btn btn-outline-primary">{frontFacingName}</label>

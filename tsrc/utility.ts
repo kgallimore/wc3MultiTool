@@ -30,6 +30,7 @@ export interface AutoHostSettings {
   flagRandomRaces: boolean;
   flagRandomHero: boolean;
   settingVisibility: "0" | "1" | "2" | "3";
+  leaveAlternate: boolean;
 }
 export interface ObsSettings {
   type: string;
