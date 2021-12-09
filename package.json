@@ -1,6 +1,6 @@
 {
   "name": "wc3multitool",
-  "version": "0.6.3",
+  "version": "0.6.5",
   "description": "A multi-tool for Warcraft 3",
   "repository": {
     "type": "git",
@@ -120,6 +120,7 @@
     "@rollup/plugin-node-resolve": "^13.0.6",
     "@rollup/plugin-typescript": "^8.3.0",
     "@tsconfig/svelte": "^2.0.1",
+    "@types/request": "^2.48.7",
     "@types/sound-play": "^1.1.0",
     "@types/ws": "^8.2.1",
     "concurrently": "^6.4.0",
@@ -146,6 +147,7 @@
     "electron-store": "^8.0.0",
     "electron-updater": "^4.3.9",
     "esm": "^3.2.25",
+    "form-data": "^2.3.3",
     "https": "^1.0.0",
     "js-combinatorics": "^1.5.3",
     "nanoid": "^3.1.25",

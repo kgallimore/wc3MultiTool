@@ -50,6 +50,8 @@
       lookupName: "",
       available: false,
       wc3statsVariant: "",
+      experimental: false,
+      handleReplays: true,
     },
     discord: {
       type: "off",
@@ -57,6 +59,9 @@
       announceChannel: "",
       chatChannel: "",
       bidirectionalChat: true,
+    },
+    client: {
+      restartOnUpdate: false,
     },
   };
   let currentStatus = {
@@ -67,6 +72,9 @@
     updater: "Up to date",
   };
   let wc3statsOptions = wc3EloModes(settings.elo.lookupName);
+  let battleTag = "";
+  let banReason = "";
+  let lastAction = "";
   $: botAnnouncement = `Welcome. I am a bot. ${
     settings.elo.available && settings.elo.type !== "off"
       ? `I will fetch ELO from ${settings.elo.type}. ${
@@ -111,6 +119,11 @@
   window.api.receive("fromMain", (data: WindowReceive) => {
     let newData = data.data;
     switch (data.messageType) {
+      case "action":
+        lastAction = newData.value;
+        banReason = "";
+        battleTag = "";
+        break;
       case "updater":
         console.log("updater", newData);
         currentStatus.updater = newData.value;
@@ -133,7 +146,6 @@
         }
         break;
       case "lobbyData":
-        console.dir(newData.lobby);
         let newLobby = newData.lobby;
         if (newLobby) {
           currentStatus.lobby = newLobby;
@@ -268,10 +280,35 @@
         </div>
         <div class="modal-body">
           <div class="container">
+            <label for="clientForm"> Client Settings</label>
+            <form id="clientForm" name="client" class="p-2">
+              <div class="row border m-2">
+                <div class="col p-2">
+                  <SettingsCheckbox
+                    frontFacingName="Restart on update"
+                    setting="client"
+                    key="restartOnUpdate"
+                    checked={settings.client.restartOnUpdate}
+                    on:change={(e) =>
+                      // @ts-ignore
+                      updateSettingSingle("client", "restartOnUpdate", e.target.checked)}
+                  />
+                </div>
+              </div>
+            </form>
             <form name="elo" class="p-2">
               <div class="row">
                 <div class="col">
-                  <label for="eloLookup" class="form-label">ELO Lookup</label>
+                  <label for="eloLookup" class="form-label">
+                    <details>
+                      <summary>ELO Lookup (click to expand)</summary>
+                      <strong>Experimental Swap:</strong>
+                      Only enable for games of more than 2 teams. It is very inefficient and
+                      largely untested.<br />
+                      <strong>Handle Replay: </strong>Will automatically handle upload to
+                      wc3stats.com at the end of each game.
+                    </details></label
+                  >
                   <select
                     id="eloLookup"
                     class="form-select"
@@ -288,7 +325,7 @@
                 </div>
               </div>
               {#if settings.elo.type !== "off"}
-                <div id="eloSettings" class="row border m-2">
+                <div id="eloSettings" class="row border p-2">
                   <div class="col">
                     <div class="d-flex justify-content-center">ELO Settings</div>
                     {#if settings.autoHost.type !== "off"}
@@ -326,7 +363,10 @@
                             {:then value}
                               <option>Select a value</option>
                               {#each value as option}
-                                <option value={JSON.stringify(option.key)}
+                                <option
+                                  selected={JSON.stringify(option.key) ===
+                                    settings.elo.wc3statsVariant}
+                                  value={JSON.stringify(option.key)}
                                   >{option.key.ladder}, {option.key.mode}, {option.key
                                     .round}, {option.key.season}</option
                                 >
@@ -338,7 +378,8 @@
                     {/if}
 
                     <div
-                      class="d-flex justify-content-center btn-group pb-2"
+                      class="btn-group btn-group-sm"
+                      style="flex-wrap: wrap;"
                       role="group"
                     >
                       <input
@@ -355,25 +396,45 @@
                       <label for="balanceTeamsCheck" class="btn btn-outline-primary"
                         >Balance Teams</label
                       >
-                      <input
-                        type="checkbox"
-                        class="btn-check"
-                        id="excludeHostFromSwapCheck"
-                        data-key="excludeHostFromSwap"
-                        data-setting="elo"
-                        checked={settings.elo.excludeHostFromSwap}
+                      <SettingsCheckbox
+                        key="experimental"
+                        setting="elo"
+                        frontFacingName="Experimental Swap"
+                        checked={settings.elo.experimental}
                         on:change={(e) =>
-                          updateSettingSingle(
-                            "elo",
-                            "excludeHostFromSwap",
-                            // @ts-ignore
-                            e.target.checked
-                          )}
+                          // @ts-ignore
+                          updateSettingSingle("elo", "experimental", e.target.checked)}
                       />
-                      <label
-                        for="excludeHostFromSwapCheck"
-                        class="btn btn-outline-primary">Exclude Host From Swap</label
-                      >
+                      {#if !settings.elo.experimental}
+                        <SettingsCheckbox
+                          key="excludeHostFromSwap"
+                          setting="elo"
+                          frontFacingName="Don't swap host"
+                          checked={settings.elo.excludeHostFromSwap}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "elo",
+                              "excludeHostFromSwap",
+                              // @ts-ignore
+                              e.target.checked
+                            )}
+                        />
+                      {/if}
+                      {#if settings.elo.type === "wc3stats"}
+                        <SettingsCheckbox
+                          key="handleReplays"
+                          setting="elo"
+                          frontFacingName="Handle Replays"
+                          checked={settings.elo.handleReplays}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "elo",
+                              "handleReplays",
+                              // @ts-ignore
+                              e.target.checked
+                            )}
+                        />
+                      {/if}
                       <input
                         type="checkbox"
                         class="btn-check"
@@ -1083,109 +1144,218 @@
       </div>
     </div>
   </div>
-  <div class="d-flex justify-content-center p-2">
-    {#if currentStatus.connected}
-      <span class="badge bg-success" id="mainStatus">
-        <h2 id="statusText">Connected to Warcraft</h2>
+  <div class="container-lg">
+    <div class="d-flex justify-content-center p-2">
+      {#if currentStatus.connected}
+        <span class="badge bg-success" id="mainStatus">
+          <h2 id="statusText">Connected to Warcraft</h2>
+        </span>
+      {:else}
+        <span class="badge bg-secondary" id="mainStatus">
+          <h2 id="statusText">Waiting for Connection</h2>
+        </span>
+      {/if}
+    </div>
+    <div class="d-flex justify-content-center p-2">
+      <span class="badge bg-primary" id="mainStatus">
+        {currentStatus.updater}
       </span>
-    {:else}
-      <span class="badge bg-secondary" id="mainStatus">
-        <h2 id="statusText">Waiting for Connection</h2>
-      </span>
-    {/if}
-  </div>
-  <div class="d-flex justify-content-center p-2">
-    <span class="badge bg-primary" id="mainStatus">
-      {currentStatus.updater}
-    </span>
-  </div>
-  <div class="d-flex justify-content-center pt-1">
-    <button
-      type="button"
-      class="btn btn-primary"
-      data-bs-toggle="modal"
-      data-bs-target="#settingsModal"
-    >
-      Settings
-    </button>
-    <button
-      on:click={() => toMain({ messageType: "openLogs" })}
-      type="button"
-      class="btn btn-primary"
-      id="logsButton"
-    >
-      Open Logs
-    </button>
-    <button
-      on:click={() => toMain({ messageType: "openWar" })}
-      type="button"
-      class="btn btn-primary"
-      id="warcraftButton"
-    >
-      Open Warcraft
-    </button>
-    <a href="https://war.trenchguns.com" type="button" class="btn btn-primary">
-      Visit The Hub
-    </a>
-    <a href="https://discord.gg/yNAyJyE9V8" type="button" class="btn btn-primary">
-      Discord
-    </a>
-  </div>
-  <h4>Menu State: <span id="menuStateLabel">{currentStatus.menu}</span></h4>
-  <h4>Current Step: <span />{currentStatus.progress.step}</h4>
-  <div class="progress">
-    <div
-      id="progressBar"
-      class="progress-bar progress-bar-striped progress-bar-animated"
-      role="progressbar"
-      aria-valuenow={currentStatus.progress.percent}
-      style="width: {currentStatus.progress.percent.toString()}%"
-    />
-  </div>
-  <table class="table table-sm">
-    <thead>
-      <tr>
-        <th>Map Name</th>
-        <th>Game Name</th>
-        <th>Game Host</th>
-        <th>ELO Available</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td id="mapName">{currentStatus.lobby.mapName ?? ""}</td>
-        <td id="lobbyName">{currentStatus.lobby.lobbyName ?? ""}</td>
-        <td id="gameHost">{currentStatus.lobby.playerHost ?? ""}</td>
-        <td id="eloAvailable">{currentStatus.lobby.eloAvailable ?? ""}</td>
-      </tr>
-    </tbody>
-  </table>
-  <div class="p-2" id="tablesDiv">
-    {#if currentStatus.lobby?.processed?.teamList?.playerTeams?.data}
-      {#each Object.entries(currentStatus.lobby.processed.teamList.playerTeams.data) as [teamName, teamData]}
-        <table class="table table-hover table-striped table-sm">
-          <thead>
-            <tr>
-              <th>{teamName} Players</th>
-              <th>ELO</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each teamData.slots as player}
-              <tr>
-                <td>{player}</td>
-                <td>{currentStatus.lobby.processed.eloList[player] ?? "N/A"}</td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      {/each}
-    {/if}
+    </div>
+    <div class="d-flex justify-content-center pt-1">
+      <button
+        type="button"
+        class="btn btn-primary"
+        data-bs-toggle="modal"
+        data-bs-target="#settingsModal"
+      >
+        Settings
+      </button>
+      <button
+        on:click={() => toMain({ messageType: "openLogs" })}
+        type="button"
+        class="btn btn-primary"
+        id="logsButton"
+      >
+        Open Logs
+      </button>
+      <button
+        on:click={() => toMain({ messageType: "openWar" })}
+        type="button"
+        class="btn btn-primary"
+        id="warcraftButton"
+      >
+        Open Warcraft
+      </button>
+      <a href="https://war.trenchguns.com" type="button" class="btn btn-primary">
+        Visit The Hub
+      </a>
+      <a href="https://discord.gg/yNAyJyE9V8" type="button" class="btn btn-primary">
+        Discord
+      </a>
+    </div>
+    <h4>Menu State: <span id="menuStateLabel">{currentStatus.menu}</span></h4>
+    <h4>Current Step: <span />{currentStatus.progress.step}</h4>
+    <div class="progress">
+      <div
+        id="progressBar"
+        class="progress-bar progress-bar-striped progress-bar-animated"
+        role="progressbar"
+        aria-valuenow={currentStatus.progress.percent}
+        style="width: {currentStatus.progress.percent.toString()}%"
+      />
+    </div>
+    <form class="border p-2">
+      {#if lastAction}
+        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+          {lastAction}<button
+            type="button"
+            class="btn-close"
+            data-bs-dismiss="alert"
+            aria-label="Close"
+          />
+        </div>
+      {/if}
+      <div class="row p-2">
+        <div class="col">
+          <input
+            type="text"
+            class="form-control"
+            placeholder="BattleTag"
+            pattern="^\D\S&#123;2,11}#\d&#123;4,8}$"
+            bind:value={battleTag}
+          />
+        </div>
+        <div class="col-6">
+          <input
+            type="text"
+            class="form-control"
+            placeholder="Ban Reason"
+            bind:value={banReason}
+          />
+        </div>
+      </div>
+      <div class="row justify-content-center p-2">
+        <div class="col d-flex justify-content-center">
+          <div class="btn-group">
+            <submit
+              class="btn btn-danger"
+              type="submit"
+              on:click={() =>
+                toMain({
+                  messageType: "banPlayer",
+                  ban: { player: battleTag, reason: banReason },
+                })}
+            >
+              Ban
+            </submit>
+            <submit
+              class="btn btn-success"
+              type="submit"
+              on:click={() =>
+                toMain({
+                  messageType: "unbanPlayer",
+                  ban: { player: battleTag },
+                })}
+            >
+              UnBan
+            </submit>
+          </div>
+          <div class="btn-group">
+            <submit
+              class="btn btn-primary"
+              type="submit"
+              on:click={() =>
+                toMain({
+                  messageType: "changePerm",
+                  perm: { player: battleTag, role: "moderator" },
+                })}
+            >
+              Mod
+            </submit>
+            <submit
+              class="btn btn-warning"
+              type="submit"
+              on:click={() =>
+                toMain({
+                  messageType: "changePerm",
+                  perm: { player: battleTag, role: "admin" },
+                })}
+            >
+              Admin
+            </submit>
+            <submit
+              class="btn btn-danger"
+              type="submit"
+              on:click={() =>
+                toMain({
+                  messageType: "changePerm",
+                  perm: { player: battleTag, role: "" },
+                })}
+            >
+              Remove Perms
+            </submit>
+          </div>
+        </div>
+      </div>
+    </form>
 
-    <script
-      src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"
-      integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM"
-      crossorigin="anonymous">
-    </script>
+    <table class="table table-sm">
+      <thead>
+        <tr>
+          <th>Map Name</th>
+          <th>Game Name</th>
+          <th>Game Host</th>
+          <th>ELO Available</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td id="mapName">{currentStatus.lobby.mapName ?? ""}</td>
+          <td id="lobbyName">{currentStatus.lobby.lobbyName ?? ""}</td>
+          <td id="gameHost">{currentStatus.lobby.playerHost ?? ""}</td>
+          <td id="eloAvailable">{currentStatus.lobby.eloAvailable ?? ""}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="p-2" id="tablesDiv">
+      {#if currentStatus.lobby?.processed?.teamList?.playerTeams?.data}
+        {#each Object.entries(currentStatus.lobby.processed.teamList.playerTeams.data) as [teamName, teamData]}
+          <table class="table table-hover table-striped table-sm">
+            <thead>
+              <tr>
+                <th>{teamName} Players</th>
+                <th>ELO</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each teamData.slots as player}
+                <tr>
+                  <td>
+                    {#if player !== "OPEN SLOT"}
+                      <button
+                        class="btn btn-danger"
+                        on:click={() =>
+                          toMain({
+                            messageType: "banPlayer",
+                            ban: { player, reason: banReason },
+                          })}>Ban</button
+                      >
+                    {/if}{player}
+                  </td>
+                  <td>{currentStatus.lobby.processed.eloList[player] ?? "N/A"}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        {/each}
+      {/if}
+
+      <script
+        src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM"
+        crossorigin="anonymous">
+      </script>
+    </div>
   </div>
 </main>

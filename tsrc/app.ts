@@ -24,7 +24,7 @@ import { play } from "sound-play";
 import sqlite3 from "better-sqlite3";
 import { DisClient } from "./disc";
 import { WarLobby } from "./lobby";
-
+const FormData = require("form-data");
 if (!app.isPackaged) {
   require("electron-reload")(__dirname, {
     electron: path.join(__dirname, "../node_modules", ".bin", "electron.cmd"),
@@ -64,6 +64,10 @@ log.info("App starting...");
 const store = new Store();
 const testNonPlayersTeam = /((computer)|(creeps)|(summoned))/i;
 const testSpecTeam = /((host)|(spectator)|(observer)|(referee))/i;
+const replayFolders: string = path.join(
+  app.getPath("documents"),
+  "Warcraft III\\BattleNet"
+);
 
 var win: BrowserWindow;
 var appIcon: Tray | null;
@@ -87,12 +91,14 @@ var state: {
   screenState: string;
   selfBattleTag: string;
   inGame: boolean;
+  tableVersion: number;
 } = {
   menuState: "Out of Menus",
   screenState: "",
   selfBattleTag: "",
   selfRegion: "eu",
   inGame: false,
+  tableVersion: (store.get("tableVersion") as number) ?? 0,
 };
 var appVersion: string;
 var discClient: DisClient | null = null;
@@ -139,6 +145,8 @@ var settings: AppSettings = <AppSettings>{
     lookupName: store.get("elo.lookupName") ?? "",
     available: store.get("elo.available") ?? false,
     wc3statsVariant: store.get("elo.wc3statsVariant") ?? "",
+    experimental: store.get("elo.experimental") ?? false,
+    handleReplays: store.get("elo.handleReplays") ?? true,
   },
   discord: {
     type: store.get("discord.type") ?? "off",
@@ -146,6 +154,9 @@ var settings: AppSettings = <AppSettings>{
     announceChannel: store.get("discord.announceChannel") ?? "",
     chatChannel: store.get("discord.chatChannel") ?? "",
     bidirectionalChat: store.get("discord.bidirectionalChat") ?? false,
+  },
+  client: {
+    restartOnUpdate: store.get("client.restartOnUpdate") ?? false,
   },
 };
 var identifier = store.get("anonymousIdentifier");
@@ -258,6 +269,27 @@ function getQueryVariables(url: string) {
 
 ipcMain.on("toMain", (event, args: WindowSend) => {
   switch (args.messageType) {
+    case "changePerm":
+      if (args.perm?.player) {
+        if (args.perm.role === "moderator" || args.perm.role === "admin") {
+          addAdmin(args.perm.player, "client", "client", args.perm.role);
+        } else if (!args.perm.role) {
+          removeAdmin(args.perm.player);
+        }
+      } else {
+        log.info("No player in perm");
+      }
+      break;
+    case "unbanPlayer":
+      if (args.ban?.player) {
+        unBanPlayer(args.ban.player, "client");
+      }
+      break;
+    case "banPlayer":
+      if (args.ban?.player) {
+        banPlayer(args.ban.player, "client", "client", args.ban.reason);
+      }
+      break;
     case "init":
       sendWindow("updateSettings", { settings: settings });
       break;
@@ -412,12 +444,21 @@ autoUpdater.on("download-progress", (progressObj) => {
   sendWindow("updater", { value: log_message });
 });
 autoUpdater.on("update-downloaded", (info) => {
-  new Notification({
-    title: "Update Downloaded",
-    body: "The latest version has been downloaded. Please restart the app",
-  }).show();
   log.info("Update downloaded");
-  sendWindow("updater", { value: "Update downloaded. Please restart the app." });
+
+  if (settings.client.restartOnUpdate) {
+    new Notification({
+      title: "Update Downloaded",
+      body: "The latest version has been downloaded and will now be installed.",
+    }).show();
+    autoUpdater.quitAndInstall(true, true);
+  } else {
+    new Notification({
+      title: "Update Downloaded",
+      body: "The latest version has been downloaded. Please restart the app",
+    }).show();
+    sendWindow("updater", { value: "Update downloaded. Please restart the app." });
+  }
 });
 
 const createWindow = () => {
@@ -473,13 +514,29 @@ const createWindow = () => {
 };
 
 app.on("ready", function () {
+  setInterval(() => {
+    autoUpdater.checkForUpdatesAndNotify();
+  }, 30 * 60 * 1000);
   log.info("App ready");
   db.exec(
-    "CREATE TABLE IF NOT EXISTS banList(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, ban_date DATETIME default current_timestamp NOT NULL, admin TEXT NOT NULL, region TEXT NOT NULL, reason TEXT, unban_date DATETIME)"
+    "CREATE TABLE IF NOT EXISTS banList(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, ban_date DATETIME default current_timestamp NOT NULL, admin TEXT NOT NULL, region TEXT NOT NULL, reason TEXT, unban_date DATETIME)"
   );
   db.exec(
     "CREATE TABLE IF NOT EXISTS lobbyEvents(id INTEGER PRIMARY KEY AUTOINCREMENT, event TEXT NOT NULL, time DATETIME default current_timestamp NOT NULL, data TEXT, username TEXT)"
   );
+  db.exec(
+    "CREATE TABLE IF NOT EXISTS adminList(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, add_date DATETIME default current_timestamp NOT NULL, admin TEXT NOT NULL, region TEXT NOT NULL, role TEXT NOT NULL)"
+  );
+  if (state.tableVersion < 1) {
+    log.info("Updating tables");
+    db.exec("ALTER TABLE banList rename to banListBackup");
+    db.exec(
+      "CREATE TABLE banList(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, ban_date DATETIME default current_timestamp NOT NULL, admin TEXT NOT NULL, region TEXT NOT NULL, reason TEXT, unban_date DATETIME)"
+    );
+    db.exec("INSERT INTO banList SELECT * FROM banListBackup;");
+    store.set("tableVersion", 1);
+    state.tableVersion = 1;
+  }
   discordSetup();
   appVersion = app.getVersion();
   wss = new WebSocket.Server({ port: 8888 });
@@ -770,6 +827,54 @@ function handleClientMessage(message: { data: string }) {
               } else {
                 triggerOBS();
                 inGame = false;
+                if (settings.elo.handleReplays) {
+                  let mostModified = { file: "", mtime: 0 };
+                  fs.readdirSync(replayFolders, { withFileTypes: true })
+                    .filter((dirent) => dirent.isDirectory())
+                    .map((dirent) => dirent.name)
+                    .forEach((folder) => {
+                      const targetFile = path.join(
+                        replayFolders,
+                        folder,
+                        "Replays",
+                        "LastReplay.w3g"
+                      );
+                      if (fs.existsSync(targetFile)) {
+                        const stats = fs.statSync(targetFile);
+                        if (stats.mtimeMs > mostModified.mtime) {
+                          mostModified.mtime = stats.mtimeMs;
+                          mostModified.file = targetFile;
+                        }
+                      }
+                    });
+                  if (mostModified.file) {
+                    if (settings.elo.type === "wc3stats") {
+                      let form = new FormData();
+                      form.append("replay", fs.createReadStream(mostModified.file));
+
+                      fetch("https://api.wc3stats.com/upload?auto=true", {
+                        method: "POST",
+                        body: form,
+                        headers: {
+                          ...form.getHeaders(),
+                        },
+                      }).then(
+                        function (response) {
+                          if (response.status !== 200) {
+                            log.info(response.statusText);
+                            sendWindow("error", { error: response.statusText });
+                          } else {
+                            sendProgress("Uploaded replay", 0);
+                          }
+                        },
+                        function (error) {
+                          log.info(error.message);
+                          sendWindow("error", { error: error.message });
+                        }
+                      );
+                    }
+                  }
+                }
                 clearLobby();
               }
               state.menuState = data.payload.screen;
@@ -910,10 +1015,8 @@ function handleChatMessage(payload: GameClientMessage) {
   ) {
     if (payload.message.sender.includes("#")) {
       var sender = payload.message.sender;
-      var superAdmin = payload.message.sender === state.selfBattleTag;
     } else {
       var sender = state.selfBattleTag;
-      var superAdmin = true;
     }
     if (payload.message.content.match(/^\?votestart/i)) {
       if (
@@ -968,13 +1071,13 @@ function handleChatMessage(payload: GameClientMessage) {
         sendChatMessage("ELO not available");
       }
     } else if (payload.message.content.match(/^\?ban/i)) {
-      if (lobby.isHost && superAdmin) {
+      if (lobby.isHost && checkRole(sender, "moderator")) {
         var banTarget = payload.message.content.split(" ")[1];
         if (banTarget) {
           var banReason = payload.message.content.split(" ").slice(2).join(" ") || "";
           if (banTarget.match(/^\D\S{2,11}#\d{4,8}$/)) {
             sendChatMessage("Banning out of lobby player.");
-            banPlayer(banTarget, sender, lobby.region, banReason, false);
+            banPlayer(banTarget, sender, lobby.region, banReason);
           } else {
             let targets = lobby.processed.allLobby.filter((user) =>
               user.match(new RegExp(banTarget, "i"))
@@ -991,6 +1094,61 @@ function handleChatMessage(payload: GameClientMessage) {
           sendChatMessage("Ban target required");
         }
       }
+    } else if (payload.message.content.match(/^\?unban/i)) {
+      if (lobby.isHost && checkRole(sender, "moderator")) {
+        var target = payload.message.content.split(" ")[1];
+        if (target) {
+          if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
+            sendChatMessage("Unbanning out of lobby player.");
+            unBanPlayer(target, sender);
+          } else {
+            sendChatMessage("Full battleTag required");
+            log.info("Full battleTag required");
+          }
+        } else {
+          sendChatMessage("Ban target required");
+          log.info("Ban target required");
+        }
+      }
+    } else if (payload.message.content.match(/^\?perm/i)) {
+      if (lobby.isHost && checkRole(sender, "admin")) {
+        var target = payload.message.content.split(" ")[1];
+        var perm = payload.message.content.split(" ")[2]?.toLowerCase() ?? "mod";
+        perm = perm === "mod" ? "moderator" : perm;
+        if ((target && perm === "moderator") || perm === "admin") {
+          if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
+            sendChatMessage("Assigning out of lobby player " + perm + ".");
+            addAdmin(target, sender, lobby.region, perm);
+          } else {
+            let targets = lobby.processed.allLobby.filter((user) =>
+              user.match(new RegExp(target, "i"))
+            );
+            if (targets.length === 1) {
+              addAdmin(target, sender, lobby.region, perm);
+            } else if (targets.length > 1) {
+              sendChatMessage("Multiple matches found. Please be more specific.");
+            } else {
+              sendChatMessage("No matches found.");
+            }
+          }
+        } else {
+          sendChatMessage("Target required, or perm incorrect");
+        }
+      }
+    } else if (payload.message.content.match(/^\?unperm/i)) {
+      if (lobby.isHost && checkRole(sender, "admin")) {
+        var target = payload.message.content.split(" ")[1];
+        if (target) {
+          if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
+            sendChatMessage("Unbanning out of lobby player.");
+            removeAdmin(target);
+          } else {
+            sendChatMessage("Full battleTag required");
+          }
+        } else {
+          sendChatMessage("Target required");
+        }
+      }
     } else if (payload.message.content.match(/^\?(help)|(commands)/i)) {
       if (lobby.eloAvailable) {
         sendChatMessage("?elo: Return back your elo");
@@ -1001,8 +1159,15 @@ function handleChatMessage(payload: GameClientMessage) {
       ) {
         sendChatMessage("?voteStart: Starts or accepts a vote to start");
       }
-      if (superAdmin) {
-        sendChatMessage("?ban <name> <?reason>: Bans a player. Permanently.");
+      if (checkRole(sender, "moderator")) {
+        sendChatMessage("?ban <name> <?reason>: Bans a player forever");
+        sendChatMessage("?unban <name>: unbans a player");
+      }
+      if (checkRole(sender, "admin")) {
+        sendChatMessage(
+          "?perm <name> <?admin|mod>: Promotes a player to admin or moderator (mod by default)"
+        );
+        sendChatMessage("?unperm <name>: Demotes player to normal");
       }
       sendChatMessage("?help: Shows commands with <required arg> <?optional arg>");
     } else if (
@@ -1023,21 +1188,83 @@ function handleChatMessage(payload: GameClientMessage) {
 function banPlayer(
   player: string,
   admin: string,
-  region: "us" | "eu",
-  reason = "",
-  banNow = true
+  region: "us" | "eu" | "client",
+  reason = ""
 ) {
-  if (lobby.processed && lobby.processed.allPlayers.includes(player)) {
-    ("CREATE TABLE IF NOT EXISTS banList(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, ban_date DATETIME default current_timestamp NOT NULL, admin TEXT NOT NULL, region TEXT NOT NULL, reason TEXT, unban_date DATETIME)");
-    db.prepare(
-      "INSERT INTO banList (username, admin, region, reason) VALUES (?, ?, ?, ?)"
-    ).run(player, admin, region, reason);
-    if (banNow) {
-      sendChatMessage("!ban " + player);
-      sendChatMessage("!kick " + player);
+  if (checkRole(admin, "moderator")) {
+    if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
+      db.prepare(
+        "INSERT INTO banList (username, admin, region, reason) VALUES (?, ?, ?, ?)"
+      ).run(player, admin, region, reason);
+      log.info("Banned " + player + " by " + admin + (reason ? " for " + reason : ""));
+      sendWindow("action", {
+        value: "Banned " + player + " by " + admin + (reason ? " for " + reason : ""),
+      });
+      if (lobby.processed && lobby.processed.allPlayers.includes(player)) {
+        sendChatMessage("!ban " + player);
+        sendChatMessage("!kick " + player);
+        sendChatMessage(player + " banned");
+      }
+    } else {
+      log.info("Invalid battleTag");
     }
-    sendChatMessage(player + " banned");
   }
+}
+
+function unBanPlayer(player: string, admin: string) {
+  db.prepare(
+    "UPDATE banList SET unban_date = DateTime('now') WHERE username = ? AND unban_date IS NULL"
+  ).run(player);
+  log.info("Unbanned " + player + " by " + admin);
+  sendWindow("action", { value: "Unbanned " + player + " by " + admin });
+}
+
+function addAdmin(
+  player: string,
+  admin: string,
+  region: "us" | "eu" | "client",
+  role: "moderator" | "admin" = "moderator"
+) {
+  if (checkRole(admin, "admin")) {
+    if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
+      removeAdmin(player);
+      db.prepare(
+        "INSERT INTO adminList (username, admin, region, role) VALUES (?, ?, ?, ?)"
+      ).run(player, admin, region, role);
+      log.info("Added " + player + " to " + role + " by " + admin);
+      sendWindow("action", { value: "Added " + player + " to " + role + " by " + admin });
+    } else {
+      log.info("Invalid battleTag");
+    }
+  } else {
+    log.info(admin + " is not an admin");
+  }
+}
+
+function removeAdmin(player: string) {
+  if (checkRole(player, "admin")) {
+    db.prepare("DELETE FROM adminList WHERE username = ?").run(player);
+    log.info("Removed permissions from " + player);
+    sendWindow("action", { value: "Removed permissions from " + player });
+  }
+}
+
+function checkRole(player: string, minPerms: "moderator" | "admin") {
+  if (player === state.selfBattleTag || "client") {
+    return true;
+  }
+  const targetRole = db
+    .prepare("SELECT role FROM adminList WHERE username = ?")
+    .get(player).role;
+  if (
+    minPerms === "moderator" &&
+    (targetRole === "admin" || targetRole === "moderator")
+  ) {
+    return true;
+  } else if (minPerms === "admin" && targetRole === "admin") {
+    return true;
+  }
+  return false;
 }
 
 function cancelVote() {
@@ -1226,6 +1453,43 @@ async function processMapData(payload: GameClientLobbyPayload) {
   processLobby(payload, true);
 }
 
+function lobbyCombinations(target: Array<string>, teamSize: number = 2) {
+  let combos = new Permutation(target);
+  let bestCombo = [];
+  let smallestEloDiff = Number.POSITIVE_INFINITY;
+  // First generate every permutation, then separate them into groups of the required team size
+  for (const combo of combos) {
+    let coupled = combo.reduce((resultArray: any[][], item: any, index: number) => {
+      const chunkIndex = Math.floor(index / teamSize);
+
+      if (!resultArray[chunkIndex]) {
+        resultArray[chunkIndex] = []; // start a new chunk
+      }
+
+      resultArray[chunkIndex].push(item);
+
+      return resultArray;
+    }, []);
+    // Now that we have each team in a chunk, we can calculate the elo difference
+    let largestEloDifference = -1;
+    for (const combo of coupled) {
+      // Go through each possible team of the chunk and calculate the highest difference in elo to the target average(totalElo/numTeams)
+      const comboElo = combo.reduce((a: number, b: string) => a + playerData[b].elo, 0);
+      const eloDiff = Math.abs(totalElo / (target.length / teamSize) - comboElo);
+      // If the difference is larger than the current largest difference, set it as the new largest
+      if (eloDiff > largestEloDifference) {
+        largestEloDifference = eloDiff;
+      }
+    }
+    // If the previously calculated difference is smaller than the current smallest difference, set it as the new smallest, and save the combo
+    if (largestEloDifference < smallestEloDiff) {
+      smallestEloDiff = largestEloDifference;
+      bestCombo = coupled;
+    }
+  }
+  return bestCombo;
+}
+
 async function processLobby(payload: GameClientLobbyPayload, sendFull = false) {
   let newAllPlayers: Array<string> = [];
   let newAllLobby: Array<string> = [];
@@ -1252,7 +1516,9 @@ async function processLobby(payload: GameClientLobbyPayload, sendFull = false) {
     const teamName = lobby.processed.teamListLookup[player.team].name;
     if (player.name) {
       db.open;
-      const row = db.prepare("SELECT * FROM banList WHERE username = ?").get(player.name);
+      const row = db
+        .prepare("SELECT * FROM banList WHERE username = ? AND unban_date IS NULL")
+        .get(player.name);
       if (row) {
         sendChatMessage("!ban " + row.username);
         sendChatMessage("!kick " + row.username);
@@ -1483,49 +1749,89 @@ function lobbyIsReady() {
 
 async function finalizeLobby() {
   if (lobby.eloAvailable && settings.elo.balanceTeams) {
-    lobby.processed.totalElo = Object.values(lobby.processed.eloList).reduce(
-      (a, b) => a + b,
-      0
-    );
-    let smallestEloDiff = Number.POSITIVE_INFINITY;
-    let bestCombo: Array<string> = [];
-    const combos = new Combination(
-      Object.keys(lobby.processed.eloList),
-      Math.floor(Object.keys(lobby.processed.eloList).length / 2)
-    );
-    for (const combo of combos) {
-      const comboElo = combo.reduce(
-        (a: any, b: any) => a + lobby.processed.eloList[b],
+    if (settings.elo.experimental) {
+      let targetCombo = lobbyCombinations(Object.keys(lobby.processed.eloList));
+      if (lobby.isHost) {
+        let dataCopy = JSON.parse(
+          JSON.stringify(lobby.processed.teamList.playerTeams.data)
+        );
+        let playerTeamNames = Object.keys(lobby.processed.teamList.playerTeams.data);
+        for (let i = 0; i < targetCombo.length; i++) {
+          for (let x = 0; x < targetCombo[i].length; x++) {
+            let targetPlayer = targetCombo[i][x];
+            // If the team does not include the target player, check through the team for an incorrect player and swap them
+            if (!dataCopy[playerTeamNames[i]].slots[x].includes(targetPlayer)) {
+              for (const currentPlayer of dataCopy[playerTeamNames[i]].slots) {
+                if (!targetCombo[i].includes(currentPlayer)) {
+                  sendProgress("Swapping " + currentPlayer + " and " + targetPlayer, 100);
+                  sendChatMessage("!swap " + currentPlayer + " " + targetPlayer);
+                  dataCopy[playerTeamNames[i]].slots[x] = currentPlayer;
+                  // Check to see where we got the target player from and swap the other plater
+                  for (const teamName of playerTeamNames) {
+                    if (dataCopy[teamName].slots.includes(currentPlayer)) {
+                      dataCopy[teamName].slots[
+                        dataCopy[teamName].slots.indexOf(currentPlayer)
+                      ] = targetPlayer;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      } else {
+        let playerTeamNames = Object.keys(lobby.processed.teamList.playerTeams.data);
+        for (let i = 0; i < playerTeamNames.length; i++) {
+          sendChatMessage(playerTeamNames[i] + " should be " + targetCombo[i].join(", "));
+        }
+      }
+    } else {
+      lobby.processed.totalElo = Object.values(lobby.processed.eloList).reduce(
+        (a, b) => a + b,
         0
       );
-      const eloDiff = Math.abs(lobby.processed.totalElo / 2 - comboElo);
-      if (eloDiff < smallestEloDiff) {
-        smallestEloDiff = eloDiff;
-        bestCombo = combo;
-      }
-    }
-    lobby.processed.bestCombo = bestCombo;
-    lobby.processed.eloDiff = smallestEloDiff;
-    swapHelper();
-    sendChatMessage("ELO data provided by: " + settings.elo.type);
-
-    if (!lobby.isHost) {
-      sendChatMessage(lobby.processed.leastSwap + " should be: " + bestCombo.join(", "));
-    } else {
-      for (let i = 0; i < lobby.processed.swaps[0].length; i++) {
-        if (!lobbyIsReady()) {
-          break;
+      let smallestEloDiff = Number.POSITIVE_INFINITY;
+      let bestCombo: Array<string> = [];
+      const combos = new Combination(
+        Object.keys(lobby.processed.eloList),
+        Math.floor(Object.keys(lobby.processed.eloList).length / 2)
+      );
+      for (const combo of combos) {
+        const comboElo = combo.reduce(
+          (a: any, b: any) => a + lobby.processed.eloList[b],
+          0
+        );
+        const eloDiff = Math.abs(lobby.processed.totalElo / 2 - comboElo);
+        if (eloDiff < smallestEloDiff) {
+          smallestEloDiff = eloDiff;
+          bestCombo = combo;
         }
-        sendProgress(
-          "Swapping " +
-            lobby.processed.swaps[0][i] +
-            " and " +
-            lobby.processed.swaps[1][i],
-          100
-        );
+      }
+      lobby.processed.bestCombo = bestCombo;
+      lobby.processed.eloDiff = smallestEloDiff;
+      swapHelper();
+      sendChatMessage("ELO data provided by: " + settings.elo.type);
+
+      if (!lobby.isHost) {
         sendChatMessage(
-          "!swap " + lobby.processed.swaps[0][i] + " " + lobby.processed.swaps[1][i]
+          lobby.processed.leastSwap + " should be: " + bestCombo.join(", ")
         );
+      } else {
+        for (let i = 0; i < lobby.processed.swaps[0].length; i++) {
+          if (!lobbyIsReady()) {
+            break;
+          }
+          sendProgress(
+            "Swapping " +
+              lobby.processed.swaps[0][i] +
+              " and " +
+              lobby.processed.swaps[1][i],
+            100
+          );
+          sendChatMessage(
+            "!swap " + lobby.processed.swaps[0][i] + " " + lobby.processed.swaps[1][i]
+          );
+        }
       }
     }
   }

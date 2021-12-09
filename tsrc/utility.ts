@@ -3,6 +3,11 @@ export interface AppSettings {
   obs: ObsSettings;
   discord: DiscordSettings;
   elo: EloSettings;
+  client: ClientSettings;
+}
+
+export interface ClientSettings {
+  restartOnUpdate: boolean;
 }
 export interface AutoHostSettings {
   type: "off" | "lobbyHost" | "rapidHost" | "smartHost";
@@ -63,10 +68,13 @@ export interface EloSettings {
   lookupName: string;
   available: boolean;
   wc3statsVariant: string;
+  experimental: boolean;
+  handleReplays: boolean;
 }
 
 export interface WindowReceive {
   messageType:
+    | "action"
     | "statusChange"
     | "updateSettingSingle"
     | "lobbyData"
@@ -87,9 +95,25 @@ export interface WindowReceive {
   };
 }
 export interface WindowSend {
-  messageType: "openLogs" | "openWar" | "getMapPath" | "updateSettingSingle" | "init";
+  messageType:
+    | "openLogs"
+    | "openWar"
+    | "getMapPath"
+    | "updateSettingSingle"
+    | "init"
+    | "banPlayer"
+    | "unbanPlayer"
+    | "changePerm";
   data?: {
     update?: { setting: keyof AppSettings; key: SettingsKeys; value: any };
+  };
+  ban?: {
+    player: string;
+    reason?: string;
+  };
+  perm?: {
+    player: string;
+    role: "admin" | "moderator" | "";
   };
 }
 export interface LobbyProcessed {
