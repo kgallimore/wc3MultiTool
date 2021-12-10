@@ -159,7 +159,7 @@
         }
         break;
       case "menusChange":
-        currentStatus.menu = newData.value ?? "Out of Menuts";
+        currentStatus.menu = newData.value ?? "Out of Menus";
         break;
       case "error":
         let alertDiv = document.createElement("div");

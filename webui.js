@@ -2,7 +2,13 @@ let webSocket;
 let autoHost = {
   type: "off",
 };
-let state = {};
+let state = {
+  selfRegion: "",
+  selfBattleTag: "",
+  menuState: "",
+  screenState: "",
+  inGame: false,
+};
 let addedHtml;
 const version = "1.0.0";
 
@@ -46,9 +52,6 @@ function wsSetup() {
           ).innerHTML = `Toggle Auto Host ${autoHost.type === "off" ? "On" : "Off"}`;
         }
         sendSocket("info", autoHost);
-        break;
-      case "stateUpdate":
-        state = data.data;
         break;
       default:
         sendSocket("echo", event.data);

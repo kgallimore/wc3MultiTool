@@ -85,19 +85,20 @@ var warcraftIsOpen = false;
 var warcraftRegion = { left: 0, top: 0, width: 0, height: 0 };
 var voteTimer: any;
 var openLobbyParams: { lobbyName?: string; gameId?: string; mapFile?: string } | null;
-var state: {
+var gameState: {
   selfRegion: "us" | "eu";
   menuState: string;
   screenState: string;
   selfBattleTag: string;
   inGame: boolean;
-  tableVersion: number;
 } = {
   menuState: "Out of Menus",
   screenState: "",
   selfBattleTag: "",
   selfRegion: "eu",
   inGame: false,
+};
+var clientState: { tableVersion: number } = {
   tableVersion: (store.get("tableVersion") as number) ?? 0,
 };
 var appVersion: string;
@@ -204,7 +205,7 @@ if (!warInstallLoc || warInstallLoc.includes(".exe")) {
 }
 
 var lastAnnounceTime = 0;
-var sentMessages: Array<Object> = [];
+var sentMessages: Array<String> = [];
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -527,7 +528,7 @@ app.on("ready", function () {
   db.exec(
     "CREATE TABLE IF NOT EXISTS adminList(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, add_date DATETIME default current_timestamp NOT NULL, admin TEXT NOT NULL, region TEXT NOT NULL, role TEXT NOT NULL)"
   );
-  if (state.tableVersion < 1) {
+  if (clientState.tableVersion < 1) {
     log.info("Updating tables");
     db.exec("ALTER TABLE banList rename to banListBackup");
     db.exec(
@@ -535,7 +536,7 @@ app.on("ready", function () {
     );
     db.exec("INSERT INTO banList SELECT * FROM banListBackup;");
     store.set("tableVersion", 1);
-    state.tableVersion = 1;
+    clientState.tableVersion = 1;
   }
   discordSetup();
   appVersion = app.getVersion();
@@ -671,7 +672,7 @@ async function triggerOBS() {
           obs.inGameHotkey.key
         );*/
     } else if (
-      state.menuState === "SCORE_SCREEN" &&
+      gameState.menuState === "SCORE_SCREEN" &&
       !inGame &&
       settings.obs.outOfGameHotkey
     ) {
@@ -712,17 +713,18 @@ function banSlot(slot: number) {
   sendMessage("BanPlayerFromGameLobby", { slot });
 }
 
-async function handleWSMessage(message: any) {
-  message = JSON.parse(message) as { messageType: string; data: string };
-  switch (message.messageType) {
+async function handleWSMessage(message: string) {
+  let data = JSON.parse(message) as { messageType: string; data: any };
+  switch (data.messageType) {
     case "state":
-      state = message.data;
+      gameState = data.data;
+      sendWindow("menusChange", { value: gameState.menuState });
       break;
     case "sendMessage":
       //console.log(message.data);
       break;
     case "clientWebSocket":
-      handleClientMessage(message);
+      handleClientMessage(data);
       break;
     case "toggleAutoHost":
       log.info("Toggling autoHost");
@@ -731,14 +733,14 @@ async function handleWSMessage(message: any) {
       sendSocket("autoHost", settings.autoHost);
     //sendWindow("autoHost", settings.autoHost);
     case "error":
-      log.error(message);
-      win.webContents.send("fromMain", message);
+      log.error(data);
+      win.webContents.send("fromMain", data);
       break;
     case "echo":
-      log.verbose(message);
+      log.verbose(data);
       break;
     default:
-      log.info(message);
+      log.info(data);
   }
 }
 
@@ -755,9 +757,9 @@ function handleClientMessage(message: { data: string }) {
         data = JSON.parse(data.toString());
         switch (data.messageType) {
           case "ScreenTransitionInfo":
-            state.screenState = data.payload.screen;
-            console.log("Screenstate", state.screenState);
-            if (state.screenState !== "GAME_LOBBY") {
+            gameState.screenState = data.payload.screen;
+            console.log("Screenstate", gameState.screenState);
+            if (gameState.screenState !== "GAME_LOBBY") {
               clearLobby();
             }
             break;
@@ -766,9 +768,9 @@ function handleClientMessage(message: { data: string }) {
               if (
                 data.payload.screen === "MAIN_MENU" ||
                 (data.payload.screen === "SCORE_SCREEN" &&
-                  state.menuState === "SCORE_SCREEN")
+                  gameState.menuState === "SCORE_SCREEN")
               ) {
-                state.menuState = data.payload.screen;
+                gameState.menuState = data.payload.screen;
                 if (openLobbyParams?.lobbyName) {
                   openParamsJoin();
                 } else if (settings.autoHost.type !== "off") {
@@ -808,14 +810,20 @@ function handleClientMessage(message: { data: string }) {
                 }
               }
               if (
-                state.menuState === "LOADING_SCREEN" &&
+                gameState.menuState === "LOADING_SCREEN" &&
                 data.payload.screen === "SCORE_SCREEN"
               ) {
                 inGame = true;
                 if (settings.autoHost.type === "smartHost") {
                   setTimeout(findQuit, 15000);
                 }
-                discClient?.lobbyStarted();
+
+                if (discClient) {
+                  discClient.lobbyStarted();
+                  discClient.sendMessage(
+                    "Game start. End of chat for " + lobby.lobbyName
+                  );
+                }
                 triggerOBS();
                 clearLobby();
                 if (settings.autoHost.type === "rapidHost") {
@@ -877,7 +885,8 @@ function handleClientMessage(message: { data: string }) {
                 }
                 clearLobby();
               }
-              state.menuState = data.payload.screen;
+              gameState.menuState = data.payload.screen;
+              sendWindow("menusChange", { value: gameState.menuState });
             }
             break;
           case "GameLobbySetup":
@@ -901,8 +910,8 @@ function handleClientMessage(message: { data: string }) {
             clearLobby();
             break;
           case "UpdateUserInfo":
-            state.selfBattleTag = data.payload.user.battleTag;
-            state.selfRegion = data.payload.user.userRegion;
+            gameState.selfBattleTag = data.payload.user.battleTag;
+            gameState.selfRegion = data.payload.user.userRegion;
           default:
             if (
               [
@@ -986,7 +995,7 @@ function clearLobby() {
 }
 
 function openParamsJoin() {
-  if (openLobbyParams && state.menuState === "MAIN_MENU") {
+  if (openLobbyParams && gameState.menuState === "MAIN_MENU") {
     updateSetting("autoHost", "type", "off");
 
     if (openLobbyParams.lobbyName) {
@@ -1006,181 +1015,188 @@ function openParamsJoin() {
 }
 
 function handleChatMessage(payload: GameClientMessage) {
-  if (
-    payload.message &&
-    lobby &&
-    lobby.isHost &&
-    payload.message.source === "gameChat" &&
-    !sentMessages.includes(payload.message.content)
-  ) {
+  if (payload.message && lobby && lobby.isHost && payload.message.source === "gameChat") {
     if (payload.message.sender.includes("#")) {
       var sender = payload.message.sender;
     } else {
-      var sender = state.selfBattleTag;
+      var sender = gameState.selfBattleTag;
     }
-    if (payload.message.content.match(/^\?votestart/i)) {
-      if (
-        settings.autoHost.voteStart &&
-        lobby.processed &&
-        ["rapidHost", "smartHost"].includes(settings.autoHost.type)
-      ) {
-        if (lobby.processed.voteStartVotes.length === 0) {
-          const emptyPlayerTeam = Object.keys(
-            lobby.processed.teamList.playerTeams.data
-          ).some(function (team) {
-            if (
-              lobby &&
-              lobby.processed.teamList.playerTeams.data[team].players.length === 0
-            ) {
-              return true;
-            }
-          });
-          if (!emptyPlayerTeam) {
-            voteTimer = setTimeout(cancelVote, 60000);
-            sendChatMessage("You have 60 seconds to ?votestart.");
-          } else {
-            sendChatMessage("Unavailable. Not all teams have players.");
-          }
-        }
-        if (!lobby.processed.voteStartVotes.includes(sender) && voteTimer) {
-          lobby.processed.voteStartVotes.push(sender);
-          if (
-            lobby.processed.voteStartVotes.length >=
-            lobby.processed.allPlayers.length * (settings.autoHost.voteStartPercent / 100)
-          ) {
-            startGame();
-          } else {
-            sendChatMessage(
-              Math.ceil(
-                lobby.processed.allPlayers.length *
-                  (settings.autoHost.voteStartPercent / 100) -
-                  lobby.processed.voteStartVotes.length
-              ).toString() + " more vote(s) required."
-            );
-          }
-        }
-      }
-    } else if (payload.message.content.match(/^\?elo/)) {
-      if (lobby.eloAvailable) {
-        if (lobby.processed.eloList[sender]) {
-          sendChatMessage(sender + " ELO: " + lobby.processed.eloList[sender]);
-        } else {
-          sendChatMessage("ELO pending");
-        }
-      } else {
-        sendChatMessage("ELO not available");
-      }
-    } else if (payload.message.content.match(/^\?ban/i)) {
-      if (lobby.isHost && checkRole(sender, "moderator")) {
-        var banTarget = payload.message.content.split(" ")[1];
-        if (banTarget) {
-          var banReason = payload.message.content.split(" ").slice(2).join(" ") || "";
-          if (banTarget.match(/^\D\S{2,11}#\d{4,8}$/)) {
-            sendChatMessage("Banning out of lobby player.");
-            banPlayer(banTarget, sender, lobby.region, banReason);
-          } else {
-            let targets = lobby.processed.allLobby.filter((user) =>
-              user.match(new RegExp(banTarget, "i"))
-            );
-            if (targets.length === 1) {
-              banPlayer(targets[0], sender, lobby.region, banReason);
-            } else if (targets.length > 1) {
-              sendChatMessage("Multiple matches found. Please be more specific.");
-            } else {
-              sendChatMessage("No matches found.");
-            }
-          }
-        } else {
-          sendChatMessage("Ban target required");
-        }
-      }
-    } else if (payload.message.content.match(/^\?unban/i)) {
-      if (lobby.isHost && checkRole(sender, "moderator")) {
-        var target = payload.message.content.split(" ")[1];
-        if (target) {
-          if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
-            sendChatMessage("Unbanning out of lobby player.");
-            unBanPlayer(target, sender);
-          } else {
-            sendChatMessage("Full battleTag required");
-            log.info("Full battleTag required");
-          }
-        } else {
-          sendChatMessage("Ban target required");
-          log.info("Ban target required");
-        }
-      }
-    } else if (payload.message.content.match(/^\?perm/i)) {
-      if (lobby.isHost && checkRole(sender, "admin")) {
-        var target = payload.message.content.split(" ")[1];
-        var perm = payload.message.content.split(" ")[2]?.toLowerCase() ?? "mod";
-        perm = perm === "mod" ? "moderator" : perm;
-        if ((target && perm === "moderator") || perm === "admin") {
-          if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
-            sendChatMessage("Assigning out of lobby player " + perm + ".");
-            addAdmin(target, sender, lobby.region, perm);
-          } else {
-            let targets = lobby.processed.allLobby.filter((user) =>
-              user.match(new RegExp(target, "i"))
-            );
-            if (targets.length === 1) {
-              addAdmin(target, sender, lobby.region, perm);
-            } else if (targets.length > 1) {
-              sendChatMessage("Multiple matches found. Please be more specific.");
-            } else {
-              sendChatMessage("No matches found.");
-            }
-          }
-        } else {
-          sendChatMessage("Target required, or perm incorrect");
-        }
-      }
-    } else if (payload.message.content.match(/^\?unperm/i)) {
-      if (lobby.isHost && checkRole(sender, "admin")) {
-        var target = payload.message.content.split(" ")[1];
-        if (target) {
-          if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
-            sendChatMessage("Unbanning out of lobby player.");
-            removeAdmin(target);
-          } else {
-            sendChatMessage("Full battleTag required");
-          }
-        } else {
-          sendChatMessage("Target required");
-        }
-      }
-    } else if (payload.message.content.match(/^\?(help)|(commands)/i)) {
-      if (lobby.eloAvailable) {
-        sendChatMessage("?elo: Return back your elo");
-      }
-      if (
-        ["rapidHost", "smartHost"].includes(settings.autoHost.type) &&
-        settings.autoHost.voteStart
-      ) {
-        sendChatMessage("?voteStart: Starts or accepts a vote to start");
-      }
-      if (checkRole(sender, "moderator")) {
-        sendChatMessage("?ban <name> <?reason>: Bans a player forever");
-        sendChatMessage("?unban <name>: unbans a player");
-      }
-      if (checkRole(sender, "admin")) {
-        sendChatMessage(
-          "?perm <name> <?admin|mod>: Promotes a player to admin or moderator (mod by default)"
-        );
-        sendChatMessage("?unperm <name>: Demotes player to normal");
-      }
-      sendChatMessage("?help: Shows commands with <required arg> <?optional arg>");
-    } else if (
-      !payload.message.content.match(/^(executed '!)|(Unknown command ')|(Command ')/i)
+    if (
+      sender === gameState.selfBattleTag &&
+      sentMessages.includes(payload.message.content)
     ) {
-      if (discClient)
-        discClient.sendMessage(payload.message.sender + ": " + payload.message.content);
+      console.log(`Delete: ${sender}: ${payload.message.content}`);
+      sentMessages.splice(sentMessages.indexOf(payload.message.content), 1);
+    } else {
+      console.log(`New: ${sender}: ${payload.message.content}`);
+      console.log(sentMessages);
+      console.log(sentMessages.includes(payload.message.content));
+      console.log(sender, gameState.selfBattleTag);
+      if (payload.message.content.match(/^\?votestart/i)) {
+        if (
+          settings.autoHost.voteStart &&
+          lobby.processed &&
+          ["rapidHost", "smartHost"].includes(settings.autoHost.type)
+        ) {
+          if (lobby.processed.voteStartVotes.length === 0) {
+            const emptyPlayerTeam = Object.keys(
+              lobby.processed.teamList.playerTeams.data
+            ).some(function (team) {
+              if (
+                lobby &&
+                lobby.processed.teamList.playerTeams.data[team].players.length === 0
+              ) {
+                return true;
+              }
+            });
+            if (!emptyPlayerTeam) {
+              voteTimer = setTimeout(cancelVote, 60000);
+              sendChatMessage("You have 60 seconds to ?votestart.");
+            } else {
+              sendChatMessage("Unavailable. Not all teams have players.");
+            }
+          }
+          if (!lobby.processed.voteStartVotes.includes(sender) && voteTimer) {
+            lobby.processed.voteStartVotes.push(sender);
+            if (
+              lobby.processed.voteStartVotes.length >=
+              lobby.processed.allPlayers.length *
+                (settings.autoHost.voteStartPercent / 100)
+            ) {
+              startGame();
+            } else {
+              sendChatMessage(
+                Math.ceil(
+                  lobby.processed.allPlayers.length *
+                    (settings.autoHost.voteStartPercent / 100) -
+                    lobby.processed.voteStartVotes.length
+                ).toString() + " more vote(s) required."
+              );
+            }
+          }
+        }
+      } else if (payload.message.content.match(/^\?elo/)) {
+        if (lobby.eloAvailable) {
+          if (lobby.processed.eloList[sender]) {
+            sendChatMessage(sender + " ELO: " + lobby.processed.eloList[sender]);
+          } else {
+            sendChatMessage("ELO pending");
+          }
+        } else {
+          sendChatMessage("ELO not available");
+        }
+      } else if (payload.message.content.match(/^\?ban/i)) {
+        if (lobby.isHost && checkRole(sender, "moderator")) {
+          var banTarget = payload.message.content.split(" ")[1];
+          if (banTarget) {
+            var banReason = payload.message.content.split(" ").slice(2).join(" ") || "";
+            if (banTarget.match(/^\D\S{2,11}#\d{4,8}$/)) {
+              sendChatMessage("Banning out of lobby player.");
+              banPlayer(banTarget, sender, lobby.region, banReason);
+            } else {
+              let targets = lobby.processed.allLobby.filter((user) =>
+                user.match(new RegExp(banTarget, "i"))
+              );
+              if (targets.length === 1) {
+                banPlayer(targets[0], sender, lobby.region, banReason);
+              } else if (targets.length > 1) {
+                sendChatMessage("Multiple matches found. Please be more specific.");
+              } else {
+                sendChatMessage("No matches found.");
+              }
+            }
+          } else {
+            sendChatMessage("Ban target required");
+          }
+        }
+      } else if (payload.message.content.match(/^\?unban/i)) {
+        if (lobby.isHost && checkRole(sender, "moderator")) {
+          var target = payload.message.content.split(" ")[1];
+          if (target) {
+            if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
+              sendChatMessage("Unbanning out of lobby player.");
+              unBanPlayer(target, sender);
+            } else {
+              sendChatMessage("Full battleTag required");
+              log.info("Full battleTag required");
+            }
+          } else {
+            sendChatMessage("Ban target required");
+            log.info("Ban target required");
+          }
+        }
+      } else if (payload.message.content.match(/^\?perm/i)) {
+        if (lobby.isHost && checkRole(sender, "admin")) {
+          var target = payload.message.content.split(" ")[1];
+          var perm = payload.message.content.split(" ")[2]?.toLowerCase() ?? "mod";
+          perm = perm === "mod" ? "moderator" : perm;
+          if ((target && perm === "moderator") || perm === "admin") {
+            if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
+              sendChatMessage("Assigning out of lobby player " + perm + ".");
+              addAdmin(target, sender, lobby.region, perm);
+            } else {
+              let targets = lobby.processed.allLobby.filter((user) =>
+                user.match(new RegExp(target, "i"))
+              );
+              if (targets.length === 1) {
+                addAdmin(target, sender, lobby.region, perm);
+              } else if (targets.length > 1) {
+                sendChatMessage("Multiple matches found. Please be more specific.");
+              } else {
+                sendChatMessage("No matches found.");
+              }
+            }
+          } else {
+            sendChatMessage("Target required, or perm incorrect");
+          }
+        }
+      } else if (payload.message.content.match(/^\?unperm/i)) {
+        if (lobby.isHost && checkRole(sender, "admin")) {
+          var target = payload.message.content.split(" ")[1];
+          if (target) {
+            if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
+              sendChatMessage("Unbanning out of lobby player.");
+              removeAdmin(target);
+            } else {
+              sendChatMessage("Full battleTag required");
+            }
+          } else {
+            sendChatMessage("Target required");
+          }
+        }
+      } else if (payload.message.content.match(/^\?(help)|(commands)/i)) {
+        if (lobby.eloAvailable) {
+          sendChatMessage("?elo: Return back your elo");
+        }
+        if (
+          ["rapidHost", "smartHost"].includes(settings.autoHost.type) &&
+          settings.autoHost.voteStart
+        ) {
+          sendChatMessage("?voteStart: Starts or accepts a vote to start");
+        }
+        if (checkRole(sender, "moderator")) {
+          sendChatMessage("?ban <name> <?reason>: Bans a player forever");
+          sendChatMessage("?unban <name>: unbans a player");
+        }
+        if (checkRole(sender, "admin")) {
+          sendChatMessage(
+            "?perm <name> <?admin|mod>: Promotes a player to admin or moderator (mod by default)"
+          );
+          sendChatMessage("?unperm <name>: Demotes player to normal");
+        }
+        sendChatMessage("?help: Shows commands with <required arg> <?optional arg>");
+      } else if (
+        !payload.message.content.match(/^(executed '!)|(Unknown command ')|(Command ')/i)
+      ) {
+        if (discClient)
+          discClient.sendMessage(payload.message.sender + ": " + payload.message.content);
 
-      if (!settings.autoHost.private || !app.isPackaged)
-        lobbyProcessedUpdate("chatMessages", {
-          sender: payload.message.sender,
-          content: payload.message.content,
-        });
+        if (!settings.autoHost.private || !app.isPackaged)
+          lobbyProcessedUpdate("chatMessages", {
+            sender: payload.message.sender,
+            content: payload.message.content,
+          });
+      }
     }
   }
 }
@@ -1250,7 +1266,8 @@ function removeAdmin(player: string) {
 }
 
 function checkRole(player: string, minPerms: "moderator" | "admin") {
-  if (player === state.selfBattleTag || "client") {
+  if (player === gameState.selfBattleTag || "client") {
+    console.log("client or self");
     return true;
   }
   const targetRole = db
@@ -1260,8 +1277,10 @@ function checkRole(player: string, minPerms: "moderator" | "admin") {
     minPerms === "moderator" &&
     (targetRole === "admin" || targetRole === "moderator")
   ) {
+    console.log(player + " is a moderator");
     return true;
   } else if (minPerms === "admin" && targetRole === "admin") {
+    console.log("Admin");
     return true;
   }
   return false;
@@ -1299,7 +1318,7 @@ async function processMapData(payload: GameClientLobbyPayload) {
   lobby.playerHost = payload.playerHost;
   lobby.mapName = payload.mapData.mapName;
   lobby.lobbyName = payload.lobbyName;
-  lobby.region = state.selfRegion;
+  lobby.region = gameState.selfRegion;
   lobby.processed = {
     allLobby: [],
     allPlayers: [],
@@ -1442,7 +1461,7 @@ async function processMapData(payload: GameClientLobbyPayload) {
   }
   if (lobby.isHost && discClient) {
     discClient.sendNewLobby(
-      state.selfRegion,
+      gameState.selfRegion,
       lobby.lobbyName,
       settings.autoHost.mapName,
       settings.autoHost.type !== "off" && settings.autoHost.private,
@@ -1912,7 +1931,7 @@ function swapHelper() {
 }
 
 function announcement() {
-  if (state.menuState === "GAME_LOBBY") {
+  if (gameState.menuState === "GAME_LOBBY") {
     let currentTime = Date.now();
     if (
       currentTime >
@@ -1980,7 +1999,7 @@ function playSound(file: string) {
 }
 
 async function findQuit() {
-  if ((inGame || state.menuState === "LOADING_SCREEN") && socket?.OPEN) {
+  if ((inGame || gameState.menuState === "LOADING_SCREEN") && socket?.OPEN) {
     await activeWindowWar();
     if (warcraftInFocus) {
       let targetRes = "1080/";
@@ -2101,9 +2120,6 @@ function sendMessage(message: string, payload: any) {
 function sendChatMessage(content: string) {
   if (typeof content === "string" && content.length > 0 && content.length <= 255) {
     sentMessages.push(content);
-    if (sentMessages.length > 3) {
-      sentMessages.shift();
-    }
     sendMessage("SendGameChatMessage", {
       content,
     });
