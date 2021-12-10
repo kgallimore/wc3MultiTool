@@ -195,3 +195,10 @@ export interface GameClientMessage {
   };
   message?: { source: string; sender: string; content: string };
 }
+
+export interface mmdResults {
+  list: {
+    [key: string]: { pid: string; won: boolean; extra: { [key: string]: string } };
+  };
+  lookup: { [key: string]: string };
+}

@@ -24,6 +24,7 @@ import { play } from "sound-play";
 import sqlite3 from "better-sqlite3";
 import { DisClient } from "./disc";
 import { WarLobby } from "./lobby";
+import parser from "w3gjs";
 const FormData = require("form-data");
 if (!app.isPackaged) {
   require("electron-reload")(__dirname, {
@@ -46,6 +47,7 @@ import type {
   LobbyProcessed,
   WindowReceive,
   SettingsKeys,
+  mmdResults,
 } from "./utility";
 const db = new sqlite3(app.getPath("userData") + "/wc3mt.db");
 console.log(app.getPath("userData"));
@@ -407,6 +409,7 @@ async function eloMapNameCheck(type: "wc3stats" | "pyroTD" | "off", mapName: str
   // Clean the name from the map name
   let clean = await cleanMapName(type, mapName);
   updateSetting("elo", "lookupName", clean.name);
+  console.log(clean);
   updateSetting("elo", "available", clean.elo);
   if (!clean.elo) {
     if (!settings.elo.available) {
@@ -721,7 +724,7 @@ async function handleWSMessage(message: string) {
       sendWindow("menusChange", { value: gameState.menuState });
       break;
     case "sendMessage":
-      //console.log(message.data);
+      //console.log(data.data);
       break;
     case "clientWebSocket":
       handleClientMessage(data);
@@ -758,13 +761,13 @@ function handleClientMessage(message: { data: string }) {
         switch (data.messageType) {
           case "ScreenTransitionInfo":
             gameState.screenState = data.payload.screen;
-            console.log("Screenstate", gameState.screenState);
-            if (gameState.screenState !== "GAME_LOBBY") {
+            /*if (gameState.screenState !== "GAME_LOBBY") {
               clearLobby();
-            }
+            }*/
             break;
           case "SetGlueScreen":
             if (data.payload.screen) {
+              // Create a new game at menu or if previously in game(score screen loads twice)
               if (
                 data.payload.screen === "MAIN_MENU" ||
                 (data.payload.screen === "SCORE_SCREEN" &&
@@ -809,6 +812,7 @@ function handleClientMessage(message: { data: string }) {
                   sendMessage("CreateLobby", payloadData);
                 }
               }
+              // Game has finished loading in
               if (
                 gameState.menuState === "LOADING_SCREEN" &&
                 data.payload.screen === "SCORE_SCREEN"
@@ -817,7 +821,6 @@ function handleClientMessage(message: { data: string }) {
                 if (settings.autoHost.type === "smartHost") {
                   setTimeout(findQuit, 15000);
                 }
-
                 if (discClient) {
                   discClient.lobbyStarted();
                   discClient.sendMessage(
@@ -883,7 +886,6 @@ function handleClientMessage(message: { data: string }) {
                     }
                   }
                 }
-                clearLobby();
               }
               gameState.menuState = data.payload.screen;
               sendWindow("menusChange", { value: gameState.menuState });
@@ -1025,13 +1027,8 @@ function handleChatMessage(payload: GameClientMessage) {
       sender === gameState.selfBattleTag &&
       sentMessages.includes(payload.message.content)
     ) {
-      console.log(`Delete: ${sender}: ${payload.message.content}`);
       sentMessages.splice(sentMessages.indexOf(payload.message.content), 1);
     } else {
-      console.log(`New: ${sender}: ${payload.message.content}`);
-      console.log(sentMessages);
-      console.log(sentMessages.includes(payload.message.content));
-      console.log(sender, gameState.selfBattleTag);
       if (payload.message.content.match(/^\?votestart/i)) {
         if (
           settings.autoHost.voteStart &&
@@ -1267,7 +1264,6 @@ function removeAdmin(player: string) {
 
 function checkRole(player: string, minPerms: "moderator" | "admin") {
   if (player === gameState.selfBattleTag || "client") {
-    console.log("client or self");
     return true;
   }
   const targetRole = db
@@ -1277,10 +1273,8 @@ function checkRole(player: string, minPerms: "moderator" | "admin") {
     minPerms === "moderator" &&
     (targetRole === "admin" || targetRole === "moderator")
   ) {
-    console.log(player + " is a moderator");
     return true;
   } else if (minPerms === "admin" && targetRole === "admin") {
-    console.log("Admin");
     return true;
   }
   return false;
@@ -2017,20 +2011,17 @@ async function findQuit() {
             break;
           }
         } catch (e) {
-          console.log(e);
+          log.error(e);
         }
       }
       if (foundTarget) {
-        console.log("Found quit. Press q");
         robot.keyTap("q");
         if (settings.autoHost.sounds) {
           playSound("quit.wav");
         }
       } else if (settings.autoHost.leaveAlternate) {
         foundTarget = false;
-        console.log("Found no quit. Press f12");
         robot.keyTap("f12");
-        console.log("f12");
         try {
           const foundImage = await screen.find(`${targetRes}closeScoreboard.png`, {
             confidence: 0.8,
@@ -2055,12 +2046,8 @@ async function findQuit() {
           //log.error(e);
         }
         robot.keyTap("escape");
-        console.log("esc");
         if (foundTarget) {
-          console.log("nowQuit!");
           quitGame(false);
-        } else {
-          console.log("nothing!");
         }
         //log.verbose("Did not find quit, try again in 5 seconds");
       }
@@ -2085,22 +2072,44 @@ async function quitGame(searchAgain = true) {
   }
 }
 
-/*async function analyzeGame() {
+async function analyzeGame(file: string) {
   let data = new Set();
   let dataTypes = new Set();
-  parser.on("gamedatablock", (block) => {
+  let parse = new parser();
+  let results: mmdResults = { list: {}, lookup: {} };
+  parse.on("gamedatablock", (block) => {
     if (block.id === 0x1f) {
       block.commandBlocks.forEach((commandBlock) => {
         if (
           commandBlock.actions.length > 0 &&
+          // @ts-ignore
           commandBlock.actions[0].filename === "MMD.Dat"
         ) {
           commandBlock.actions.forEach((block) => {
-            if (block.key && !/^\d+$/.test(block.key)) {
-              if (!/^DefVarP/i.test(block.key)) {
-                data.add(block.key);
+            // @ts-ignore
+            let key = block.key as string;
+            if (key && !/^\d+$/.test(key)) {
+              if (!/^DefVarP/i.test(key)) {
+                if (key.match(/^init pid/i)) {
+                  results.list[key.split(" ")[3]] = {
+                    pid: key.split(" ")[2],
+                    won: false,
+                    extra: {},
+                  };
+                  results.lookup[key.split(" ")[2]] = key.split(" ")[3];
+                } else if (key.match(/^FlagP/i)) {
+                  results.list[results.lookup[key.split(" ")[1]]].won =
+                    key.split(" ")[2] === "winner";
+                } else if (key.match(/^VarP /i)) {
+                  if (results.list[results.lookup[key.split(" ")[1]]]) {
+                    results.list[results.lookup[key.split(" ")[1]]].extra[
+                      key.split(" ")[2]
+                    ] = key.split("=")[1].trim();
+                  }
+                }
+                data.add(key);
               } else {
-                dataTypes.add(block.key);
+                dataTypes.add(key);
               }
             }
           });
@@ -2108,8 +2117,9 @@ async function quitGame(searchAgain = true) {
       });
     }
   });
-  await parser.parse(readFileSync("./replay.w3g"));
-}*/
+  await parse.parse(fs.readFileSync(file));
+  return results;
+}
 
 function sendMessage(message: string, payload: any) {
   if (clientWebSocket) {

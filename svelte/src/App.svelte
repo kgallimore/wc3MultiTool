@@ -245,7 +245,7 @@
       }
       (value as any) = settings.autoHost.closeSlots;
     }
-    if (settings[setting][key] !== value) {
+    if (settings[setting][key] !== value || key === "closeSlots") {
       toMain({
         messageType: "updateSettingSingle",
         data: {

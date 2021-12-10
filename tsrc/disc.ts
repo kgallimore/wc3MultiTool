@@ -1,5 +1,6 @@
 import Discord from "discord.js";
 import EventEmitter from "events";
+import type { mmdResults } from "./utility";
 export class DisClient extends EventEmitter {
   client: Discord.Client;
   announceChannel: Discord.TextChannel | null;
@@ -118,8 +119,26 @@ export class DisClient extends EventEmitter {
         { name: "Game Started", value: `<t:${Math.floor(Date.now() / 1000)}:R>` },
       ]);
       this.#sentEmbed.edit(newEmbed);
-      this.#embed = null;
-      this.#sentEmbed = null;
+    }
+  }
+
+  async lobbyEnded(results: mmdResults) {
+    if (this.#embed && this.#sentEmbed) {
+      let newEmbed = new Discord.MessageEmbed(this.#embed);
+      newEmbed.setDescription("Game has ended");
+      newEmbed.setColor("#228B22");
+      newEmbed.setURL("");
+      newEmbed.fields.forEach((field) => {
+        for (const [playerName, value] of Object.entries(results.list)) {
+          if (field.value.match(new RegExp(playerName, "i"))) {
+          }
+        }
+        Object.entries(results.list).some((key) => {});
+      });
+      newEmbed.addFields([
+        { name: "Game Ended", value: `<t:${Math.floor(Date.now() / 1000)}:R>` },
+      ]);
+      this.#sentEmbed.edit(newEmbed);
     }
   }
 

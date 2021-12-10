@@ -1,6 +1,6 @@
 {
   "name": "wc3multitool",
-  "version": "0.6.6",
+  "version": "0.6.7",
   "description": "A multi-tool for Warcraft 3",
   "repository": {
     "type": "git",
@@ -153,6 +153,7 @@
     "nanoid": "^3.1.25",
     "robotjs": "^0.6.0",
     "sound-play": "^1.1.0",
+    "w3gjs": "^2.4.2",
     "ws": "^8.2.0"
   }
 }
