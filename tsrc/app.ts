@@ -409,8 +409,8 @@ async function eloMapNameCheck(type: "wc3stats" | "pyroTD" | "off", mapName: str
   // Clean the name from the map name
   let clean = await cleanMapName(type, mapName);
   updateSetting("elo", "lookupName", clean.name);
-  console.log(clean);
   updateSetting("elo", "available", clean.elo);
+  updateSetting("elo", "wc3statsVariant", "");
   if (!clean.elo) {
     if (!settings.elo.available) {
       sendWindow("error", {

@@ -138,11 +138,11 @@
       case "updateSettingSingle":
         let update = newData.update;
         if (update) {
+          // @ts-ignore
+          settings[update.setting][update.key] = update.value;
           if (update.key === "lookupName") {
             wc3statsOptions = wc3EloModes(settings.elo.lookupName);
           }
-          // @ts-ignore
-          settings[update.setting][update.key] = update.value;
         }
         break;
       case "lobbyData":
@@ -1295,6 +1295,14 @@
               Remove Perms
             </submit>
           </div>
+        </div>
+      </div>
+      <div class="row justify-content-center p-2">
+        <div class="col d-flex ">
+          <details>
+            <summary>Permissions</summary><strong>Mod: </strong>May ban and unban players.<br
+            /> <strong>Admin:</strong> Mod + add/remove mods.
+          </details>
         </div>
       </div>
     </form>
