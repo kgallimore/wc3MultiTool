@@ -103,3 +103,9 @@ src/logs
 
 #Other Material
 screenshots
+
+public/build
+
+src/*.js
+src/*.map
+warpi
