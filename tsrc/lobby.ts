@@ -109,10 +109,14 @@ export class WarLobby extends EventEmitter {
   }
 
   processLobby(payload: GameClientLobbyPayload) {
+    let updates = [];
     payload.players.forEach((player: PlayerPayload) => {
       if (JSON.stringify(this.slots[player.slot].data) !== JSON.stringify(player)) {
         this.slots[player.slot] = { data: player, elo: "N/A", gamesPlayed: "N/A" };
       }
     });
+  }
+  getAllPlayers() {
+    return this.slots.map((slot) => slot.data.name);
   }
 }
