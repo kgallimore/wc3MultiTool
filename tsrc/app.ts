@@ -76,7 +76,7 @@ var appIcon: Tray | null;
 var currentStatus = false;
 var gameNumber = 0;
 // @ts-ignore
-var lobby: Lobby = {};
+var lobby: WarLobby | null;
 var inGame = false;
 var wss: WebSocket.Server | null = null;
 var socket: WebSocket | null = null;
@@ -596,7 +596,7 @@ function connectToHub() {
   };
   hubWebSocket.onopen = (ev) => {
     log.info("Connected to hub");
-    if ((lobby as Lobby).lobbyName && (!settings.autoHost.private || !app.isPackaged)) {
+    if (lobby?.lobbyName && (!settings.autoHost.private || !app.isPackaged)) {
       sendToHub("hostedLobby", lobby);
     }
     setTimeout(hubHeartbeat, 30000);
@@ -1213,7 +1213,7 @@ function banPlayer(
       sendWindow("action", {
         value: "Banned " + player + " by " + admin + (reason ? " for " + reason : ""),
       });
-      if (lobby.processed && lobby.processed.allPlayers.includes(player)) {
+      if (lobby?.getAllPlayers().includes(player)) {
         sendChatMessage("!ban " + player);
         sendChatMessage("!kick " + player);
         sendChatMessage(player + " banned");
@@ -1289,7 +1289,7 @@ function cancelVote() {
     sendChatMessage("Vote timed out.");
   }
   if (lobby) {
-    lobby.processed.voteStartVotes = [];
+    lobby.voteStartVotes = [];
   }
 }
 

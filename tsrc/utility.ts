@@ -168,25 +168,94 @@ export interface TeamData {
   };
 }
 export interface PlayerPayload {
-  isSelf: boolean;
-  team: string;
-  slotStatus: number;
+  slotStatus: 0 | 1 | 2;
   slot: number;
-  name: string;
-  playerRegion: string;
+  team: number;
+  //What are slot types?
+  // 0 = open, 1 = computer?
+  slotType: number | 0 | 1;
+  isObserver: boolean;
+  isSelf: boolean;
+  slotTypeChangeEnabled: boolean;
+  id: number;
+  name: string | "Computer (Easy)" | "Computer (Normal)" | "Computer (Insane)";
+  playerRegion: "us" | "eu" | "";
+  //what are gateways?
+  playerGateway: number | -1;
+  color:
+    | 0
+    | 1
+    | 2
+    | 3
+    | 4
+    | 5
+    | 6
+    | 7
+    | 8
+    | 9
+    | 10
+    | 11
+    | 12
+    | 13
+    | 14
+    | 15
+    | 16
+    | 17
+    | 18
+    | 19
+    | 20
+    | 21
+    | 22
+    | 23;
+  colorChangeEnabled: boolean;
+  teamChangeEnabled: boolean;
+  race: 0 | 1 | 2 | 3 | 4;
+  raceChangeEnabled: boolean;
+  handicap: number;
+  handicapChangeEnabled: boolean;
 }
 export interface GameClientLobbyPayload {
   isHost: boolean;
-  mapFile: string;
   playerHost: string;
-  mapData: { mapName: string };
+  mapFile: string;
+  maxTeams: number;
+  isCustomForces: boolean;
+  isCustomPlayers: boolean;
+  mapData: {
+    mapSize: string | "Extra Small";
+    mapSpeed: string | "Fast";
+    mapName: string;
+    mapPath: string;
+    mapAuthor: string;
+    description: string;
+    suggested_players: string;
+  };
   lobbyName: string;
+  mapFlags: {
+    flagLockTeams: boolean;
+    flagPlaceTeamsTogether: boolean;
+    flagFullSharedUnitControl: boolean;
+    flagRandomRaces: boolean;
+    flagRandomHero: boolean;
+    settingObservers:
+      | "No Observers"
+      | "Observers on Defeat"
+      | "Referees"
+      | "Full Observers";
+    typeObservers: 0 | 1 | 2 | 3;
+    settingVisibility: "Default" | "Hide Terrain" | "Map Explored" | "Always Visible";
+    typeVisibility: 0 | 1 | 2 | 3;
+  };
   teamData: {
+    teams: Array<{ name: string; team: string; filledSlots: number; totalSlots: number }>;
     playableSlots: number;
-    teams: Array<{ name: string; team: string; totalSlots: number }>;
+    filledPlayableSlots: number;
+    observerSlotsRemaining: number;
+  };
+  availableTeamColors: {
+    [key: string]: Array<number>;
   };
   players: Array<PlayerPayload>;
-  availableTeamColors: any;
 }
 export interface GameClientMessage {
   messageType: "ScreenTransitionInfo" | "SetGlueScreen";
