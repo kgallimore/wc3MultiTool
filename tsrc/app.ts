@@ -60,8 +60,6 @@ if (!app.isPackaged) {
 log.info("App starting...");
 
 const store = new Store();
-const testNonPlayersTeam = /((computer)|(creeps)|(summoned))/i;
-const testSpecTeam = /((host)|(spectator)|(observer)|(referee))/i;
 const replayFolders: string = path.join(
   app.getPath("documents"),
   "Warcraft III\\BattleNet"
@@ -95,8 +93,9 @@ var gameState: {
   selfRegion: "eu",
   inGame: false,
 };
-var clientState: { tableVersion: number } = {
+var clientState: { tableVersion: number; latestUploadedReplay: number } = {
   tableVersion: (store.get("tableVersion") as number) ?? 0,
+  latestUploadedReplay: (store.get("latestUploadedReplay") as number) ?? 0,
 };
 var appVersion: string;
 var discClient: DisClient | null = null;
@@ -541,10 +540,26 @@ app.on("ready", function () {
       sendStatus(false);
     });
   });
-  lobby.on("update", (data: LobbyUpdates) => {
-    switch (data.type) {
+  lobby.on("update", (update: LobbyUpdates) => {
+    let data = update.data;
+    switch (update.type) {
       case "newLobby":
-        sendWindow("newLobby", { lobby: lobby.getPlayerTeams() });
+        if (data.lobbyData) sendWindow("newLobby", { lobbyData: data.lobbyData });
+        break;
+      case "playerPayload":
+        if (data.playerPayload) {
+          sendWindow("playerPayload", { playerPayload: data.playerPayload });
+        } else {
+          console.log("No player payload");
+        }
+        break;
+      case "playerData":
+        if (data.playerData && data.playerName)
+          sendWindow("playerData", {
+            playerData: data.playerData,
+            playerName: data.playerName,
+          });
+        break;
       case "playerLeft":
         console.log("Player left");
         break;
@@ -868,11 +883,15 @@ function handleClientMessage(message: { data: string }) {
                         }
                       }
                     });
-                  if (mostModified.file) {
+                  if (
+                    mostModified.file &&
+                    mostModified.mtime > clientState.latestUploadedReplay
+                  ) {
+                    clientState.latestUploadedReplay = mostModified.mtime;
+                    store.set("latestUploadedReplay", clientState.latestUploadedReplay);
                     if (settings.elo.type === "wc3stats") {
                       let form = new FormData();
                       form.append("replay", fs.createReadStream(mostModified.file));
-
                       fetch("https://api.wc3stats.com/upload?auto=true", {
                         method: "POST",
                         body: form,

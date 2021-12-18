@@ -5,6 +5,7 @@
     WindowReceive,
     WindowSend,
   } from "../../tsrc/utility";
+  import { MicroLobby } from "../../tsrc/microLobby";
   import CloseSlot from "./components/CloseSlot.svelte";
   import SettingsCheckbox from "./components/SettingsCheckbox.svelte";
   let settings: AppSettings = {
@@ -63,17 +64,26 @@
       restartOnUpdate: false,
     },
   };
-  let currentStatus = {
+  let currentStatus: {
+    connected: boolean;
+    menu: string;
+    progress: { percent: number; step: string };
+    lobby: MicroLobby | null;
+    updater: string;
+  } = {
     connected: false,
     menu: "Out of menus",
     progress: { percent: 0, step: "Waiting" },
-    lobby: {},
+    lobby: null,
     updater: "Up to date",
   };
   let wc3statsOptions = wc3EloModes(settings.elo.lookupName);
   let battleTag = "";
   let banReason = "";
   let lastAction = "";
+  let structuredTeamData = currentStatus.lobby
+    ? Object.entries(currentStatus.lobby.exportTeamStructure(false))
+    : [];
   $: botAnnouncement = `Welcome. I am a bot. ${
     settings.elo.available && settings.elo.type !== "off"
       ? `I will fetch ELO from ${settings.elo.type}. ${
@@ -124,7 +134,6 @@
         battleTag = "";
         break;
       case "updater":
-        console.log("updater", newData);
         currentStatus.updater = newData.value;
         break;
       case "statusChange":
@@ -144,10 +153,28 @@
           }
         }
         break;
-      case "lobbyData":
-        let newLobby = newData.lobby;
-        if (newLobby) {
-          currentStatus.lobby = newLobby;
+      case "newLobby":
+        if (newData.lobbyData) {
+          currentStatus.lobby = new MicroLobby(newData.lobbyData);
+          structuredTeamData = Object.entries(
+            currentStatus.lobby.exportTeamStructure(false)
+          );
+        }
+        break;
+      case "playerPayload":
+        if (currentStatus.lobby && newData.playerPayload) {
+          currentStatus.lobby.ingestUpdate({ type: data.messageType, data: data.data });
+          structuredTeamData = Object.entries(
+            currentStatus.lobby.exportTeamStructure(false)
+          );
+        }
+        break;
+      case "playerData":
+        if (currentStatus.lobby && newData.playerData) {
+          currentStatus.lobby.ingestUpdate({ type: data.messageType, data: data.data });
+          structuredTeamData = Object.entries(
+            currentStatus.lobby.exportTeamStructure(false)
+          );
         }
         break;
       case "progress":
@@ -1317,40 +1344,57 @@
       </thead>
       <tbody>
         <tr>
-          <td id="mapName">{currentStatus.lobby.mapName ?? ""}</td>
-          <td id="lobbyName">{currentStatus.lobby.lobbyName ?? ""}</td>
-          <td id="gameHost">{currentStatus.lobby.playerHost ?? ""}</td>
-          <td id="eloAvailable">{currentStatus.lobby.eloAvailable ?? ""}</td>
+          {#if currentStatus.lobby}
+            <td id="mapName">{currentStatus.lobby.lobbyStatic.mapData.mapName}</td>
+            <td id="lobbyName">{currentStatus.lobby.lobbyStatic.lobbyName}</td>
+            <td id="gameHost">{currentStatus.lobby.lobbyStatic.playerHost}</td>
+            <td id="eloAvailable">{currentStatus.lobby.eloAvailable}</td>
+          {:else}
+            <td id="mapName" />
+            <td id="lobbyName" />
+            <td id="gameHost" />
+            <td id="eloAvailable" />
+          {/if}
         </tr>
       </tbody>
     </table>
 
     <div class="p-2" id="tablesDiv">
-      {#if currentStatus.lobby}
-        {#each Object.entries(currentStatus.lobby.processed.teamList.playerTeams.data) as [teamName, teamData]}
+      {#if structuredTeamData}
+        {#each structuredTeamData as [teamName, teamData]}
           <table class="table table-hover table-striped table-sm">
             <thead>
               <tr>
                 <th>{teamName} Players</th>
-                <th>ELO</th>
+                <th>ELO/Rank/Games/Wins/Losses</th>
               </tr>
             </thead>
             <tbody>
-              {#each teamData.slots as player}
+              {#each teamData as player}
                 <tr>
                   <td>
-                    {#if player !== "OPEN SLOT"}
+                    {#if player.slotStatus === 2 && player.realPlayer}
                       <button
                         class="btn btn-danger"
                         on:click={() =>
                           toMain({
                             messageType: "banPlayer",
-                            ban: { player, reason: banReason },
+                            ban: { player: player.name, reason: banReason },
                           })}>Ban</button
                       >
-                    {/if}{player}
+                    {/if}{player.name}
                   </td>
-                  <td>{currentStatus.lobby.processed.eloList[player] ?? "N/A"}</td>
+                  <td
+                    >{player.rating > -1
+                      ? [
+                          player.rating,
+                          player.rank,
+                          player.played,
+                          player.wins,
+                          player.losses,
+                        ].join(" / ")
+                      : "N/A"}</td
+                  >
                 </tr>
               {/each}
             </tbody>

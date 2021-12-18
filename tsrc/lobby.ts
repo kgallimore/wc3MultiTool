@@ -1,4 +1,5 @@
 import * as https from "https";
+import fetch from "cross-fetch";
 import EventEmitter from "events";
 import type {
   GameClientLobbyPayload,
@@ -9,6 +10,7 @@ import type {
   LobbyUpdates,
   PlayerTeamsData,
   TeamData,
+  MicroLobbyData,
 } from "./utility";
 require = require("esm")(module);
 var { Combination } = require("js-combinatorics");
@@ -17,7 +19,6 @@ export class WarLobby extends EventEmitter {
   wc3StatsVariant: string;
   eloAvailable: boolean = false;
   eloType: "wc3stats" | "pyroTD" | "off";
-  totalElo: number = 0;
   region: "us" | "eu" = "eu";
   voteStartVotes: Array<string> = [];
   slots: { [key: string]: PlayerPayload } = {};
@@ -45,7 +46,6 @@ export class WarLobby extends EventEmitter {
   clear() {
     this.lookupName = "";
     this.eloAvailable = false;
-    this.totalElo = 0;
     this.region = "eu";
     this.voteStartVotes = [];
     this.#slotLookup = {};
@@ -118,7 +118,7 @@ export class WarLobby extends EventEmitter {
           this.fetchStats(player.name);
         }
       });
-      this.emitUpdate({ type: "newLobby" });
+      this.emitUpdate({ type: "newLobby", data: { lobbyData: this.export() } });
     } else {
       payload.players.forEach((player: PlayerPayload) => {
         if (JSON.stringify(this.slots[player.slot]) !== JSON.stringify(player)) {
@@ -151,12 +151,12 @@ export class WarLobby extends EventEmitter {
             }
           }*/
           this.slots[player.slot] = player;
-          this.emitUpdate({ type: "playerData", player });
+          this.emitUpdate({ type: "playerPayload", data: { playerPayload: player } });
         }
       });
       for (const slot of Object.values(this.slots)) {
         if (slot.playerRegion && !this.playerData[slot.name]) {
-          this.emitUpdate({ type: "playerJoined", player: slot });
+          this.emitUpdate({ type: "playerJoined", data: { playerPayload: slot } });
           this.playerData[slot.name] = {
             wins: -1,
             losses: -1,
@@ -170,12 +170,12 @@ export class WarLobby extends EventEmitter {
       }
       for (const player of Object.keys(this.playerData)) {
         if (!this.getAllPlayers(true).includes(player)) {
-          this.emitUpdate({ type: "playerLeft" });
+          this.emitUpdate({ type: "playerLeft", data: { playerName: player } });
           this.playerLeave(player);
         }
       }
       if (this.isLobbyReady()) {
-        this.emitUpdate({ type: "lobbyReady" });
+        this.emitUpdate({ type: "lobbyReady", data: {} });
       }
     }
   }
@@ -188,53 +188,48 @@ export class WarLobby extends EventEmitter {
       });
       if (this.lookupName) {
         if (this.eloAvailable) {
-          https
-            .get(
+          let jsonData: { body: Array<PlayerData & { name: string }> } = await (
+            await fetch(
               `https://api.wc3stats.com/leaderboard&map=${this.lookupName}${
                 this.lobbyStatic?.isHost ? encodeURI(buildVariant) : ""
-              }&search=${encodeURI(name)}`,
-              (resp) => {
-                let dataChunks = "";
-                resp.on("data", (chunk) => {
-                  dataChunks += chunk;
-                });
-                // The whole response has been received. Print out the result.
-                resp.on("end", async () => {
-                  const jsonData: { body: Array<PlayerData & { name: string }> } =
-                    JSON.parse(dataChunks);
-                  let elo = 500;
-                  let data;
-                  if (this.lookupName === "Footmen%20Vs%20Grunts") {
-                    elo = 1000;
-                  }
-                  if (jsonData.body.length > 0) {
-                    let { name, ...desiredData } = jsonData.body[0];
-                    data = desiredData;
-                  }
-                  // If they haven't left, set real ELO
-                  if (this.playerData[name]) {
-                    this.playerData[name] = data ?? {
-                      played: 0,
-                      wins: 0,
-                      losses: 0,
-                      rating: elo,
-                      lastChange: 0,
-                      rank: 9999,
-                    };
-                    this.emitInfo(name + " stats received and saved.");
-                    // If the lobby is full, and we have the ELO for everyone,
-                    if (this.isLobbyReady()) {
-                      this.emitUpdate({ type: "lobbyReady" });
-                    }
-                  } else {
-                    this.emitInfo(name + " left before ELO was found");
-                  }
-                });
-              }
+              }&search=${encodeURI(name)}`
             )
-            .on("error", (err) => {
-              this.emitError("Error: " + err.message);
+          ).json();
+          let elo = 500;
+          let data: PlayerData | undefined;
+          if (this.lookupName === "Footmen%20Vs%20Grunts") {
+            elo = 1000;
+          }
+          if (jsonData.body.length > 0) {
+            let { name, ...desiredData } = jsonData.body[0];
+            data = desiredData;
+          }
+          data = data ?? {
+            played: 0,
+            wins: 0,
+            losses: 0,
+            rating: elo,
+            lastChange: 0,
+            rank: 9999,
+          };
+          // If they haven't left, set real ELO
+          if (this.playerData[name]) {
+            this.playerData[name] = data;
+            this.emitUpdate({
+              type: "playerData",
+              data: {
+                playerData: data,
+                playerName: name,
+              },
             });
+            this.emitInfo(name + " stats received and saved.");
+            // If the lobby is full, and we have the ELO for everyone,
+            if (this.isLobbyReady()) {
+              this.emitUpdate({ type: "lobbyReady", data: {} });
+            }
+          } else {
+            this.emitInfo(name + " left before ELO was found");
+          }
         } else {
           this.emitInfo("Elo not available. Skipping");
         }
@@ -290,7 +285,7 @@ export class WarLobby extends EventEmitter {
   }
 
   isLobbyReady() {
-    let teams = this.getPlayerTeams();
+    let teams = this.exportTeamStructure(false);
     if (this.eloType !== "off" && this.eloAvailable) {
       for (const team of Object.values(teams)) {
         if (
@@ -312,7 +307,7 @@ export class WarLobby extends EventEmitter {
   }
 
   allPlayerTeamsContainPlayers() {
-    let teams = this.getPlayerTeams();
+    let teams = this.exportTeamStructure();
     for (const team of Object.values(teams)) {
       if (team.filter((slot) => slot.realPlayer).length === 0) {
         return false;
@@ -321,9 +316,13 @@ export class WarLobby extends EventEmitter {
     return true;
   }
 
-  getPlayerTeams() {
+  exportTeamStructure(playerTeamsOnly: boolean = true) {
     let returnValue: PlayerTeamsData = {};
-    let playerTeams = Object.entries(this.teamList.playerTeams.data);
+    let playerTeams = playerTeamsOnly
+      ? Object.entries(this.teamList.playerTeams.data)
+      : Object.entries(this.teamList.playerTeams.data)
+          .concat(Object.entries(this.teamList.otherTeams.data))
+          .concat(Object.entries(this.teamList.specTeams.data));
     playerTeams.forEach(([teamName, teamNumber]) => {
       returnValue[teamName] = Object.values(this.slots)
         .filter(
@@ -362,13 +361,19 @@ export class WarLobby extends EventEmitter {
   }
 
   export() {
-    return {
-      lobbyStatic: this.lobbyStatic,
-      playerData: this.playerData,
-      slots: this.slots,
-      region: this.region,
-      chatMessages: this.chatMessages,
-      lookupName: this.lookupName,
-    };
+    if (this.lobbyStatic) {
+      return {
+        lobbyStatic: this.lobbyStatic,
+        playerData: this.playerData,
+        slots: this.slots,
+        region: this.region,
+        chatMessages: this.chatMessages,
+        lookupName: this.lookupName,
+        wc3StatsVariant: this.wc3StatsVariant,
+        eloAvailable: this.eloAvailable,
+        eloType: this.eloType,
+        teamList: this.teamList,
+      };
+    }
   }
 }

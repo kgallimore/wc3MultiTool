@@ -1,5 +1,3 @@
-import { WarLobby } from "./lobby";
-
 export interface AppSettings {
   autoHost: AutoHostSettings;
   obs: ObsSettings;
@@ -87,16 +85,15 @@ export interface WindowReceive {
     | "gotMapPath"
     | "updateSettings"
     | "updater";
-  data: {
-    update?: { setting: keyof AppSettings; key: SettingsKeys; value: any };
-    settings?: AppSettings;
-    connected?: boolean;
-    progress?: { step: string; progress: number };
-    error?: string;
-    lobby?: PlayerTeamsData;
-    lobbyUpdate?: LobbyUpdates;
-    value?: string;
-  };
+  data:
+    | LobbyUpdates["data"] & {
+        update?: { setting: keyof AppSettings; key: SettingsKeys; value: any };
+        settings?: AppSettings;
+        connected?: boolean;
+        progress?: { step: string; progress: number };
+        error?: string;
+        value?: string;
+      };
 }
 export interface WindowSend {
   messageType:
@@ -255,14 +252,34 @@ export interface LobbyUpdates {
     | "computerJoined"
     | "playerData"
     | "newLobby"
-    | "lobbyReady";
-  slot?: number;
-  move?: { from: number; to: number };
-  player?: PlayerPayload;
+    | "lobbyReady"
+    | "playerPayload";
+  data: {
+    slot?: number;
+    move?: { from: number; to: number };
+    playerPayload?: PlayerPayload;
+    playerName?: string;
+    playerData?: PlayerData;
+    lobbyData?: MicroLobbyData;
+  };
 }
 
 export interface PlayerTeamsData {
   [key: string]: Array<
     { name: string; slotStatus: 0 | 1 | 2; realPlayer: boolean } & PlayerData
   >;
+}
+export interface MicroLobbyData {
+  lookupName: string;
+  wc3StatsVariant: string;
+  eloAvailable: boolean;
+  eloType: "wc3stats" | "pyroTD" | "off";
+  region: "us" | "eu";
+  slots: { [key: string]: PlayerPayload };
+  lobbyStatic: GameClientLobbyPayloadStatic;
+  playerData: {
+    [key: string]: PlayerData;
+  };
+  teamList: { otherTeams: TeamData; specTeams: TeamData; playerTeams: TeamData };
+  chatMessages: Array<{ name: string; message: string; time: string }>;
 }

@@ -4,41 +4,73 @@ import type {
   PlayerData,
   PlayerTeamsData,
   TeamData,
+  LobbyUpdates,
+  MicroLobbyData,
 } from "./utility";
-export class WarLobby {
-  lookupName: string = "";
-  wc3StatsVariant: string = "";
-  eloAvailable: boolean = false;
-  eloType: "wc3stats" | "pyroTD" | "off" = "off";
-  totalElo: number = 0;
-  region: "us" | "eu" = "eu";
-  slots: { [key: string]: PlayerPayload } = {};
-  lobbyStatic: GameClientLobbyPayloadStatic | null = null;
+export class MicroLobby {
+  lookupName: string;
+  wc3StatsVariant: string;
+  eloAvailable: boolean;
+  eloType: "wc3stats" | "pyroTD" | "off";
+  region: "us" | "eu";
+  slots: { [key: string]: PlayerPayload };
+  lobbyStatic: GameClientLobbyPayloadStatic;
   playerData: {
     [key: string]: PlayerData;
-  } = {};
-  teamList: { otherTeams: TeamData; specTeams: TeamData; playerTeams: TeamData } = {
-    otherTeams: { data: {}, lookup: {} },
-    specTeams: { data: {}, lookup: {} },
-    playerTeams: { data: {}, lookup: {} },
   };
-  chatMessages: Array<{ name: string; message: string; time: string }> = [];
+  teamList: { otherTeams: TeamData; specTeams: TeamData; playerTeams: TeamData };
+  chatMessages: Array<{ name: string; message: string; time: string }>;
 
-  constructor() {}
+  constructor(data: MicroLobbyData) {
+    this.lobbyStatic = data.lobbyStatic;
+    this.lookupName = data.lookupName;
+    this.wc3StatsVariant = data.wc3StatsVariant;
+    this.eloAvailable = data.eloAvailable;
+    this.eloType = data.eloType;
+    this.region = data.region;
+    this.slots = data.slots;
+    this.playerData = data.playerData;
+    this.teamList = data.teamList;
+    this.chatMessages = data.chatMessages;
+  }
 
-  ingestUpdate() {}
-
-  clear() {
-    this.lookupName = "";
-    this.wc3StatsVariant = "";
-    this.eloAvailable = false;
-    this.eloType = "off";
-    this.totalElo = 0;
-    this.region = "eu";
-    this.lobbyStatic = null;
-    this.slots = {};
-    this.playerData = {};
-    this.chatMessages = [];
+  ingestUpdate(update: LobbyUpdates) {
+    let data = update.data;
+    switch (update.type) {
+      case "playerData":
+        if (data.playerData && data.playerName) {
+          this.playerData[data.playerName] = data.playerData;
+        } else {
+          console.log("Missing playerData", data);
+        }
+        break;
+      case "playerPayload":
+        if (data.playerPayload) {
+          this.slots[data.playerPayload.slot] = data.playerPayload;
+        } else {
+          console.log("Missing playerPayload");
+        }
+        break;
+    }
+    for (const slot of Object.values(this.slots)) {
+      if (slot.playerRegion && !this.playerData[slot.name]) {
+        console.log({ type: "playerJoined", player: slot });
+        this.playerData[slot.name] = {
+          wins: -1,
+          losses: -1,
+          rating: -1,
+          played: -1,
+          lastChange: 0,
+          rank: -1,
+        };
+      }
+    }
+    for (const player of Object.keys(this.playerData)) {
+      if (!this.getAllPlayers(true).includes(player)) {
+        console.log({ type: "playerLeft" });
+        this.playerLeave(player);
+      }
+    }
   }
 
   playerLeave(name: string) {
@@ -60,9 +92,13 @@ export class WarLobby {
     this.chatMessages.push({ name, message, time: new Date().getTime().toString() });
   }
 
-  getPlayerTeams() {
+  exportTeamStructure(playerTeamsOnly: boolean = true) {
     let returnValue: PlayerTeamsData = {};
-    let playerTeams = Object.entries(this.teamList.playerTeams.data);
+    let playerTeams = playerTeamsOnly
+      ? Object.entries(this.teamList.playerTeams.data)
+      : Object.entries(this.teamList.playerTeams.data)
+          .concat(Object.entries(this.teamList.otherTeams.data))
+          .concat(Object.entries(this.teamList.specTeams.data));
     playerTeams.forEach(([teamName, teamNumber]) => {
       returnValue[teamName] = Object.values(this.slots)
         .filter(
@@ -104,6 +140,10 @@ export class WarLobby {
       region: this.region,
       chatMessages: this.chatMessages,
       lookupName: this.lookupName,
+      wc3StatsVariant: this.wc3StatsVariant,
+      eloAvailable: this.eloAvailable,
+      eloType: this.eloType,
+      teamList: this.teamList,
     };
   }
 }
