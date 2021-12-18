@@ -1,7 +1,6 @@
 <script lang="ts">
   import type {
     AppSettings,
-    Lobby,
     SettingsKeys,
     WindowReceive,
     WindowSend,
@@ -68,7 +67,7 @@
     connected: false,
     menu: "Out of menus",
     progress: { percent: 0, step: "Waiting" },
-    lobby: {} as Lobby,
+    lobby: {},
     updater: "Up to date",
   };
   let wc3statsOptions = wc3EloModes(settings.elo.lookupName);
@@ -1327,7 +1326,7 @@
     </table>
 
     <div class="p-2" id="tablesDiv">
-      {#if currentStatus.lobby?.processed?.teamList?.playerTeams?.data}
+      {#if currentStatus.lobby}
         {#each Object.entries(currentStatus.lobby.processed.teamList.playerTeams.data) as [teamName, teamData]}
           <table class="table table-hover table-striped table-sm">
             <thead>

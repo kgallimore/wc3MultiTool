@@ -1,3 +1,5 @@
+import { WarLobby } from "./lobby";
+
 export interface AppSettings {
   autoHost: AutoHostSettings;
   obs: ObsSettings;
@@ -74,6 +76,7 @@ export interface EloSettings {
 
 export interface WindowReceive {
   messageType:
+    | LobbyUpdates["type"]
     | "action"
     | "statusChange"
     | "updateSettingSingle"
@@ -90,7 +93,8 @@ export interface WindowReceive {
     connected?: boolean;
     progress?: { step: string; progress: number };
     error?: string;
-    lobby?: Lobby;
+    lobby?: PlayerTeamsData;
+    lobbyUpdate?: LobbyUpdates;
     value?: string;
   };
 }
@@ -116,70 +120,37 @@ export interface WindowSend {
     role: "admin" | "moderator" | "";
   };
 }
-export interface LobbyProcessed {
-  allLobby: Array<string>;
-  allPlayers: Array<string>;
-  bestCombo: Array<string>;
-  chatMessages: Array<{ name: string; message: string; time: string }>;
-  eloList: { [key: string]: number };
-  openPlayerSlots: number;
-  playerSet: Array<string>;
-  swaps: Array<Array<string>>;
-  startingSlot: number;
-  teamList: {
-    playerTeams: TeamData;
-    specTeams: TeamData;
-    otherTeams: TeamData;
-  };
-  teamListLookup: {
-    [key: string]: { type: TeamTypes; name: string };
-  };
-  voteStartVotes: Array<string>;
-  lookingUpELO?: Set<string>;
-  totalElo?: number;
-  eloDiff?: number;
-  leastSwap?: string;
-}
-export interface Lobby {
-  lobbyName: string;
-  lookupName: string;
-  isHost: boolean;
-  eloAvailable: boolean;
-  teamData: { teams: Array<{ name: string; team: string; totalSlots: number }> };
-  availableTeamColors: any;
-  playerHost: string;
-  mapName: string;
-  region: "us" | "eu";
-  processed: LobbyProcessed;
-}
+
 export type TeamTypes = "otherTeams" | "specTeams" | "playerTeams";
 export interface TeamData {
-  data: {
-    [key: string]: {
-      players: Array<string>;
-      number: string;
-      slots: Array<string>;
-      totalSlots: number;
-      defaultOpenSlots: Array<number>;
-    };
-  };
-  lookup: {
-    [key: string]: string;
-  };
+  data: { [key: string]: number };
+  lookup: { [key: number]: string };
+}
+
+export interface PlayerData {
+  played: number;
+  wins: number;
+  losses: number;
+  rating: number;
+  lastChange: number;
+  rank: number;
 }
 export interface PlayerPayload {
+  // 0 = open, 1 = closed, 2 = filled
   slotStatus: 0 | 1 | 2;
   slot: number;
   team: number;
   //What are slot types?
-  // 0 = open, 1 = computer?
+  // 0 = useable, 1 = managed?
   slotType: number | 0 | 1;
   isObserver: boolean;
   isSelf: boolean;
   slotTypeChangeEnabled: boolean;
+  // always 255?
   id: number;
   name: string | "Computer (Easy)" | "Computer (Normal)" | "Computer (Insane)";
-  playerRegion: "us" | "eu" | "";
+  //Regions tbd, usw might replace us
+  playerRegion: "us" | "usw" | "eu" | "";
   //what are gateways?
   playerGateway: number | -1;
   color:
@@ -214,10 +185,10 @@ export interface PlayerPayload {
   handicap: number;
   handicapChangeEnabled: boolean;
 }
-export interface GameClientLobbyPayload {
+
+export interface GameClientLobbyPayloadStatic {
   isHost: boolean;
   playerHost: string;
-  mapFile: string;
   maxTeams: number;
   isCustomForces: boolean;
   isCustomPlayers: boolean;
@@ -246,8 +217,10 @@ export interface GameClientLobbyPayload {
     settingVisibility: "Default" | "Hide Terrain" | "Map Explored" | "Always Visible";
     typeVisibility: 0 | 1 | 2 | 3;
   };
+}
+export interface GameClientLobbyPayload extends GameClientLobbyPayloadStatic {
   teamData: {
-    teams: Array<{ name: string; team: string; filledSlots: number; totalSlots: number }>;
+    teams: Array<{ name: string; team: number; filledSlots: number; totalSlots: number }>;
     playableSlots: number;
     filledPlayableSlots: number;
     observerSlotsRemaining: number;
@@ -270,4 +243,26 @@ export interface mmdResults {
     [key: string]: { pid: string; won: boolean; extra: { [key: string]: string } };
   };
   lookup: { [key: string]: string };
+}
+
+export interface LobbyUpdates {
+  type:
+    | "slotOpened"
+    | "slotClosed"
+    | "playerMoved"
+    | "playerJoined"
+    | "playerLeft"
+    | "computerJoined"
+    | "playerData"
+    | "newLobby"
+    | "lobbyReady";
+  slot?: number;
+  move?: { from: number; to: number };
+  player?: PlayerPayload;
+}
+
+export interface PlayerTeamsData {
+  [key: string]: Array<
+    { name: string; slotStatus: 0 | 1 | 2; realPlayer: boolean } & PlayerData
+  >;
 }
