@@ -118,7 +118,7 @@ export class WarLobby extends EventEmitter {
           this.fetchStats(player.name);
         }
       });
-      this.emitUpdate({ type: "newLobby", data: { lobbyData: this.export() } });
+      this.emitUpdate({ type: "newLobby", data: { newData: this.export() } });
     } else {
       payload.players.forEach((player: PlayerPayload) => {
         if (JSON.stringify(this.slots[player.slot]) !== JSON.stringify(player)) {

@@ -36,16 +36,26 @@ export class MicroLobby {
 
   ingestUpdate(update: LobbyUpdates) {
     let data = update.data;
+    let isUpdated = false;
     switch (update.type) {
       case "playerData":
-        if (data.playerData && data.playerName) {
+        if (
+          data.playerData &&
+          data.playerName &&
+          this.playerData[data.playerName] !== data.playerData
+        ) {
+          isUpdated = true;
           this.playerData[data.playerName] = data.playerData;
         } else {
           console.log("Missing playerData", data);
         }
         break;
       case "playerPayload":
-        if (data.playerPayload) {
+        if (
+          data.playerPayload &&
+          this.slots[data.playerPayload.slot] !== data.playerPayload
+        ) {
+          isUpdated = true;
           this.slots[data.playerPayload.slot] = data.playerPayload;
         } else {
           console.log("Missing playerPayload");
@@ -54,6 +64,7 @@ export class MicroLobby {
     }
     for (const slot of Object.values(this.slots)) {
       if (slot.playerRegion && !this.playerData[slot.name]) {
+        isUpdated = true;
         console.log({ type: "playerJoined", player: slot });
         this.playerData[slot.name] = {
           wins: -1,
@@ -67,10 +78,12 @@ export class MicroLobby {
     }
     for (const player of Object.keys(this.playerData)) {
       if (!this.getAllPlayers(true).includes(player)) {
+        isUpdated = true;
         console.log({ type: "playerLeft" });
         this.playerLeave(player);
       }
     }
+    return isUpdated;
   }
 
   playerLeave(name: string) {
@@ -134,7 +147,7 @@ export class MicroLobby {
 
   export() {
     return {
-      mapData: this.lobbyStatic,
+      lobbyStatic: this.lobbyStatic,
       playerData: this.playerData,
       slots: this.slots,
       region: this.region,

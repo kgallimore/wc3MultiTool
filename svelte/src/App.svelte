@@ -153,29 +153,30 @@
           }
         }
         break;
-      case "newLobby":
-        if (newData.lobbyData) {
-          currentStatus.lobby = new MicroLobby(newData.lobbyData);
-          structuredTeamData = Object.entries(
-            currentStatus.lobby.exportTeamStructure(false)
-          );
-        }
-        break;
-      case "playerPayload":
-        if (currentStatus.lobby && newData.playerPayload) {
-          currentStatus.lobby.ingestUpdate({ type: data.messageType, data: data.data });
-          structuredTeamData = Object.entries(
-            currentStatus.lobby.exportTeamStructure(false)
-          );
-        }
-        break;
-      case "playerData":
-        if (currentStatus.lobby && newData.playerData) {
-          currentStatus.lobby.ingestUpdate({ type: data.messageType, data: data.data });
-          structuredTeamData = Object.entries(
-            currentStatus.lobby.exportTeamStructure(false)
-          );
-        }
+      case "lobbyUpdate":
+        let type = newData.lobbyData.type;
+        let lobbyData = newData.lobbyData.data;
+        if (type && lobbyData)
+          switch (type) {
+            case "newLobby":
+              currentStatus.lobby = new MicroLobby(lobbyData.newData);
+              structuredTeamData = Object.entries(
+                currentStatus.lobby.exportTeamStructure(false)
+              );
+              break;
+            case "playerPayload":
+            case "playerData":
+              if (
+                currentStatus.lobby &&
+                (lobbyData.playerData || lobbyData.playerPayload)
+              ) {
+                currentStatus.lobby.ingestUpdate(newData.lobbyData);
+                structuredTeamData = Object.entries(
+                  currentStatus.lobby.exportTeamStructure(false)
+                );
+              }
+              break;
+          }
         break;
       case "progress":
         let progress = newData.progress;

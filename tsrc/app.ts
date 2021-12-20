@@ -45,6 +45,7 @@ import type {
   SettingsKeys,
   mmdResults,
   LobbyUpdates,
+  HubReceive,
 } from "./utility";
 const db = new sqlite3(app.getPath("userData") + "/wc3mt.db");
 
@@ -158,8 +159,8 @@ var settings: AppSettings = <AppSettings>{
 };
 const lobby: WarLobby = new WarLobby(settings.elo.type, settings.elo.wc3statsVariant);
 
-var identifier = store.get("anonymousIdentifier");
-if (!identifier) {
+var identifier: string = store.get("anonymousIdentifier") as string;
+if (!identifier || identifier.length !== 21) {
   identifier = nanoid();
   store.set("anonymousIdentifier", identifier);
 }
@@ -544,21 +545,12 @@ app.on("ready", function () {
     let data = update.data;
     switch (update.type) {
       case "newLobby":
-        if (data.lobbyData) sendWindow("newLobby", { lobbyData: data.lobbyData });
-        break;
       case "playerPayload":
-        if (data.playerPayload) {
-          sendWindow("playerPayload", { playerPayload: data.playerPayload });
-        } else {
-          console.log("No player payload");
-        }
-        break;
       case "playerData":
-        if (data.playerData && data.playerName)
-          sendWindow("playerData", {
-            playerData: data.playerData,
-            playerName: data.playerName,
-          });
+        if (data) {
+          sendWindow("lobbyUpdate", { lobbyData: update });
+          sendToHub("lobbyUpdate", update);
+        }
         break;
       case "playerLeft":
         console.log("Player left");
@@ -620,9 +612,10 @@ function connectToHub() {
     log.error("Failed hub connection", error);
   };
   hubWebSocket.onopen = (ev) => {
+    if (ev.target.readyState !== WebSocket.OPEN) return;
     log.info("Connected to hub");
     if (lobby.lobbyStatic && (!settings.autoHost.private || !app.isPackaged)) {
-      sendToHub("hostedLobby", lobby);
+      sendToHub("lobbyUpdate", { type: "newLobby", data: { newData: lobby.export() } });
     }
     setTimeout(hubHeartbeat, 30000);
   };
@@ -664,11 +657,11 @@ function discordSetup() {
   }
 }
 
-function sendToHub(messageType: string, data = {}) {
+function sendToHub(
+  messageType: HubReceive["messageType"],
+  data: HubReceive["data"] = null
+) {
   if (hubWebSocket && hubWebSocket.readyState === WebSocket.OPEN) {
-    //if (messageType !== "heartbeat") {
-    //console.log("Sending to hub: " + messageType + " ", data);
-    //}
     hubWebSocket.send(
       JSON.stringify({
         type: messageType,
@@ -1015,12 +1008,7 @@ function handleGameList(data: {
 }
 
 function clearLobby() {
-  if (lobby.lobbyStatic?.isHost && (!settings.autoHost.private || !app.isPackaged)) {
-    sendToHub("hostedLobbyClosed");
-  }
-  if (!inGame) {
-    //sendWindow("lobbyData", { lobby: lobby });
-  }
+  lobby.clear();
 }
 
 function openParamsJoin() {

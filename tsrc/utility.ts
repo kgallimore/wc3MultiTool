@@ -74,26 +74,25 @@ export interface EloSettings {
 
 export interface WindowReceive {
   messageType:
-    | LobbyUpdates["type"]
     | "action"
     | "statusChange"
     | "updateSettingSingle"
-    | "lobbyData"
+    | "lobbyUpdate"
     | "menusChange"
     | "error"
     | "progress"
     | "gotMapPath"
     | "updateSettings"
     | "updater";
-  data:
-    | LobbyUpdates["data"] & {
-        update?: { setting: keyof AppSettings; key: SettingsKeys; value: any };
-        settings?: AppSettings;
-        connected?: boolean;
-        progress?: { step: string; progress: number };
-        error?: string;
-        value?: string;
-      };
+  data: {
+    update?: { setting: keyof AppSettings; key: SettingsKeys; value: any };
+    settings?: AppSettings;
+    connected?: boolean;
+    progress?: { step: string; progress: number };
+    error?: string;
+    value?: string;
+    lobbyData?: LobbyUpdates;
+  };
 }
 export interface WindowSend {
   messageType:
@@ -260,7 +259,7 @@ export interface LobbyUpdates {
     playerPayload?: PlayerPayload;
     playerName?: string;
     playerData?: PlayerData;
-    lobbyData?: MicroLobbyData;
+    newData?: MicroLobbyData;
   };
 }
 
@@ -282,4 +281,21 @@ export interface MicroLobbyData {
   };
   teamList: { otherTeams: TeamData; specTeams: TeamData; playerTeams: TeamData };
   chatMessages: Array<{ name: string; message: string; time: string }>;
+}
+
+export interface HubReceive {
+  messageType: "lobbyUpdate" | "lobbyStarted" | "heartbeat";
+  data: LobbyUpdates | null;
+  appVersion: string;
+}
+export interface HubSend {
+  messageType: "newLobby" | "lobbyUpdate" | "lobbyClosed" | "clientSizeChange";
+  data: {
+    newData?: MicroLobbyData;
+    change?: {
+      lobby: { region: "us" | "eu"; name: string };
+      lobbyUpdate?: LobbyUpdates;
+    };
+    clientSize?: number;
+  };
 }

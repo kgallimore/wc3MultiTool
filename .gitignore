@@ -109,3 +109,4 @@ public/build
 src/*.js
 src/*.map
 warpi
+move.bat
