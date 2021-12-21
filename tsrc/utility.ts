@@ -147,7 +147,7 @@ export interface PlayerPayload {
   id: number;
   name: string | "Computer (Easy)" | "Computer (Normal)" | "Computer (Insane)";
   //Regions tbd, usw might replace us
-  playerRegion: "us" | "usw" | "eu" | "";
+  playerRegion: Regions | "usw" | "";
   //what are gateways?
   playerGateway: number | -1;
   color:
@@ -182,7 +182,7 @@ export interface PlayerPayload {
   handicap: number;
   handicapChangeEnabled: boolean;
 }
-
+export type Regions = "us" | "eu";
 export interface GameClientLobbyPayloadStatic {
   isHost: boolean;
   playerHost: string;
@@ -253,6 +253,7 @@ export interface LobbyUpdates {
   playerJoined?: PlayerPayload;
   playerPayload?: PlayerPayload;
   playerData?: { name: string; data: PlayerData };
+  chatMessage?: { name: string; message: string };
 }
 
 export interface PlayerTeamsData {
@@ -265,19 +266,25 @@ export interface PlayerTeamsData {
     } & PlayerData
   >;
 }
+
+export interface ChatMessage {
+  name: string;
+  message: string;
+  time: number;
+}
 export interface MicroLobbyData {
   lookupName: string;
   wc3StatsVariant: string;
   eloAvailable: boolean;
   eloType: "wc3stats" | "pyroTD" | "off";
-  region: "us" | "eu";
+  region: Regions;
   slots: { [key: string]: PlayerPayload };
   lobbyStatic: GameClientLobbyPayloadStatic;
   playerData: {
     [key: string]: PlayerData;
   };
   teamList: { otherTeams: TeamData; specTeams: TeamData; playerTeams: TeamData };
-  chatMessages: Array<{ name: string; message: string; time: string }>;
+  chatMessages: Array<ChatMessage>;
 }
 
 export interface HubReceive {
@@ -286,13 +293,20 @@ export interface HubReceive {
   appVersion: string;
 }
 export interface HubSend {
-  messageType: "newLobby" | "lobbyUpdate" | "lobbyClosed" | "clientSizeChange";
+  messageType:
+    | "newLobby"
+    | "lobbyUpdate"
+    | "lobbyClosed"
+    | "clientSizeChange"
+    | "userJoinedLobby"
+    | "userLeftLobby";
   data: {
     newData?: MicroLobbyData;
     change?: {
-      lobby: { region: "us" | "eu"; name: string };
+      lobby: { region: Regions; name: string };
       lobbyUpdate?: LobbyUpdates;
     };
+    userLobby?: { userName: string; lobbyName: string; region: Regions };
     clientSize?: number;
   };
 }

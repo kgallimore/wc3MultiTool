@@ -30,7 +30,7 @@ export class WarLobby extends EventEmitter {
   playerData: {
     [key: string]: PlayerData;
   } = {};
-  chatMessages: Array<{ name: string; message: string; time: string }> = [];
+  chatMessages: Array<{ name: string; message: string; time: number }> = [];
   teamList: { otherTeams: TeamData; specTeams: TeamData; playerTeams: TeamData } = {
     otherTeams: { data: {}, lookup: {} },
     specTeams: { data: {}, lookup: {} },
@@ -332,7 +332,7 @@ export class WarLobby extends EventEmitter {
   }
 
   newChat(name: string, message: string) {
-    this.chatMessages.push({ name, message, time: new Date().getTime().toString() });
+    this.chatMessages.push({ name, message, time: new Date().getTime() });
   }
 
   lobbyCombinations(target: Array<string>, teamSize: number = 3) {
@@ -461,7 +461,10 @@ export class WarLobby extends EventEmitter {
             }
           }
         } else {
-          this.bestCombo = this.lobbyCombinations(Object.keys(this.playerData));
+          this.bestCombo = this.lobbyCombinations(
+            Object.keys(this.playerData),
+            teams.length
+          );
           if (this.lobbyStatic?.isHost) {
             let dataCopy: [
               string,

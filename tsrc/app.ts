@@ -647,6 +647,13 @@ function lobbySetup() {
     if (update.playerPayload || update.playerData || update.newLobby) {
       sendWindow("lobbyUpdate", { lobbyData: update });
       sendToHub("lobbyUpdate", update);
+      if (discClient) {
+        if (update.newLobby) {
+          discClient.sendNewLobby(update.newLobby, lobby.exportTeamStructure());
+        } else {
+          discClient.updateLobby(lobby.exportTeamStructure());
+        }
+      }
     } else if (update.playerLeft) {
       console.log("Player left: " + update.playerLeft);
     } else if (update.playerJoined) {
@@ -1268,8 +1275,15 @@ function handleChatMessage(payload: GameClientMessage) {
         if (discClient)
           discClient.sendMessage(payload.message.sender + ": " + payload.message.content);
 
-        if (!settings.autoHost.private || !app.isPackaged)
+        if (!settings.autoHost.private || !app.isPackaged) {
           lobby.newChat(payload.message.sender, payload.message.content);
+          sendToHub("lobbyUpdate", {
+            chatMessage: {
+              name: payload.message.sender,
+              message: payload.message.content,
+            },
+          });
+        }
       }
     }
   }

@@ -8,18 +8,17 @@ import type {
   MicroLobbyData,
 } from "./utility";
 export class MicroLobby {
-  lookupName: string;
-  wc3StatsVariant: string;
-  eloAvailable: boolean;
-  eloType: "wc3stats" | "pyroTD" | "off";
-  region: "us" | "eu";
-  slots: { [key: string]: PlayerPayload };
-  lobbyStatic: GameClientLobbyPayloadStatic;
-  playerData: {
-    [key: string]: PlayerData;
-  };
-  teamList: { otherTeams: TeamData; specTeams: TeamData; playerTeams: TeamData };
-  chatMessages: Array<{ name: string; message: string; time: string }>;
+  // TODO: Fix typing
+  lookupName: MicroLobbyData["lookupName"];
+  wc3StatsVariant: MicroLobbyData["wc3StatsVariant"];
+  eloAvailable: MicroLobbyData["eloAvailable"];
+  eloType: MicroLobbyData["eloType"];
+  region: MicroLobbyData["region"];
+  slots: MicroLobbyData["slots"];
+  lobbyStatic: MicroLobbyData["lobbyStatic"];
+  playerData: MicroLobbyData["playerData"];
+  teamList: MicroLobbyData["teamList"];
+  chatMessages: MicroLobbyData["chatMessages"];
 
   constructor(data: MicroLobbyData) {
     this.lobbyStatic = data.lobbyStatic;
@@ -36,44 +35,48 @@ export class MicroLobby {
 
   ingestUpdate(update: LobbyUpdates) {
     let isUpdated = false;
-    if (update.playerData) {
-      if (
-        update.playerData.name &&
-        update.playerData.data &&
-        this.playerData[update.playerData.name] &&
-        this.playerData[update.playerData.name] !== update.playerData.data
-      ) {
-        isUpdated = true;
-        this.playerData[update.playerData.name] = update.playerData.data;
-      } else {
-        console.log("Missing playerData");
+    if (update.chatMessage) {
+      isUpdated = this.newChat(update.chatMessage.name, update.chatMessage.message);
+    } else {
+      if (update.playerData) {
+        if (
+          update.playerData.name &&
+          update.playerData.data &&
+          this.playerData[update.playerData.name] &&
+          this.playerData[update.playerData.name] !== update.playerData.data
+        ) {
+          isUpdated = true;
+          this.playerData[update.playerData.name] = update.playerData.data;
+        } else {
+          console.log("Missing playerData");
+        }
+      } else if (update.playerPayload) {
+        if (this.slots[update.playerPayload.slot] !== update.playerPayload) {
+          isUpdated = true;
+          this.slots[update.playerPayload.slot] = update.playerPayload;
+        }
       }
-    } else if (update.playerPayload) {
-      if (this.slots[update.playerPayload.slot] !== update.playerPayload) {
-        isUpdated = true;
-        this.slots[update.playerPayload.slot] = update.playerPayload;
+      for (const slot of Object.values(this.slots)) {
+        if (slot.playerRegion && !this.playerData[slot.name]) {
+          isUpdated = true;
+          console.log("playerJoined", slot.name);
+          this.playerData[slot.name] = {
+            wins: -1,
+            losses: -1,
+            rating: -1,
+            played: -1,
+            lastChange: 0,
+            rank: -1,
+            slot: slot.slot,
+          };
+        }
       }
-    }
-    for (const slot of Object.values(this.slots)) {
-      if (slot.playerRegion && !this.playerData[slot.name]) {
-        isUpdated = true;
-        console.log("playerJoined", slot.name);
-        this.playerData[slot.name] = {
-          wins: -1,
-          losses: -1,
-          rating: -1,
-          played: -1,
-          lastChange: 0,
-          rank: -1,
-          slot: slot.slot,
-        };
-      }
-    }
-    for (const player of Object.keys(this.playerData)) {
-      if (!this.getAllPlayers(true).includes(player)) {
-        isUpdated = true;
-        console.log("Player left", player);
-        this.playerLeave(player);
+      for (const player of Object.keys(this.playerData)) {
+        if (!this.getAllPlayers(true).includes(player)) {
+          isUpdated = true;
+          console.log("Player left", player);
+          this.playerLeave(player);
+        }
       }
     }
     return isUpdated;
@@ -95,7 +98,17 @@ export class MicroLobby {
   }
 
   newChat(name: string, message: string) {
-    this.chatMessages.push({ name, message, time: new Date().getTime().toString() });
+    let currentTime = new Date().getTime();
+    // If the same message is sent within 1 second, skip.
+    if (
+      Object.values(this.chatMessages).filter(
+        (chat) => chat.message === message && Math.abs(chat.time - currentTime) < 1000
+      ).length === 0
+    ) {
+      this.chatMessages.push({ name, message, time: currentTime });
+      return true;
+    }
+    return false;
   }
 
   exportTeamStructure(playerTeamsOnly: boolean = true) {
@@ -119,7 +132,6 @@ export class MicroLobby {
             name: name,
             realPlayer: player.playerRegion !== "",
             slotStatus: player.slotStatus,
-            slot: player.slot,
             ...(this.playerData[player.name] ?? {
               wins: -1,
               losses: -1,
@@ -127,6 +139,7 @@ export class MicroLobby {
               played: -1,
               lastChange: 0,
               rank: -1,
+              slot: player.slot,
             }),
           };
         });
@@ -147,5 +160,8 @@ export class MicroLobby {
       eloType: this.eloType,
       teamList: this.teamList,
     };
+  }
+  getSelf(): string {
+    return Object.values(this.slots).find((slot) => slot.isSelf)?.name ?? "";
   }
 }
