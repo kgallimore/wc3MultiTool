@@ -33,9 +33,6 @@ if (!app.isPackaged) {
     hardResetMethod: "exit",
   });
 }
-
-require = require("esm")(module);
-var { Combination } = require("js-combinatorics");
 import type {
   AppSettings,
   WindowSend,
@@ -157,7 +154,7 @@ var settings: AppSettings = <AppSettings>{
     restartOnUpdate: store.get("client.restartOnUpdate") ?? false,
   },
 };
-const lobby: WarLobby = new WarLobby(settings.elo.type, settings.elo.wc3statsVariant);
+let lobby: WarLobby;
 
 var identifier: string = store.get("anonymousIdentifier") as string;
 if (!identifier || identifier.length !== 21) {
@@ -373,6 +370,10 @@ function updateSetting(setting: keyof AppSettings, key: SettingsKeys, value: any
         lobby.eloType = value;
       } else if (key === "wc3statsVariant") {
         lobby.wc3StatsVariant = value;
+      } else if (key === "balanceTeams") {
+        lobby.balanceTeams = value;
+      } else if (key === "excludeHostFromSwap") {
+        lobby.excludeHostFromSwap = value;
       }
     }
     sendSocket(setting + "Settings", settings[setting]);
@@ -541,39 +542,17 @@ app.on("ready", function () {
       sendStatus(false);
     });
   });
-  lobby.on("update", (update: LobbyUpdates) => {
-    let data = update.data;
-    switch (update.type) {
-      case "newLobby":
-      case "playerPayload":
-      case "playerData":
-        if (data) {
-          sendWindow("lobbyUpdate", { lobbyData: update });
-          sendToHub("lobbyUpdate", update);
-        }
-        break;
-      case "playerLeft":
-        console.log("Player left");
-        break;
-      case "lobbyReady":
-        console.log("Lobby ready!");
-        /*setTimeout(() => {
-          if (lobby.isLobbyReady()) {
-            startGame();
-          }
-        }, 150);*/
-        break;
-      default:
-        break;
+  wss.on("error", function (err) {
+    if (err.message.includes("EADDRINUSE")) {
+      throw new Error(
+        "The app is already open. Check your taskbar or task manager for another instance."
+      );
+    } else {
+      log.error(err.message);
+      throw err;
     }
-    //sendToHub("lobbyUpdate", data);
   });
-  lobby.on("error", (data) => {
-    log.error(data);
-  });
-  lobby.on("info", (data) => {
-    log.info(data);
-  });
+  lobbySetup();
   globalShortcut.register("Alt+CommandOrControl+S", () => {
     sendMessage("PlaySound", { sound: "MenuButtonClick" });
   });
@@ -615,7 +594,7 @@ function connectToHub() {
     if (ev.target.readyState !== WebSocket.OPEN) return;
     log.info("Connected to hub");
     if (lobby.lobbyStatic && (!settings.autoHost.private || !app.isPackaged)) {
-      sendToHub("lobbyUpdate", { type: "newLobby", data: { newData: lobby.export() } });
+      sendToHub("lobbyUpdate", { newLobby: lobby.export() });
     }
     setTimeout(hubHeartbeat, 30000);
   };
@@ -624,7 +603,7 @@ function connectToHub() {
   };
   hubWebSocket.onclose = function close() {
     log.warn("Disconnected from hub");
-    setTimeout(connectToHub, Math.random() * 10000 + 3000);
+    setTimeout(connectToHub, Math.random() * 5000 + 3000);
     hubWebSocket = null;
   };
 }
@@ -655,6 +634,63 @@ function discordSetup() {
   } else {
     discClient = null;
   }
+}
+
+function lobbySetup() {
+  lobby = new WarLobby(
+    settings.elo.type,
+    settings.elo.wc3statsVariant,
+    settings.elo.balanceTeams,
+    settings.elo.excludeHostFromSwap
+  );
+  lobby.on("update", (update: LobbyUpdates) => {
+    if (update.playerPayload || update.playerData || update.newLobby) {
+      sendWindow("lobbyUpdate", { lobbyData: update });
+      sendToHub("lobbyUpdate", update);
+    } else if (update.playerLeft) {
+      console.log("Player left: " + update.playerLeft);
+    } else if (update.playerJoined) {
+      console.log("Player joined: " + update.playerJoined.name);
+      announcement();
+    } else if (update.lobbyReady) {
+      console.log("Lobby ready!");
+      sendProgress("Starting Game", 100);
+      if (lobby?.lobbyStatic?.isHost) {
+        if (
+          settings.autoHost.type === "smartHost" ||
+          settings.autoHost.type === "rapidHost"
+        ) {
+          // Wait a quarter second to make sure no one left
+          setTimeout(async () => {
+            if (lobby.isLobbyReady()) {
+              startGame();
+            }
+          }, 250);
+        } else if (settings.autoHost.type === "lobbyHost" && settings.autoHost.sounds) {
+          playSound("ready.wav");
+        }
+      }
+      /*setTimeout(() => {
+          if (lobby.isLobbyReady()) {
+            startGame();
+          }
+        }, 150);*/
+    }
+    //sendToHub("lobbyUpdate", data);
+  });
+  lobby.on("sendChat", (data: string) => {
+    sendChatMessage(data);
+  });
+  lobby.on("error", (data: string) => {
+    log.error(data);
+  });
+  lobby.on("info", (data: string) => {
+    log.info(data);
+  });
+  lobby.on("progress", (data: { step: string; progress: number }) => {
+    log.info(data);
+    sendWindow("progress", { progress: data });
+  });
 }
 
 function sendToHub(
@@ -1008,7 +1044,8 @@ function handleGameList(data: {
 }
 
 function clearLobby() {
-  lobby.clear();
+  sendWindow("lobbyUpdate", { lobbyData: { leftLobby: true } });
+  sendToHub("lobbyUpdate", { leftLobby: true });
 }
 
 function openParamsJoin() {
@@ -1340,44 +1377,7 @@ function handleLobbyUpdate(payload: GameClientLobbyPayload) {
   }
 }
 
-/*function lobbyCombinations(target: Array<string>, teamSize: number = 2) {
-  let combos = new Permutation(target);
-  let bestCombo = [];
-  let smallestEloDiff = Number.POSITIVE_INFINITY;
-  // First generate every permutation, then separate them into groups of the required team size
-  for (const combo of combos) {
-    let coupled = combo.reduce((resultArray: any[][], item: any, index: number) => {
-      const chunkIndex = Math.floor(index / teamSize);
-
-      if (!resultArray[chunkIndex]) {
-        resultArray[chunkIndex] = []; // start a new chunk
-      }
-
-      resultArray[chunkIndex].push(item);
-
-      return resultArray;
-    }, []);
-    // Now that we have each team in a chunk, we can calculate the elo difference
-    let largestEloDifference = -1;
-    for (const combo of coupled) {
-      // Go through each possible team of the chunk and calculate the highest difference in elo to the target average(totalElo/numTeams)
-      const comboElo = combo.reduce((a: number, b: string) => a + playerData[b].elo, 0);
-      const eloDiff = Math.abs(totalElo / (target.length / teamSize) - comboElo);
-      // If the difference is larger than the current largest difference, set it as the new largest
-      if (eloDiff > largestEloDifference) {
-        largestEloDifference = eloDiff;
-      }
-    }
-    // If the previously calculated difference is smaller than the current smallest difference, set it as the new smallest, and save the combo
-    if (largestEloDifference < smallestEloDiff) {
-      smallestEloDiff = largestEloDifference;
-      bestCombo = coupled;
-    }
-  }
-  return bestCombo;
-}
-
-async function processLobby(payload: GameClientLobbyPayload, sendFull = false) {
+/*async function processLobby(payload: GameClientLobbyPayload, sendFull = false) {
   let newAllPlayers: Array<string> = [];
   let newAllLobby: Array<string> = [];
   let newOpenPlayerSlots = 0;
@@ -1542,189 +1542,6 @@ async function processLobby(payload: GameClientLobbyPayload, sendFull = false) {
   if (sendFull && lobby.isHost) {
     sendToHub("hostedLobby", lobby);
   }
-}
-
-function lobbyIsReady() {
-  return (
-    (lobby.eloAvailable &&
-      Object.keys(lobby.processed.eloList).length === lobby.processed.allPlayers.length &&
-      lobby.processed.openPlayerSlots === 0) ||
-    (!lobby.eloAvailable && lobby.processed.openPlayerSlots === 0)
-  );
-}
-
-
-function lobbyProcessedUpdate(key = "", value: any, teamName = "") {
-  if (["otherTeams", "playerTeams", "specTeams"].includes(key)) {
-    lobby.processed.teamList[key as TeamTypes].data[teamName].slots = value.slots;
-    lobby.processed.teamList[key as TeamTypes].data[teamName].players = value.players;
-    sendToHub("lobbyUpdate", { key, value, teamName });
-  } else if (key === "chatMessages") {
-    if (!sentMessages.includes(value.content)) {
-      lobby.processed.chatMessages.push(value);
-      sendToHub("lobbyUpdate", { key, value });
-    }
-  } else if (lobby.processed[key as keyof LobbyProcessed] !== value) {
-    // @ts-ignore
-    lobby.processed[key as keyof LobbyProcessed] = value;
-    sendToHub("lobbyUpdate", { key, value });
-  }
-  sendWindow("lobbyData", { lobby });
-}
-
-function swapHelper() {
-  let swapsFromTeam1: Array<string> = [];
-  let swapsFromTeam2: Array<string> = [];
-  const team1 = Object.keys(lobby.processed.teamList.playerTeams.data)[0];
-  const team2 = Object.keys(lobby.processed.teamList.playerTeams.data)[1];
-  const bestComboInTeam1 = intersect(
-    lobby.processed.bestCombo,
-
-    lobby.processed.teamList.playerTeams.data[team1].players
-  );
-  const bestComboInTeam2 = intersect(
-    lobby.processed.bestCombo,
-    lobby.processed.teamList.playerTeams.data[team2].players
-  );
-  log.verbose(bestComboInTeam1, bestComboInTeam2);
-  // If not excludeHostFromSwap and team1 has more best combo people, or excludeHostFromSwap and the best combo includes the host keep all best combo players in team 1.
-  if (
-    (!settings.elo.excludeHostFromSwap &&
-      bestComboInTeam1.length >= bestComboInTeam2.length) ||
-    (settings.elo.excludeHostFromSwap &&
-      lobby.processed.bestCombo.includes(lobby.playerHost))
-  ) {
-    lobby.processed.leastSwap = team1;
-    // Go through team 1 and grab everyone who is not in the best combo
-
-    lobby.processed.teamList.playerTeams.data[team1].players.forEach((user) => {
-      if (!lobby.processed.bestCombo.includes(user)) {
-        swapsFromTeam1.push(user);
-      }
-    });
-    // Go through team 2 and grab everyone who is in the best combo
-
-    bestComboInTeam2.forEach(function (user) {
-      swapsFromTeam2.push(user);
-    });
-  } else {
-    lobby.processed.leastSwap = team2;
-    lobby.processed.teamList.playerTeams.data[team2].players.forEach((user) => {
-      if (!lobby.processed.bestCombo.includes(user)) {
-        swapsFromTeam2.push(user);
-      }
-    });
-    bestComboInTeam1.forEach(function (user) {
-      swapsFromTeam1.push(user);
-    });
-  }
-  lobby.processed.swaps = [swapsFromTeam1, swapsFromTeam2];
-}
-
-async function finalizeLobby() {
-  if (lobby.eloAvailable && settings.elo.balanceTeams) {
-    if (settings.elo.experimental) {
-      let targetCombo = lobbyCombinations(Object.keys(lobby.processed.eloList));
-      if (lobby.isHost) {
-        let dataCopy = JSON.parse(
-          JSON.stringify(lobby.processed.teamList.playerTeams.data)
-        );
-        let playerTeamNames = Object.keys(lobby.processed.teamList.playerTeams.data);
-        for (let i = 0; i < targetCombo.length; i++) {
-          for (let x = 0; x < targetCombo[i].length; x++) {
-            let targetPlayer = targetCombo[i][x];
-            // If the team does not include the target player, check through the team for an incorrect player and swap them
-            if (!dataCopy[playerTeamNames[i]].slots[x].includes(targetPlayer)) {
-              for (const currentPlayer of dataCopy[playerTeamNames[i]].slots) {
-                if (!targetCombo[i].includes(currentPlayer)) {
-                  sendProgress("Swapping " + currentPlayer + " and " + targetPlayer, 100);
-                  sendChatMessage("!swap " + currentPlayer + " " + targetPlayer);
-                  dataCopy[playerTeamNames[i]].slots[x] = currentPlayer;
-                  // Check to see where we got the target player from and swap the other plater
-                  for (const teamName of playerTeamNames) {
-                    if (dataCopy[teamName].slots.includes(currentPlayer)) {
-                      dataCopy[teamName].slots[
-                        dataCopy[teamName].slots.indexOf(currentPlayer)
-                      ] = targetPlayer;
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      } else {
-        let playerTeamNames = Object.keys(lobby.processed.teamList.playerTeams.data);
-        for (let i = 0; i < playerTeamNames.length; i++) {
-          sendChatMessage(playerTeamNames[i] + " should be " + targetCombo[i].join(", "));
-        }
-      }
-    } else {
-      lobby.processed.totalElo = Object.values(lobby.processed.eloList).reduce(
-        (a, b) => a + b,
-        0
-      );
-      let smallestEloDiff = Number.POSITIVE_INFINITY;
-      let bestCombo: Array<string> = [];
-      const combos = new Combination(
-        Object.keys(lobby.processed.eloList),
-        Math.floor(Object.keys(lobby.processed.eloList).length / 2)
-      );
-      for (const combo of combos) {
-        const comboElo = combo.reduce(
-          (a: any, b: any) => a + lobby.processed.eloList[b],
-          0
-        );
-        const eloDiff = Math.abs(lobby.processed.totalElo / 2 - comboElo);
-        if (eloDiff < smallestEloDiff) {
-          smallestEloDiff = eloDiff;
-          bestCombo = combo;
-        }
-      }
-      lobby.processed.bestCombo = bestCombo;
-      lobby.processed.eloDiff = smallestEloDiff;
-      swapHelper();
-      sendChatMessage("ELO data provided by: " + settings.elo.type);
-
-      if (!lobby.isHost) {
-        sendChatMessage(
-          lobby.processed.leastSwap + " should be: " + bestCombo.join(", ")
-        );
-      } else {
-        for (let i = 0; i < lobby.processed.swaps[0].length; i++) {
-          if (!lobbyIsReady()) {
-            break;
-          }
-          sendProgress(
-            "Swapping " +
-              lobby.processed.swaps[0][i] +
-              " and " +
-              lobby.processed.swaps[1][i],
-            100
-          );
-          sendChatMessage(
-            "!swap " + lobby.processed.swaps[0][i] + " " + lobby.processed.swaps[1][i]
-          );
-        }
-      }
-    }
-  }
-  sendProgress("Starting Game", 100);
-  if (lobby.isHost) {
-    if (
-      settings.autoHost.type === "smartHost" ||
-      settings.autoHost.type === "rapidHost"
-    ) {
-      // Wait a quarter second to make sure no one left
-      setTimeout(async () => {
-        if (lobbyIsReady()) {
-          startGame();
-        }
-      }, 150);
-    } else if (settings.autoHost.type === "lobbyHost" && settings.autoHost.sounds) {
-      playSound("ready.wav");
-    }
-  }
 }*/
 
 function startGame() {
@@ -1773,11 +1590,6 @@ function announcement() {
       }
     }
   }
-}
-
-function intersect(a: Array<string>, b: Array<string>) {
-  var setB = new Set(b);
-  return [...new Set(a)].filter((x) => setB.has(x));
 }
 
 function sendWindow(

@@ -124,6 +124,7 @@ export interface TeamData {
 }
 
 export interface PlayerData {
+  slot: number;
   played: number;
   wins: number;
   losses: number;
@@ -242,30 +243,26 @@ export interface mmdResults {
 }
 
 export interface LobbyUpdates {
-  type:
-    | "slotOpened"
-    | "slotClosed"
-    | "playerMoved"
-    | "playerJoined"
-    | "playerLeft"
-    | "computerJoined"
-    | "playerData"
-    | "newLobby"
-    | "lobbyReady"
-    | "playerPayload";
-  data: {
-    slot?: number;
-    move?: { from: number; to: number };
-    playerPayload?: PlayerPayload;
-    playerName?: string;
-    playerData?: PlayerData;
-    newData?: MicroLobbyData;
-  };
+  lobbyReady?: true;
+  leftLobby?: true;
+  newLobby?: MicroLobbyData;
+  slotOpened?: number;
+  slotClosed?: number;
+  playerMoved?: { from: number; to: number };
+  playerLeft?: string;
+  playerJoined?: PlayerPayload;
+  playerPayload?: PlayerPayload;
+  playerData?: { name: string; data: PlayerData };
 }
 
 export interface PlayerTeamsData {
   [key: string]: Array<
-    { name: string; slotStatus: 0 | 1 | 2; realPlayer: boolean } & PlayerData
+    {
+      name: string;
+      slotStatus: 0 | 1 | 2;
+      slot: number;
+      realPlayer: boolean;
+    } & PlayerData
   >;
 }
 export interface MicroLobbyData {

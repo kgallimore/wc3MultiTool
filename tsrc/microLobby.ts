@@ -35,37 +35,29 @@ export class MicroLobby {
   }
 
   ingestUpdate(update: LobbyUpdates) {
-    let data = update.data;
     let isUpdated = false;
-    switch (update.type) {
-      case "playerData":
-        if (
-          data.playerData &&
-          data.playerName &&
-          this.playerData[data.playerName] !== data.playerData
-        ) {
-          isUpdated = true;
-          this.playerData[data.playerName] = data.playerData;
-        } else {
-          console.log("Missing playerData", data);
-        }
-        break;
-      case "playerPayload":
-        if (
-          data.playerPayload &&
-          this.slots[data.playerPayload.slot] !== data.playerPayload
-        ) {
-          isUpdated = true;
-          this.slots[data.playerPayload.slot] = data.playerPayload;
-        } else {
-          console.log("Missing playerPayload");
-        }
-        break;
+    if (update.playerData) {
+      if (
+        update.playerData.name &&
+        update.playerData.data &&
+        this.playerData[update.playerData.name] &&
+        this.playerData[update.playerData.name] !== update.playerData.data
+      ) {
+        isUpdated = true;
+        this.playerData[update.playerData.name] = update.playerData.data;
+      } else {
+        console.log("Missing playerData");
+      }
+    } else if (update.playerPayload) {
+      if (this.slots[update.playerPayload.slot] !== update.playerPayload) {
+        isUpdated = true;
+        this.slots[update.playerPayload.slot] = update.playerPayload;
+      }
     }
     for (const slot of Object.values(this.slots)) {
       if (slot.playerRegion && !this.playerData[slot.name]) {
         isUpdated = true;
-        console.log({ type: "playerJoined", player: slot });
+        console.log("playerJoined", slot.name);
         this.playerData[slot.name] = {
           wins: -1,
           losses: -1,
@@ -73,13 +65,14 @@ export class MicroLobby {
           played: -1,
           lastChange: 0,
           rank: -1,
+          slot: slot.slot,
         };
       }
     }
     for (const player of Object.keys(this.playerData)) {
       if (!this.getAllPlayers(true).includes(player)) {
         isUpdated = true;
-        console.log({ type: "playerLeft" });
+        console.log("Player left", player);
         this.playerLeave(player);
       }
     }
@@ -114,12 +107,7 @@ export class MicroLobby {
           .concat(Object.entries(this.teamList.specTeams.data));
     playerTeams.forEach(([teamName, teamNumber]) => {
       returnValue[teamName] = Object.values(this.slots)
-        .filter(
-          (player) =>
-            teamNumber === player.team &&
-            (player.playerRegion ||
-              (!player.playerRegion && player.slotTypeChangeEnabled))
-        )
+        .filter((player) => teamNumber === player.team)
         .map((player) => {
           let name =
             player.slotStatus === 2
@@ -131,6 +119,7 @@ export class MicroLobby {
             name: name,
             realPlayer: player.playerRegion !== "",
             slotStatus: player.slotStatus,
+            slot: player.slot,
             ...(this.playerData[player.name] ?? {
               wins: -1,
               losses: -1,

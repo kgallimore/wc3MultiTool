@@ -106,10 +106,17 @@
     });
   }
 
-  async function wc3EloModes(lookupName: string) {
+  async function wc3EloModes(lookupName: string): Promise<
+    Array<{
+      key: { mode: string; season: string; round: string; ladder: string };
+    }>
+  > {
     let stats = await fetch("https://api.wc3stats.com/maps/" + lookupName);
     let data = await stats.json();
-    return data.body.variants[0].stats;
+    if (data.body.variants) {
+      return data.body.variants[0].stats;
+    }
+    return [];
   }
 
   function init() {
@@ -154,29 +161,23 @@
         }
         break;
       case "lobbyUpdate":
-        let type = newData.lobbyData.type;
-        let lobbyData = newData.lobbyData.data;
-        if (type && lobbyData)
-          switch (type) {
-            case "newLobby":
-              currentStatus.lobby = new MicroLobby(lobbyData.newData);
-              structuredTeamData = Object.entries(
-                currentStatus.lobby.exportTeamStructure(false)
-              );
-              break;
-            case "playerPayload":
-            case "playerData":
-              if (
-                currentStatus.lobby &&
-                (lobbyData.playerData || lobbyData.playerPayload)
-              ) {
-                currentStatus.lobby.ingestUpdate(newData.lobbyData);
-                structuredTeamData = Object.entries(
-                  currentStatus.lobby.exportTeamStructure(false)
-                );
-              }
-              break;
+        let lobbyData = newData.lobbyData;
+        if (lobbyData.newLobby) {
+          currentStatus.lobby = new MicroLobby(lobbyData.newLobby);
+          structuredTeamData = Object.entries(
+            currentStatus.lobby.exportTeamStructure(false)
+          );
+        } else if (lobbyData.playerPayload || lobbyData.playerData) {
+          if (currentStatus.lobby) {
+            currentStatus.lobby.ingestUpdate(lobbyData);
+            structuredTeamData = Object.entries(
+              currentStatus.lobby.exportTeamStructure(false)
+            );
           }
+        } else if (lobbyData.leftLobby) {
+          currentStatus.lobby = null;
+          structuredTeamData = [];
+        }
         break;
       case "progress":
         let progress = newData.progress;
