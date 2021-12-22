@@ -1,6 +1,7 @@
 import Discord from "discord.js";
 import EventEmitter from "events";
 import type { MicroLobbyData, mmdResults, PlayerTeamsData } from "./utility";
+import { DeColorName } from "./utility";
 export class DisClient extends EventEmitter {
   client: Discord.Client;
   announceChannel: Discord.TextChannel | null;
@@ -84,6 +85,9 @@ export class DisClient extends EventEmitter {
   }
 
   async sendNewLobby(lobbyData: MicroLobbyData, data: PlayerTeamsData) {
+    if (this.#embed && this.#sentEmbed) {
+      await this.lobbyClosed();
+    }
     this.#embed = new Discord.MessageEmbed()
       .setTitle(
         (lobbyData.region === "us" ? ":flag_us: " : ":flag_eu: ") +
@@ -97,7 +101,7 @@ export class DisClient extends EventEmitter {
         )}`
       )
       .addFields([
-        { name: "Map Name", value: lobbyData.lobbyStatic.mapData.mapName },
+        { name: "Map Name", value: DeColorName(lobbyData.lobbyStatic.mapData.mapName) },
         { name: "Created", value: `<t:${Math.floor(Date.now() / 1000)}:R> ` },
         {
           name: "Observers",
@@ -149,6 +153,8 @@ export class DisClient extends EventEmitter {
         { name: "Game Ended", value: `<t:${Math.floor(Date.now() / 1000)}:R>` },
       ]);
       this.#sentEmbed.edit(newEmbed);
+      this.#sentEmbed = null;
+      this.#embed = null;
     }
   }
 
@@ -164,6 +170,8 @@ export class DisClient extends EventEmitter {
         { name: "Lobby Closed", value: `<t:${Math.floor(Date.now() / 1000)}:R>` },
       ]);
       this.#sentEmbed.edit(newEmbed);
+      this.#sentEmbed = null;
+      this.#embed = null;
     }
   }
 

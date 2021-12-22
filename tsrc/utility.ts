@@ -251,7 +251,7 @@ export interface LobbyUpdates {
   playerMoved?: { from: number; to: number };
   playerLeft?: string;
   playerJoined?: PlayerPayload;
-  playerPayload?: PlayerPayload;
+  playerPayload?: Array<PlayerPayload>;
   playerData?: { name: string; data: PlayerData };
   chatMessage?: { name: string; message: string };
 }
@@ -309,4 +309,8 @@ export interface HubSend {
     userLobby?: { userName: string; lobbyName: string; region: Regions };
     clientSize?: number;
   };
+}
+
+export function DeColorName(name: string): string {
+  return name.replace(/(\|c[0-9a-f]{8})|(\|r)/gi, "");
 }

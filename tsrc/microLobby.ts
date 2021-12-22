@@ -51,9 +51,11 @@ export class MicroLobby {
           console.log("Missing playerData");
         }
       } else if (update.playerPayload) {
-        if (this.slots[update.playerPayload.slot] !== update.playerPayload) {
-          isUpdated = true;
-          this.slots[update.playerPayload.slot] = update.playerPayload;
+        for (const newPayload of update.playerPayload) {
+          if (this.slots[newPayload.slot] && this.slots[newPayload.slot] !== newPayload) {
+            isUpdated = true;
+            this.slots[newPayload.slot] = newPayload;
+          }
         }
       }
       for (const slot of Object.values(this.slots)) {

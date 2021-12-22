@@ -30,7 +30,6 @@ if (!app.isPackaged) {
   require("electron-reload")(__dirname, {
     electron: path.join(__dirname, "../node_modules", ".bin", "electron.cmd"),
     awaitWriteFinish: true,
-    hardResetMethod: "exit",
   });
 }
 import type {
@@ -231,6 +230,7 @@ app.on("second-instance", (event, args) => {
 });
 
 app.on("before-quit", () => {
+  sendToHub("lobbyUpdate", { leftLobby: true });
   discClient?.lobbyClosed();
   lobby?.clear();
 });
@@ -573,6 +573,7 @@ app.on("ready", function () {
 });
 
 app.on("window-all-closed", () => {
+  sendToHub("lobbyUpdate", { leftLobby: true });
   discClient?.lobbyClosed();
   lobby?.clear();
   if (process.platform !== "darwin") {
@@ -711,14 +712,9 @@ function sendToHub(
   messageType: HubReceive["messageType"],
   data: HubReceive["data"] = null
 ) {
+  let buildMessage: HubReceive = { messageType, data, appVersion };
   if (hubWebSocket && hubWebSocket.readyState === WebSocket.OPEN) {
-    hubWebSocket.send(
-      JSON.stringify({
-        type: messageType,
-        data: data,
-        appVersion: appVersion,
-      })
-    );
+    hubWebSocket.send(JSON.stringify(buildMessage));
   }
 }
 
@@ -987,7 +983,7 @@ function handleClientMessage(message: { data: string }) {
             gameState.selfBattleTag = data.payload.user.battleTag;
             gameState.selfRegion = data.payload.user.userRegion;
           default:
-            console.log(data);
+            //console.log(data);
             if (
               [
                 "FriendsFriendUpdated",
@@ -1282,11 +1278,12 @@ function handleChatMessage(payload: GameClientMessage) {
       } else if (
         !payload.message.content.match(/^(executed '!)|(Unknown command ')|(Command ')/i)
       ) {
-        if (discClient)
+        let notSpam = lobby.newChat(payload.message.sender, payload.message.content);
+
+        if (discClient && notSpam)
           discClient.sendMessage(payload.message.sender + ": " + payload.message.content);
 
-        if (!settings.autoHost.private || !app.isPackaged) {
-          lobby.newChat(payload.message.sender, payload.message.content);
+        if ((!settings.autoHost.private || !app.isPackaged) && notSpam) {
           sendToHub("lobbyUpdate", {
             chatMessage: {
               name: payload.message.sender,

@@ -1,4 +1,3 @@
-import * as https from "https";
 import fetch from "cross-fetch";
 import EventEmitter from "events";
 import type {
@@ -139,23 +138,25 @@ export class WarLobby extends EventEmitter {
           name: teamName,
         };
       }
-      payload.players.forEach((player) => {
-        this.slots[player.slot] = player;
-        if (player.playerRegion) {
-          this.playerData[player.name] = {
+      payload.players.forEach((newPlayer) => {
+        this.slots[newPlayer.slot] = newPlayer;
+        if (newPlayer.playerRegion) {
+          this.playerData[newPlayer.name] = {
             wins: -1,
             losses: -1,
             rating: -1,
             played: -1,
             lastChange: 0,
             rank: -1,
-            slot: player.slot,
+            slot: newPlayer.slot,
           };
-          this.fetchStats(player.name);
+          this.fetchStats(newPlayer.name);
         }
       });
       this.emitUpdate({ newLobby: this.export() });
     } else {
+      let playerUpdates: Array<PlayerPayload> = [];
+
       payload.players.forEach((player: PlayerPayload) => {
         if (JSON.stringify(this.slots[player.slot]) !== JSON.stringify(player)) {
           /*if (player.slotStatus === 0) {
@@ -187,9 +188,12 @@ export class WarLobby extends EventEmitter {
             }
           }*/
           this.slots[player.slot] = player;
-          this.emitUpdate({ playerPayload: player });
+          playerUpdates.push(player);
         }
       });
+      if (playerUpdates) {
+        this.emitUpdate({ playerPayload: playerUpdates });
+      }
       for (const slot of Object.values(this.slots)) {
         if (slot.playerRegion && !this.playerData[slot.name]) {
           this.emitUpdate({ playerJoined: slot });
@@ -281,8 +285,8 @@ export class WarLobby extends EventEmitter {
           //this.emitInfo("No elo enabled");
         }
       }
-    } catch (err) {
-      console.log(err);
+    } catch (err: any) {
+      this.emitError(err);
     }
   }
 
