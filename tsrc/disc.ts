@@ -1,11 +1,6 @@
 import Discord from "discord.js";
 import EventEmitter from "events";
-import type {
-  LobbyUpdates,
-  MicroLobbyData,
-  mmdResults,
-  PlayerTeamsData,
-} from "./utility";
+import type { MicroLobbyData, mmdResults, PlayerTeamsData } from "./utility";
 export class DisClient extends EventEmitter {
   client: Discord.Client;
   announceChannel: Discord.TextChannel | null;
@@ -152,6 +147,21 @@ export class DisClient extends EventEmitter {
       });
       newEmbed.addFields([
         { name: "Game Ended", value: `<t:${Math.floor(Date.now() / 1000)}:R>` },
+      ]);
+      this.#sentEmbed.edit(newEmbed);
+    }
+  }
+
+  async lobbyClosed() {
+    if (this.#embed && this.#sentEmbed) {
+      let newEmbed = new Discord.MessageEmbed(this.#embed);
+      newEmbed.setDescription("Lobby closed");
+      newEmbed.setColor("#36454F");
+      newEmbed.setURL("");
+      newEmbed.fields = this.#embed.fields.splice(0, 3);
+      this.#embed = newEmbed;
+      newEmbed.addFields([
+        { name: "Lobby Closed", value: `<t:${Math.floor(Date.now() / 1000)}:R>` },
       ]);
       this.#sentEmbed.edit(newEmbed);
     }

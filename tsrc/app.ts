@@ -230,6 +230,11 @@ app.on("second-instance", (event, args) => {
   }
 });
 
+app.on("before-quit", () => {
+  discClient?.lobbyClosed();
+  lobby?.clear();
+});
+
 function protocolHandler(url: string) {
   if (url) {
     openLobbyParams = getQueryVariables(url.split("?", 2)[1]);
@@ -568,6 +573,8 @@ app.on("ready", function () {
 });
 
 app.on("window-all-closed", () => {
+  discClient?.lobbyClosed();
+  lobby?.clear();
   if (process.platform !== "darwin") {
     app.quit();
   }
@@ -980,6 +987,7 @@ function handleClientMessage(message: { data: string }) {
             gameState.selfBattleTag = data.payload.user.battleTag;
             gameState.selfRegion = data.payload.user.userRegion;
           default:
+            console.log(data);
             if (
               [
                 "FriendsFriendUpdated",
@@ -1053,6 +1061,8 @@ function handleGameList(data: {
 function clearLobby() {
   sendWindow("lobbyUpdate", { lobbyData: { leftLobby: true } });
   sendToHub("lobbyUpdate", { leftLobby: true });
+  discClient?.lobbyClosed();
+  lobby?.clear();
 }
 
 function openParamsJoin() {
@@ -1391,173 +1401,6 @@ function handleLobbyUpdate(payload: GameClientLobbyPayload) {
   }
 }
 
-/*async function processLobby(payload: GameClientLobbyPayload, sendFull = false) {
-  let newAllPlayers: Array<string> = [];
-  let newAllLobby: Array<string> = [];
-  let newOpenPlayerSlots = 0;
-  let newTeamData: {
-    otherTeams: { [key: string]: { players: Array<string>; slots: Array<string> } };
-    specTeams: { [key: string]: { players: Array<string>; slots: Array<string> } };
-    playerTeams: { [key: string]: { players: Array<string>; slots: Array<string> } };
-  } = {
-    otherTeams: {},
-    specTeams: {},
-    playerTeams: {},
-  };
-  (["otherTeams", "specTeams", "playerTeams"] as Array<TeamTypes>).forEach((type) => {
-    Object.keys(lobby?.processed?.teamList[type]?.data).forEach(function (name) {
-      newTeamData[type][name] = {
-        players: [],
-        slots: [],
-      };
-    });
-  });
-  payload.players.forEach((player) => {
-    const teamType = lobby.processed.teamListLookup[player.team].type;
-    const teamName = lobby.processed.teamListLookup[player.team].name;
-    if (player.name) {
-      db.open;
-      const row = db
-        .prepare("SELECT * FROM banList WHERE username = ? AND unban_date IS NULL")
-        .get(player.name);
-      if (row) {
-        sendChatMessage("!ban " + row.username);
-        sendChatMessage("!kick " + row.username);
-        sendChatMessage(
-          player.name + " is permanently banned" + (row.reason ? ": " + row.reason : "")
-        );
-      }
-    }
-    if (player.playerRegion && teamType === "playerTeams") {
-      newAllPlayers.push(player.name);
-    }
-    if (player.playerRegion) {
-      newAllLobby.push(player.name);
-    }
-    if (player.name) {
-      newTeamData[teamType][teamName].players.push(player.name);
-      newTeamData[teamType][teamName].slots.push(player.name);
-    } else if (player.slotStatus === 0) {
-      newTeamData[teamType][teamName].slots.push("OPEN SLOT");
-      if (teamType === "playerTeams") {
-        newOpenPlayerSlots += 1;
-      }
-    } else {
-      newTeamData[teamType][teamName].slots.push("OPEN SLOT");
-    }
-
-    //player.name.replace(/#\d+$/g, "");
-  });
-  newAllPlayers.sort();
-  newAllLobby.sort();
-  if (!sendFull) {
-    if (
-      newAllPlayers.length !== lobby.processed.allPlayers.length &&
-      JSON.stringify(newAllPlayers) !== JSON.stringify(lobby.processed.allPlayers)
-    ) {
-      lobbyProcessedUpdate("allPlayers", newAllPlayers);
-    }
-    if (
-      newAllLobby.length !== lobby.processed.allLobby.length &&
-      JSON.stringify(newAllLobby) !== JSON.stringify(lobby.processed.allLobby)
-    ) {
-      lobbyProcessedUpdate("allLobby", newAllLobby);
-    }
-    if (lobby.processed.openPlayerSlots !== newOpenPlayerSlots) {
-      lobbyProcessedUpdate("openPlayerSlots", newOpenPlayerSlots);
-    }
-
-    Object.entries(newTeamData).forEach(([type, team]) => {
-      Object.entries(team).forEach(([name, data]) => {
-        if (
-          !lobby.processed.teamList[type as TeamTypes].data[name].players ||
-          !lobby.processed.teamList[type as TeamTypes].data[name].slots ||
-          lobby.processed.teamList[type as TeamTypes].data[name].players.length !==
-            data.players.length ||
-          JSON.stringify(
-            lobby.processed.teamList[type as TeamTypes].data[name].players
-          ) !== JSON.stringify(data.players) ||
-          JSON.stringify(lobby.processed.teamList[type as TeamTypes].data[name].slots) !==
-            JSON.stringify(data.slots)
-        ) {
-          lobbyProcessedUpdate(type, data, name);
-        }
-      });
-    });
-  } else {
-    lobby.processed.allPlayers = newAllPlayers;
-    lobby.processed.allLobby = newAllLobby;
-    lobby.processed.openPlayerSlots = newOpenPlayerSlots;
-    Object.entries(newTeamData).forEach(([type, team]) => {
-      Object.entries(team).forEach(([name, data]) => {
-        lobby.processed.teamList[type as TeamTypes].data[name].players = data.players;
-        lobby.processed.teamList[type as TeamTypes].data[name].slots = data.slots;
-      });
-    });
-  }
-
-  if (lobby.eloAvailable) {
-    const mapName = lobby.lookupName;
-    let eloUpdated = false;
-    Object.keys(lobby.processed.eloList).forEach((user) => {
-      if (!lobby.processed.allPlayers.includes(user)) {
-        delete lobby.processed.eloList[user];
-        eloUpdated = true;
-      }
-      lobby.processed.lookingUpELO?.delete(user);
-    });
-    if (eloUpdated && !sendFull) {
-      lobbyProcessedUpdate("eloList", lobby.processed.eloList);
-    }
-    let discData: { [key: string]: Array<string> } = {};
-    Object.entries(lobby.processed.teamList.playerTeams.data).forEach(
-      ([teamName, teamData]) => {
-        discData[teamName] = teamData.slots.map(
-          (slot) => slot + ": " + (lobby.processed.eloList[slot] ?? "N/A")
-        );
-      }
-    );
-    discClient?.updateLobby(discData);
-  } else {
-    let discData: { [key: string]: Array<string> } = {};
-    Object.entries(lobby.processed.teamList.playerTeams.data).forEach(
-      ([teamName, teamData]) => {
-        discData[teamName] = teamData.slots;
-      }
-    );
-    discClient?.updateLobby(discData);
-  }
-  if (lobby.isHost) {
-    if (
-      (settings.autoHost.announceIsBot || settings.autoHost.announceCustom) &&
-      lobby.processed.allLobby.length > 1
-    ) {
-      lobby.processed.allLobby.some(function (user) {
-        if (lobby.processed.playerSet && !lobby.processed.playerSet.includes(user)) {
-          announcement();
-          return;
-        }
-      });
-      lobby.processed.playerSet = lobby.processed.allLobby;
-    }
-    if (settings.autoHost.voteStart && voteTimer) {
-      cancelVote();
-    }
-    if (
-      (settings.autoHost.type === "smartHost" ||
-        settings.autoHost.type === "rapidHost") &&
-      !lobby.eloAvailable &&
-      lobbyIsReady()
-    ) {
-      finalizeLobby();
-    }
-  }
-  sendWindow("lobbyData", { lobby });
-  if (sendFull && lobby.isHost) {
-    sendToHub("hostedLobby", lobby);
-  }
-}*/
-
 function startGame() {
   sendChatMessage("AutoHost functionality provided by WC3 MultiTool.");
   if (settings.autoHost.sounds) {
@@ -1568,7 +1411,7 @@ function startGame() {
 }
 
 function announcement() {
-  if (gameState.menuState === "GAME_LOBBY") {
+  if (gameState.menuState === "GAME_LOBBY" && lobby.lobbyStatic?.isHost) {
     let currentTime = Date.now();
     if (
       currentTime >
@@ -1610,10 +1453,12 @@ function sendWindow(
   messageType: WindowReceive["messageType"],
   message: WindowReceive["data"]
 ) {
-  win.webContents.send("fromMain", <WindowReceive>{
-    messageType: messageType,
-    data: message,
-  });
+  if (win?.webContents) {
+    win.webContents.send("fromMain", <WindowReceive>{
+      messageType: messageType,
+      data: message,
+    });
+  }
 }
 
 function sendSocket(messageType = "info", data: string | object = "none") {

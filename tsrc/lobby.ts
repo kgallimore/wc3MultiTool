@@ -555,11 +555,6 @@ export class WarLobby extends EventEmitter {
           return false;
         } else if (this.eloAvailable) {
           for (const team of Object.values(teams)) {
-            console.log(
-              team.filter(
-                (slot) => slot.slotStatus == 0 || (slot.realPlayer && slot.rating < 0)
-              ).length
-            );
             if (
               team.filter(
                 (slot) => slot.slotStatus == 0 || (slot.realPlayer && slot.rating < 0)

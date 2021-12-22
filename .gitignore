@@ -110,3 +110,5 @@ src/*.js
 src/*.map
 warpi
 move.bat
+
+GlueManagerAltered.js
