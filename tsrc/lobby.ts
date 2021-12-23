@@ -381,13 +381,17 @@ export class WarLobby extends EventEmitter {
     this.emit("progress", { step, progress });
   }
 
-  getAllPlayers(includeNonPlayerTeams: boolean = false) {
+  getAllPlayers(includeNonPlayerTeams: boolean = false, withData: boolean = false) {
     let target = includeNonPlayerTeams
       ? Object.values(this.slots).filter((slot) => slot.playerRegion)
       : Object.values(this.slots).filter(
           (slot) => this.teamList.playerTeams.lookup[slot.team] && slot.playerRegion
         );
     return target.map((slot) => slot.name);
+  }
+
+  searchPlayer(name: string) {
+    return this.getAllPlayers(true).filter((user) => user.match(new RegExp(name, "i")));
   }
 
   testTeam(teamName: string) {

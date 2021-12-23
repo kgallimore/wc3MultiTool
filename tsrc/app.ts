@@ -43,6 +43,7 @@ import type {
   LobbyUpdates,
   HubReceive,
   LobbyAppSettings,
+  PlayerData,
 } from "./utility";
 const db = new sqlite3(app.getPath("userData") + "/wc3mt.db");
 
@@ -311,10 +312,27 @@ ipcMain.on("toMain", (event, args: WindowSend) => {
         })
         .then((result) => {
           if (!result.canceled) {
-            settings.autoHost.mapPath = result.filePaths[0];
+            let newMapPath = result.filePaths[0];
+            let mapName = newMapPath.split("\\").pop();
+            if (!settings.autoHost.mapPath.includes("\\Maps\\")) {
+              log.info("Map path is potentially dangerous. Copying map to safe path.");
+              let copyDir = `${app.getPath(
+                "home"
+              )}\\Documents\\Warcraft III\\Maps\\MultiTool\\`;
+              if (!fs.existsSync(copyDir)) {
+                fs.mkdirSync(copyDir);
+              }
+              newMapPath = copyDir + mapName;
+              try {
+                fs.copyFileSync(result.filePaths[0], newMapPath);
+              } catch (e) {
+                log.error(e);
+                return;
+              }
+            }
+            settings.autoHost.mapPath = newMapPath;
             log.info(`Change map to ${settings.autoHost.mapPath}`);
             store.set("autoHost.mapPath", settings.autoHost.mapPath);
-            let mapName = settings.autoHost.mapPath.split("\\").pop();
             if (mapName) {
               mapName = mapName.substring(0, mapName.length - 4);
               settings.autoHost.mapName = mapName;
@@ -1146,7 +1164,20 @@ function handleChatMessage(payload: GameClientMessage) {
         }
       } else if (payload.message.content.match(/^\?stats/)) {
         if (lobby.eloAvailable) {
-          let data = lobby.getPlayerData(sender);
+          let data: PlayerData;
+          let playerTarget = payload.message.content.split(" ")[1];
+          if (playerTarget) {
+          } else {
+            let targets = lobby.searchPlayer(playerTarget);
+            if (targets.length === 1) {
+              data = lobby.getPlayerData(targets[0]);
+            } else if (targets.length > 1) {
+              sendChatMessage("Multiple players found. Please be more specific.");
+            } else {
+              sendChatMessage("No player found.");
+            }
+          }
+          data = lobby.getPlayerData(sender);
           if (data) {
             if (data.rating === -1) {
               sendChatMessage("Data pending");
@@ -1197,9 +1228,7 @@ function handleChatMessage(payload: GameClientMessage) {
               sendChatMessage("Banning out of lobby player.");
               banPlayer(banTarget, sender, lobby.region, banReason);
             } else {
-              let targets = lobby
-                .getAllPlayers(true)
-                .filter((user) => user.match(new RegExp(banTarget, "i")));
+              let targets = lobby.searchPlayer(banTarget);
               if (targets.length === 1) {
                 banPlayer(targets[0], sender, lobby.region, banReason);
               } else if (targets.length > 1) {
