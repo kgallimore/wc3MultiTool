@@ -9,15 +9,13 @@ import type {
   LobbyUpdates,
   PlayerTeamsData,
   TeamData,
+  LobbyAppSettings,
 } from "./utility";
 require = require("esm")(module);
 var { Combination, Permutation } = require("js-combinatorics");
+
 export class WarLobby extends EventEmitter {
-  balanceTeams: boolean;
-  wc3StatsVariant: string;
-  excludeHostFromSwap: boolean;
-  moveToSpec: boolean;
-  eloType: "wc3stats" | "pyroTD" | "off";
+  #appSettings: LobbyAppSettings;
 
   lookupName: string = "";
   eloAvailable: boolean = false;
@@ -42,17 +40,31 @@ export class WarLobby extends EventEmitter {
 
   constructor(
     eloType: "wc3stats" | "pyroTD" | "off",
-    buildVariant: string,
+    wc3StatsVariant: string,
     balanceTeams: boolean,
     excludeHostFromSwap: boolean,
-    moveToSpec: boolean
+    moveToSpec: boolean,
+    closeSlots: Array<number>
   ) {
     super();
-    this.eloType = eloType;
-    this.wc3StatsVariant = buildVariant;
-    this.balanceTeams = balanceTeams;
-    this.excludeHostFromSwap = excludeHostFromSwap;
-    this.moveToSpec = moveToSpec;
+    this.#appSettings = {
+      eloType,
+      moveToSpec,
+      balanceTeams,
+      wc3StatsVariant,
+      excludeHostFromSwap,
+      closeSlots,
+    };
+  }
+
+  updateSetting(setting: keyof LobbyAppSettings, value: any) {
+    if (
+      this.#appSettings[setting] !== undefined &&
+      typeof this.#appSettings[setting] === typeof value
+    ) {
+      // @ts-ignore
+      this.#appSettings[setting] = value;
+    }
   }
 
   clear() {
@@ -75,7 +87,7 @@ export class WarLobby extends EventEmitter {
   }
 
   async cleanMapName(mapName: string) {
-    if (this.eloType === "wc3stats" || this.eloType === "off") {
+    if (this.#appSettings.eloType === "wc3stats" || this.#appSettings.eloType === "off") {
       if (mapName.match(/(HLW)/i)) {
         return { name: "HLW", elo: true };
       } else if (mapName.match(/(pyro\s*td\s*league)/i)) {
@@ -99,7 +111,11 @@ export class WarLobby extends EventEmitter {
     if (!this.lobbyStatic || this.lobbyStatic.lobbyName !== staticFields.lobbyName) {
       // The fields are changed, must be a new lobby!
       this.clear();
-      if (staticFields.playerHost && payload.players[0]) {
+      if (
+        staticFields.playerHost &&
+        payload.players[0] &&
+        Object.values(payload.players).find((slot) => slot.isSelf) !== undefined
+      ) {
         this.lobbyStatic = staticFields;
         this.region = region;
         this.lobbyStatic.mapData.mapPath = staticFields.mapData.mapPath.substring(
@@ -160,7 +176,7 @@ export class WarLobby extends EventEmitter {
         this.emitUpdate({ newLobby: this.export() });
         let specTeams = Object.entries(this.teamList.specTeams.data);
         let selfSlot = this.getSelfSlot();
-        if (this.moveToSpec) {
+        if (this.#appSettings.moveToSpec) {
           if (specTeams.length > 0 && selfSlot) {
             let target =
               specTeams.find(
@@ -188,8 +204,9 @@ export class WarLobby extends EventEmitter {
           } else {
             this.emitInfo("Either I'm not in the lobby, or there are no spec teams");
           }
-        } else {
-          console.log("Not moving to spec");
+        }
+        for (const slot of this.#appSettings.closeSlots) {
+          this.closeSlot(slot);
         }
       }
     } else {
@@ -268,11 +285,13 @@ export class WarLobby extends EventEmitter {
         }, 1000);
         return;
       } else if (this.eloAvailable) {
-        if (this.eloType === "wc3stats") {
+        if (this.#appSettings.eloType === "wc3stats") {
           let buildVariant = "";
-          Object.entries(JSON.parse(this.wc3StatsVariant)).forEach(([key, value]) => {
-            if (value) buildVariant += "&" + key + "=" + value;
-          });
+          Object.entries(JSON.parse(this.#appSettings.wc3StatsVariant)).forEach(
+            ([key, value]) => {
+              if (value) buildVariant += "&" + key + "=" + value;
+            }
+          );
           if (this.eloAvailable) {
             let jsonData: { body: Array<PlayerData & { name: string }> } = await (
               await fetch(
@@ -449,7 +468,7 @@ export class WarLobby extends EventEmitter {
     stoppingPoint = 1;
     console.log(stoppingPoint);
     let teams = Object.entries(this.exportTeamStructure());
-    if (this.eloAvailable && this.balanceTeams) {
+    if (this.eloAvailable && this.#appSettings.balanceTeams) {
       stoppingPoint = 2;
       console.log(stoppingPoint);
       if (this.bestCombo === undefined || this.bestCombo.length == 0) {
@@ -495,9 +514,9 @@ export class WarLobby extends EventEmitter {
           this.emitInfo(JSON.stringify(bestComboInTeam1, bestComboInTeam2));
           // If not excludeHostFromSwap and team1 has more best combo people, or excludeHostFromSwap and the best combo includes the host keep all best combo players in team 1.
           if (
-            (!this.excludeHostFromSwap &&
+            (!this.#appSettings.excludeHostFromSwap &&
               bestComboInTeam1.length >= bestComboInTeam2.length) ||
-            (this.excludeHostFromSwap &&
+            (this.#appSettings.excludeHostFromSwap &&
               this.bestCombo.includes(this.lobbyStatic?.playerHost || ""))
           ) {
             stoppingPoint = 6;
@@ -617,7 +636,7 @@ export class WarLobby extends EventEmitter {
           }
         }
         this.emitUpdate({ lobbyReady: true });
-        this.emitChat("ELO data provided by: " + this.eloType);
+        this.emitChat("ELO data provided by: " + this.#appSettings.eloType);
       } else {
         console.log("Combo already running?");
       }
@@ -636,7 +655,7 @@ export class WarLobby extends EventEmitter {
         return false;
       }
     }
-    if (this.eloType !== "off") {
+    if (this.#appSettings.eloType !== "off") {
       if (!this.lookupName) {
         console.log("No lookup name");
         return false;
@@ -654,6 +673,20 @@ export class WarLobby extends EventEmitter {
       }
     }
     return true;
+  }
+
+  closeSlot(slotNumber: number) {
+    if (this.lobbyStatic?.isHost) {
+      if (
+        Object.values(this.slots).find(
+          (slot) => slot.slot === slotNumber && !slot.isSelf && slot.slotTypeChangeEnabled
+        )
+      ) {
+        this.emitMessage("CloseSlot", {
+          slot: slotNumber,
+        });
+      }
+    }
   }
 
   allPlayerTeamsContainPlayers() {
@@ -715,9 +748,9 @@ export class WarLobby extends EventEmitter {
         region: this.region,
         chatMessages: this.chatMessages,
         lookupName: this.lookupName,
-        wc3StatsVariant: this.wc3StatsVariant,
+        wc3StatsVariant: this.#appSettings.wc3StatsVariant,
         eloAvailable: this.eloAvailable,
-        eloType: this.eloType,
+        eloType: this.#appSettings.eloType,
         teamList: this.teamList,
       };
     }

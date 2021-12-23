@@ -344,6 +344,15 @@ interface ObjectLookup {
   [key: string]: ValidObjectTypes | ObjectLookup | Array<any>;
 }
 
+export interface LobbyAppSettings {
+  balanceTeams: boolean;
+  wc3StatsVariant: string;
+  excludeHostFromSwap: boolean;
+  moveToSpec: boolean;
+  eloType: "wc3stats" | "pyroTD" | "off";
+  closeSlots: Array<number>;
+}
+
 export function InvalidData(
   name: string,
   data: any,

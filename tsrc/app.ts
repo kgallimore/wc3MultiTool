@@ -42,6 +42,7 @@ import type {
   mmdResults,
   LobbyUpdates,
   HubReceive,
+  LobbyAppSettings,
 } from "./utility";
 const db = new sqlite3(app.getPath("userData") + "/wc3mt.db");
 
@@ -369,22 +370,10 @@ function updateSetting(setting: keyof AppSettings, key: SettingsKeys, value: any
         discClient.bidirectionalChat = value;
       }
     }
-    if (setting === "elo") {
-      if (key === "type") {
-        lobby.eloType = value;
-      } else if (key === "wc3statsVariant") {
-        lobby.wc3StatsVariant = value;
-      } else if (key === "balanceTeams") {
-        lobby.balanceTeams = value;
-      } else if (key === "excludeHostFromSwap") {
-        lobby.excludeHostFromSwap = value;
-      }
+    if (lobby) {
+      lobby.updateSetting(key as keyof LobbyAppSettings, value);
     }
-    if (setting === "autoHost") {
-      if (key === "moveToSpec") {
-        lobby.moveToSpec = value;
-      }
-    }
+
     sendSocket(setting + "Settings", settings[setting]);
     sendWindow("updateSettingSingle", {
       update: {
@@ -654,7 +643,8 @@ function lobbySetup() {
     settings.elo.wc3statsVariant,
     settings.elo.balanceTeams,
     settings.elo.excludeHostFromSwap,
-    settings.autoHost.moveToSpec
+    settings.autoHost.moveToSpec,
+    settings.autoHost.closeSlots
   );
   lobby.on("update", (update: LobbyUpdates) => {
     if (
