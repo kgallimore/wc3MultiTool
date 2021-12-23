@@ -96,64 +96,66 @@ export class WarLobby extends EventEmitter {
     if (!this.lobbyStatic || this.lobbyStatic.lobbyName !== staticFields.lobbyName) {
       // The fields are changed, must be a new lobby!
       this.clear();
-      this.lobbyStatic = staticFields;
-      this.region = region;
-      this.lobbyStatic.mapData.mapPath = staticFields.mapData.mapPath.substring(
-        staticFields.mapData.mapPath.lastIndexOf("/") + 1
-      );
-      let lookup = await this.cleanMapName(this.lobbyStatic.mapData.mapPath);
-      this.lookupName = lookup.name;
-      this.eloAvailable = lookup.elo;
-      for (const team of payload.teamData.teams) {
-        const teamName = team.name;
-        let teamType: TeamTypes = "playerTeams";
-        let players = payload.players.filter((player) => player.team === team.team);
-        if (this.lobbyStatic.isHost) {
-          if (players.filter((player) => player.isObserver).length > 0) {
-            teamType = "specTeams";
-          } else if (
-            players.filter((player) => player.slotTypeChangeEnabled).length === 0
-          ) {
-            teamType = "otherTeams";
-          } else if (this.testTeam(teamName) === "specTeams") {
-            teamType = "specTeams";
+      if (staticFields.playerHost && payload.players[0]) {
+        this.lobbyStatic = staticFields;
+        this.region = region;
+        this.lobbyStatic.mapData.mapPath = staticFields.mapData.mapPath.substring(
+          staticFields.mapData.mapPath.lastIndexOf("/") + 1
+        );
+        let lookup = await this.cleanMapName(this.lobbyStatic.mapData.mapPath);
+        this.lookupName = lookup.name;
+        this.eloAvailable = lookup.elo;
+        for (const team of payload.teamData.teams) {
+          const teamName = team.name;
+          let teamType: TeamTypes = "playerTeams";
+          let players = payload.players.filter((player) => player.team === team.team);
+          if (this.lobbyStatic.isHost) {
+            if (players.filter((player) => player.isObserver).length > 0) {
+              teamType = "specTeams";
+            } else if (
+              players.filter((player) => player.slotTypeChangeEnabled).length === 0
+            ) {
+              teamType = "otherTeams";
+            } else if (this.testTeam(teamName) === "specTeams") {
+              teamType = "specTeams";
+            }
+          } else {
+            if (players.filter((player) => player.isObserver).length > 0) {
+              teamType = "specTeams";
+            } else if (
+              players.filter((player) => player.slotStatus === 2 && !player.playerRegion)
+                .length === players.length
+            ) {
+              teamType = "otherTeams";
+            } else if (this.testTeam(teamName) === "specTeams") {
+              teamType = "specTeams";
+            }
           }
-        } else {
-          if (players.filter((player) => player.isObserver).length > 0) {
-            teamType = "specTeams";
-          } else if (
-            players.filter((player) => player.slotStatus === 2 && !player.playerRegion)
-              .length === players.length
-          ) {
-            teamType = "otherTeams";
-          } else if (this.testTeam(teamName) === "specTeams") {
-            teamType = "specTeams";
-          }
-        }
 
-        this.teamList[teamType].data[teamName] = team.team;
-        this.teamList[teamType].lookup[team.team] = teamName;
-        this.#teamListLookup[team.team] = {
-          type: teamType,
-          name: teamName,
-        };
-      }
-      payload.players.forEach((newPlayer) => {
-        this.slots[newPlayer.slot] = newPlayer;
-        if (newPlayer.playerRegion) {
-          this.playerData[newPlayer.name] = {
-            wins: -1,
-            losses: -1,
-            rating: -1,
-            played: -1,
-            lastChange: 0,
-            rank: -1,
-            slot: newPlayer.slot,
+          this.teamList[teamType].data[teamName] = team.team;
+          this.teamList[teamType].lookup[team.team] = teamName;
+          this.#teamListLookup[team.team] = {
+            type: teamType,
+            name: teamName,
           };
-          this.fetchStats(newPlayer.name);
         }
-      });
-      this.emitUpdate({ newLobby: this.export() });
+        payload.players.forEach((newPlayer) => {
+          this.slots[newPlayer.slot] = newPlayer;
+          if (newPlayer.playerRegion) {
+            this.playerData[newPlayer.name] = {
+              wins: -1,
+              losses: -1,
+              rating: -1,
+              played: -1,
+              lastChange: 0,
+              rank: -1,
+              slot: newPlayer.slot,
+            };
+            this.fetchStats(newPlayer.name);
+          }
+        });
+        this.emitUpdate({ newLobby: this.export() });
+      }
     } else {
       let playerUpdates: Array<PlayerPayload> = [];
 
@@ -249,8 +251,8 @@ export class WarLobby extends EventEmitter {
               elo = 1000;
             }
             if (jsonData.body.length > 0) {
-              let { name, ...desiredData } = jsonData.body[0];
-              data = desiredData;
+              let { name, slot, ...desiredData } = jsonData.body[0];
+              data = { slot: this.playerData[name].slot, ...desiredData };
             }
             data = data ?? {
               played: 0,
@@ -335,8 +337,18 @@ export class WarLobby extends EventEmitter {
     return "playerTeams";
   }
 
-  newChat(name: string, message: string) {
-    this.chatMessages.push({ name, message, time: new Date().getTime() });
+  newChat(name: string, message: string): boolean {
+    let currentTime = new Date().getTime();
+    // If the same message is sent within 1 second, skip.
+    if (
+      Object.values(this.chatMessages).filter(
+        (chat) => chat.message === message && Math.abs(chat.time - currentTime) < 1000
+      ).length === 0
+    ) {
+      this.chatMessages.push({ name, message, time: currentTime });
+      return true;
+    }
+    return false;
   }
 
   lobbyCombinations(target: Array<string>, teamSize: number = 3) {
@@ -634,11 +646,12 @@ export class WarLobby extends EventEmitter {
   }
 
   getPlayerData(player: string) {
-    return this.playerData[this.#slotLookup[player]] ?? false;
+    return this.playerData[player] ?? false;
   }
 
   export() {
     if (this.lobbyStatic) {
+      console.log(this.playerData);
       return {
         lobbyStatic: this.lobbyStatic,
         playerData: this.playerData,

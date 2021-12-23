@@ -50,7 +50,6 @@
       lookupName: "",
       available: false,
       wc3statsVariant: "",
-      experimental: false,
       handleReplays: true,
     },
     discord: {
@@ -330,9 +329,6 @@
                   <label for="eloLookup" class="form-label">
                     <details>
                       <summary>ELO Lookup (click to expand)</summary>
-                      <strong>Experimental Swap:</strong>
-                      Only enable for games of more than 2 teams. It is very inefficient and
-                      largely untested.<br />
                       <strong>Handle Replay: </strong>Will automatically handle upload to
                       wc3stats.com at the end of each game.
                     </details></label
@@ -425,29 +421,18 @@
                         >Balance Teams</label
                       >
                       <SettingsCheckbox
-                        key="experimental"
+                        key="excludeHostFromSwap"
                         setting="elo"
-                        frontFacingName="Experimental Swap"
-                        checked={settings.elo.experimental}
+                        frontFacingName="Don't swap host"
+                        checked={settings.elo.excludeHostFromSwap}
                         on:change={(e) =>
-                          // @ts-ignore
-                          updateSettingSingle("elo", "experimental", e.target.checked)}
+                          updateSettingSingle(
+                            "elo",
+                            "excludeHostFromSwap",
+                            // @ts-ignore
+                            e.target.checked
+                          )}
                       />
-                      {#if !settings.elo.experimental}
-                        <SettingsCheckbox
-                          key="excludeHostFromSwap"
-                          setting="elo"
-                          frontFacingName="Don't swap host"
-                          checked={settings.elo.excludeHostFromSwap}
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "elo",
-                              "excludeHostFromSwap",
-                              // @ts-ignore
-                              e.target.checked
-                            )}
-                        />
-                      {/if}
                       {#if settings.elo.type === "wc3stats"}
                         <SettingsCheckbox
                           key="handleReplays"
@@ -663,7 +648,7 @@
                                 e.target.checked
                               )}
                           />
-                          {#if settings.autoHost.type === "smartHost" && settings.autoHost.observers}
+                          {#if settings.autoHost.type === "smartHost"}
                             <SettingsCheckbox
                               frontFacingName="Intrusive check"
                               key="leaveAlternate"

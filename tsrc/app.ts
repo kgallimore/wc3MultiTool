@@ -139,7 +139,6 @@ var settings: AppSettings = <AppSettings>{
     lookupName: store.get("elo.lookupName") ?? "",
     available: store.get("elo.available") ?? false,
     wc3statsVariant: store.get("elo.wc3statsVariant") ?? "",
-    experimental: store.get("elo.experimental") ?? false,
     handleReplays: store.get("elo.handleReplays") ?? true,
   },
   discord: {
@@ -652,7 +651,15 @@ function lobbySetup() {
     settings.elo.excludeHostFromSwap
   );
   lobby.on("update", (update: LobbyUpdates) => {
-    if (update.playerPayload || update.playerData || update.newLobby) {
+    if (
+      update.playerPayload ||
+      update.playerData ||
+      update.newLobby ||
+      update.leftLobby
+    ) {
+      if (update.leftLobby) {
+        clearLobby();
+      }
       sendWindow("lobbyUpdate", { lobbyData: update });
       sendToHub("lobbyUpdate", update);
       if (discClient) {
@@ -661,6 +668,23 @@ function lobbySetup() {
         } else {
           discClient.updateLobby(lobby.exportTeamStructure());
         }
+      }
+      if (settings.elo.announce && update.playerData) {
+        sendChatMessage(
+          update.playerData.name +
+            " ELO: " +
+            update.playerData.data.rating +
+            ", Rank: " +
+            update.playerData.data.rank +
+            ", Played: " +
+            update.playerData.data.played +
+            ", Wins: " +
+            update.playerData.data.wins +
+            ", Losses: " +
+            update.playerData.data.losses +
+            ", Last Change: " +
+            update.playerData.data.lastChange
+        );
       }
     } else if (update.playerLeft) {
       console.log("Player left: " + update.playerLeft);
@@ -685,13 +709,7 @@ function lobbySetup() {
           playSound("ready.wav");
         }
       }
-      /*setTimeout(() => {
-          if (lobby.isLobbyReady()) {
-            startGame();
-          }
-        }, 150);*/
     }
-    //sendToHub("lobbyUpdate", data);
   });
   lobby.on("sendChat", (data: string) => {
     sendChatMessage(data);
@@ -825,9 +843,6 @@ function handleClientMessage(message: { data: string }) {
         switch (data.messageType) {
           case "ScreenTransitionInfo":
             gameState.screenState = data.payload.screen;
-            /*if (gameState.screenState !== "GAME_LOBBY") {
-              clearLobby();
-            }*/
             break;
           case "SetGlueScreen":
             if (data.payload.screen) {
@@ -892,7 +907,6 @@ function handleClientMessage(message: { data: string }) {
                   );
                 }
                 triggerOBS();
-                clearLobby();
                 if (settings.autoHost.type === "rapidHost") {
                   setTimeout(
                     quitGame,
@@ -1082,11 +1096,7 @@ function openParamsJoin() {
 }
 
 function handleChatMessage(payload: GameClientMessage) {
-  if (
-    payload.message &&
-    lobby.lobbyStatic?.isHost &&
-    payload.message.source === "gameChat"
-  ) {
+  if (payload.message && payload.message.source === "gameChat") {
     if (payload.message.sender.includes("#")) {
       var sender = payload.message.sender;
     } else {
@@ -1102,6 +1112,7 @@ function handleChatMessage(payload: GameClientMessage) {
         if (
           settings.autoHost.voteStart &&
           lobby.voteStartVotes &&
+          lobby.lobbyStatic?.isHost &&
           ["rapidHost", "smartHost"].includes(settings.autoHost.type)
         ) {
           if (lobby.voteStartVotes.length === 0) {
@@ -1175,7 +1186,7 @@ function handleChatMessage(payload: GameClientMessage) {
           sendChatMessage("ELO not available");
         }
       } else if (payload.message.content.match(/^\?ban/i)) {
-        if (lobby.lobbyStatic.isHost && checkRole(sender, "moderator")) {
+        if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
           var banTarget = payload.message.content.split(" ")[1];
           if (banTarget) {
             var banReason = payload.message.content.split(" ").slice(2).join(" ") || "";
@@ -1199,7 +1210,7 @@ function handleChatMessage(payload: GameClientMessage) {
           }
         }
       } else if (payload.message.content.match(/^\?unban/i)) {
-        if (lobby.lobbyStatic.isHost && checkRole(sender, "moderator")) {
+        if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
           var target = payload.message.content.split(" ")[1];
           if (target) {
             if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
@@ -1215,7 +1226,7 @@ function handleChatMessage(payload: GameClientMessage) {
           }
         }
       } else if (payload.message.content.match(/^\?perm/i)) {
-        if (lobby.lobbyStatic.isHost && checkRole(sender, "admin")) {
+        if (lobby.lobbyStatic?.isHost && checkRole(sender, "admin")) {
           var target = payload.message.content.split(" ")[1];
           var perm = payload.message.content.split(" ")[2]?.toLowerCase() ?? "mod";
           perm = perm === "mod" ? "moderator" : perm;
@@ -1240,7 +1251,7 @@ function handleChatMessage(payload: GameClientMessage) {
           }
         }
       } else if (payload.message.content.match(/^\?unperm/i)) {
-        if (lobby.lobbyStatic.isHost && checkRole(sender, "admin")) {
+        if (lobby.lobbyStatic?.isHost && checkRole(sender, "admin")) {
           var target = payload.message.content.split(" ")[1];
           if (target) {
             if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
@@ -1254,34 +1265,39 @@ function handleChatMessage(payload: GameClientMessage) {
           }
         }
       } else if (payload.message.content.match(/^\?(help)|(commands)/i)) {
-        if (lobby.eloAvailable) {
-          sendChatMessage("?elo: Return back your elo");
-          sendChatMessage("?stats: Return back your stats");
+        if (lobby.lobbyStatic?.isHost) {
+          if (lobby.eloAvailable) {
+            sendChatMessage("?elo: Return back your elo");
+            sendChatMessage("?stats: Return back your stats");
+          }
+          if (
+            ["rapidHost", "smartHost"].includes(settings.autoHost.type) &&
+            settings.autoHost.voteStart
+          ) {
+            sendChatMessage("?voteStart: Starts or accepts a vote to start");
+          }
+          if (checkRole(sender, "moderator")) {
+            sendChatMessage("?ban <name> <?reason>: Bans a player forever");
+            sendChatMessage("?unban <name>: un-bans a player");
+          }
+          if (checkRole(sender, "admin")) {
+            sendChatMessage(
+              "?perm <name> <?admin|mod>: Promotes a player to admin or moderator (mod by default)"
+            );
+            sendChatMessage("?unperm <name>: Demotes player to normal");
+          }
+          sendChatMessage("?help: Shows commands with <required arg> <?optional arg>");
         }
-        if (
-          ["rapidHost", "smartHost"].includes(settings.autoHost.type) &&
-          settings.autoHost.voteStart
-        ) {
-          sendChatMessage("?voteStart: Starts or accepts a vote to start");
-        }
-        if (checkRole(sender, "moderator")) {
-          sendChatMessage("?ban <name> <?reason>: Bans a player forever");
-          sendChatMessage("?unban <name>: un-bans a player");
-        }
-        if (checkRole(sender, "admin")) {
-          sendChatMessage(
-            "?perm <name> <?admin|mod>: Promotes a player to admin or moderator (mod by default)"
-          );
-          sendChatMessage("?unperm <name>: Demotes player to normal");
-        }
-        sendChatMessage("?help: Shows commands with <required arg> <?optional arg>");
       } else if (
         !payload.message.content.match(/^(executed '!)|(Unknown command ')|(Command ')/i)
       ) {
         let notSpam = lobby.newChat(payload.message.sender, payload.message.content);
 
-        if (discClient && notSpam)
+        if (discClient && notSpam) {
           discClient.sendMessage(payload.message.sender + ": " + payload.message.content);
+        } else {
+          console.log(discClient, notSpam);
+        }
 
         if ((!settings.autoHost.private || !app.isPackaged) && notSpam) {
           sendToHub("lobbyUpdate", {

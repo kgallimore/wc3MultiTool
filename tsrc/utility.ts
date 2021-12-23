@@ -68,7 +68,6 @@ export interface EloSettings {
   lookupName: string;
   available: boolean;
   wc3statsVariant: string;
-  experimental: boolean;
   handleReplays: boolean;
 }
 
@@ -135,7 +134,31 @@ export interface PlayerData {
 export interface PlayerPayload {
   // 0 = open, 1 = closed, 2 = filled
   slotStatus: 0 | 1 | 2;
-  slot: number;
+  slot:
+    | 0
+    | 1
+    | 2
+    | 3
+    | 4
+    | 5
+    | 6
+    | 7
+    | 8
+    | 9
+    | 10
+    | 11
+    | 12
+    | 13
+    | 14
+    | 15
+    | 16
+    | 17
+    | 18
+    | 19
+    | 20
+    | 21
+    | 22
+    | 23;
   team: number;
   //What are slot types?
   // 0 = useable, 1 = managed?
@@ -313,4 +336,55 @@ export interface HubSend {
 
 export function DeColorName(name: string): string {
   return name.replace(/(\|c[0-9a-f]{8})|(\|r)/gi, "");
+}
+
+type ValidObjectTypes = "boolean" | "object" | "string" | "number";
+
+interface ObjectLookup {
+  [key: string]: ValidObjectTypes | ObjectLookup | Array<any>;
+}
+
+export function InvalidData(
+  name: string,
+  data: any,
+  type: ValidObjectTypes,
+  objectKeys: ObjectLookup = {}
+): false | string {
+  if (typeof data !== type) {
+    return (
+      "Type mismatch for " +
+      name +
+      ": " +
+      type +
+      " expected, " +
+      typeof data +
+      " received"
+    );
+  } else if (type === "object") {
+    for (const [key, value] of Object.entries(objectKeys)) {
+      if (Array.isArray(value)) {
+        if (!value.includes(data[key])) {
+          return (
+            "Value is not expected. Expected: " + value.join(",") + ", received: " + data
+          );
+        }
+      } else if (typeof value === "object") {
+        let check = InvalidData(
+          key,
+          data[key],
+          "object",
+          objectKeys[key] as ObjectLookup
+        );
+        if (check) {
+          return check;
+        }
+      } else {
+        let check = InvalidData(key, data[key], value as ValidObjectTypes);
+        if (check) {
+          return check;
+        }
+      }
+    }
+  }
+  return false;
 }
