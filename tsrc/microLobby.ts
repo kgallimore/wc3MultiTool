@@ -15,6 +15,7 @@ export class MicroLobby {
   chatMessages: MicroLobbyData["chatMessages"];
 
   constructor(data: MicroLobbyData) {
+    if (data?.region.includes("us")) data.region = "us";
     let dataTest = InvalidData("MicroLobbyData", data, "object", {
       lookupName: "string",
       wc3StatsVariant: "string",

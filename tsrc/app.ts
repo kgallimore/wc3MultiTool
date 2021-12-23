@@ -648,7 +648,8 @@ function lobbySetup() {
     settings.elo.type,
     settings.elo.wc3statsVariant,
     settings.elo.balanceTeams,
-    settings.elo.excludeHostFromSwap
+    settings.elo.excludeHostFromSwap,
+    settings.autoHost.moveToSpec
   );
   lobby.on("update", (update: LobbyUpdates) => {
     if (
@@ -693,16 +694,18 @@ function lobbySetup() {
       announcement();
     } else if (update.lobbyReady) {
       console.log("Lobby ready!");
-      sendProgress("Starting Game", 100);
       if (lobby?.lobbyStatic?.isHost) {
         if (
           settings.autoHost.type === "smartHost" ||
           settings.autoHost.type === "rapidHost"
         ) {
+          sendProgress("Starting Game", 100);
           // Wait a quarter second to make sure no one left
           setTimeout(async () => {
             if (lobby.isLobbyReady()) {
               startGame();
+            } else {
+              console.log("Game not ready anymore");
             }
           }, 250);
         } else if (settings.autoHost.type === "lobbyHost" && settings.autoHost.sounds) {
@@ -713,6 +716,9 @@ function lobbySetup() {
   });
   lobby.on("sendChat", (data: string) => {
     sendChatMessage(data);
+  });
+  lobby.on("sendMessage", (data: string) => {
+    sendMessage(data);
   });
   lobby.on("error", (data: string) => {
     log.error(data);
@@ -940,6 +946,8 @@ function handleClientMessage(message: { data: string }) {
                     mostModified.file &&
                     mostModified.mtime > clientState.latestUploadedReplay
                   ) {
+                    // TODO parse file for results and update discord etc
+                    //if(discClient)discClient.lobbyEnded();
                     clientState.latestUploadedReplay = mostModified.mtime;
                     store.set("latestUploadedReplay", clientState.latestUploadedReplay);
                     if (settings.elo.type === "wc3stats") {
@@ -1408,7 +1416,6 @@ function cancelVote() {
 }
 
 function handleLobbyUpdate(payload: GameClientLobbyPayload) {
-  // If we are not in the same lobby
   if (payload.teamData.playableSlots > 1) {
     lobby.processLobby(payload, gameState.selfRegion);
   }
@@ -1617,7 +1624,7 @@ async function analyzeGame(file: string) {
   return results;
 }
 
-function sendMessage(message: string, payload: any) {
+function sendMessage(message: string, payload: any = "") {
   if (clientWebSocket) {
     clientWebSocket.send(JSON.stringify({ message: message, payload: payload }));
   }

@@ -16,6 +16,7 @@ export class WarLobby extends EventEmitter {
   balanceTeams: boolean;
   wc3StatsVariant: string;
   excludeHostFromSwap: boolean;
+  moveToSpec: boolean;
   eloType: "wc3stats" | "pyroTD" | "off";
 
   lookupName: string = "";
@@ -43,13 +44,15 @@ export class WarLobby extends EventEmitter {
     eloType: "wc3stats" | "pyroTD" | "off",
     buildVariant: string,
     balanceTeams: boolean,
-    excludeHostFromSwap: boolean
+    excludeHostFromSwap: boolean,
+    moveToSpec: boolean
   ) {
     super();
     this.eloType = eloType;
     this.wc3StatsVariant = buildVariant;
     this.balanceTeams = balanceTeams;
     this.excludeHostFromSwap = excludeHostFromSwap;
+    this.moveToSpec = moveToSpec;
   }
 
   clear() {
@@ -155,6 +158,42 @@ export class WarLobby extends EventEmitter {
           }
         });
         this.emitUpdate({ newLobby: this.export() });
+        let specTeams = Object.entries(this.teamList.specTeams.data);
+        let selfSlot = this.getSelfSlot();
+        if (this.moveToSpec && specTeams.length > 0) {
+          if (
+            specTeams.some(([teamName, teamNumber]) => {
+              if (
+                selfSlot?.slot &&
+                teamName.match(/host/i) &&
+                Object.values(this.slots).filter(
+                  (player) => player.team === teamNumber && player.slotStatus === 0
+                ).length > 0
+              ) {
+                this.emitInfo("Found host slot to move to: " + teamName);
+                this.emitMessage("SetTeam", {
+                  slot: selfSlot.slot,
+                  team: teamNumber,
+                });
+                return true;
+              }
+            }) === false
+          ) {
+            specTeams.some(([teamName, teamNumber]) => {
+              if (
+                selfSlot?.slot &&
+                Object.values(this.slots).filter(
+                  (player) => player.team === teamNumber && player.slotStatus === 0
+                ).length > 0
+              ) {
+                this.emitMessage("SetTeam", {
+                  slot: selfSlot.slot,
+                  team: teamNumber,
+                });
+              }
+            });
+          }
+        }
       }
     } else {
       let playerUpdates: Array<PlayerPayload> = [];
@@ -273,8 +312,8 @@ export class WarLobby extends EventEmitter {
                 },
               });
               this.emitInfo(name + " stats received and saved.");
-              // If the lobby is full, and we have the ELO for everyone,
               if (this.isLobbyReady()) {
+                this.emitInfo("Lobby is ready, auto-balancing.");
                 this.autoBalance();
               }
             } else {
@@ -299,6 +338,13 @@ export class WarLobby extends EventEmitter {
     }
   }
 
+  emitMessage(type: string, payload: any) {
+    this.emit("sendMessage", {
+      type,
+      payload,
+    });
+  }
+
   emitUpdate(update: LobbyUpdates) {
     this.emit("update", update);
   }
@@ -312,7 +358,7 @@ export class WarLobby extends EventEmitter {
   }
 
   emitChat(message: string) {
-    this.emit("chat", message);
+    this.emit("sendChat", message);
   }
 
   emitProgress(step: string, progress: number) {
@@ -349,6 +395,10 @@ export class WarLobby extends EventEmitter {
       return true;
     }
     return false;
+  }
+
+  getSelfSlot() {
+    return Object.values(this.slots).find((slot) => slot.isSelf);
   }
 
   lobbyCombinations(target: Array<string>, teamSize: number = 3) {
@@ -563,40 +613,30 @@ export class WarLobby extends EventEmitter {
 
   isLobbyReady() {
     let teams = this.exportTeamStructure();
-    let values = Object.values(teams);
-    let test = values.filter((team) => team.length > 0);
-    if (test.length > 0) {
-      if (this.eloType !== "off") {
-        if (!this.lookupName) {
-          return false;
-        } else if (this.eloAvailable) {
-          for (const team of Object.values(teams)) {
-            if (
-              team.filter(
-                (slot) => slot.slotStatus == 0 || (slot.realPlayer && slot.rating < 0)
-              ).length > 0
-            ) {
-              return false;
-            }
-          }
-        } else {
-          for (const team of Object.values(teams)) {
-            if (team.filter((slot) => slot.slotStatus === 0).length > 0) {
-              return false;
-            }
-          }
-        }
-      } else {
+    for (const team of Object.values(teams)) {
+      if (team.filter((slot) => slot.slotStatus === 0).length > 0) {
+        console.log("Missing Player");
+        return false;
+      }
+    }
+    if (this.eloType !== "off") {
+      if (!this.lookupName) {
+        console.log("No lookup name");
+        return false;
+      } else if (this.eloAvailable) {
         for (const team of Object.values(teams)) {
-          if (team.filter((slot) => slot.slotStatus === 0).length > 0) {
+          if (
+            team.filter(
+              (slot) => slot.slotStatus == 0 || (slot.realPlayer && slot.rating < 0)
+            ).length > 0
+          ) {
+            console.log("Missing ELO data");
             return false;
           }
         }
       }
-      return true;
-    } else {
-      return false;
     }
+    return true;
   }
 
   allPlayerTeamsContainPlayers() {

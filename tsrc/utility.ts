@@ -365,7 +365,10 @@ export function InvalidData(
       if (Array.isArray(value)) {
         if (!value.includes(data[key])) {
           return (
-            "Value is not expected. Expected: " + value.join(",") + ", received: " + data
+            "Value is not expected. Expected: " +
+            value.join(",") +
+            ", received: " +
+            data[key]
           );
         }
       } else if (typeof value === "object") {
