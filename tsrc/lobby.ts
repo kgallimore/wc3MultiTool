@@ -160,39 +160,36 @@ export class WarLobby extends EventEmitter {
         this.emitUpdate({ newLobby: this.export() });
         let specTeams = Object.entries(this.teamList.specTeams.data);
         let selfSlot = this.getSelfSlot();
-        if (this.moveToSpec && specTeams.length > 0) {
-          if (
-            specTeams.some(([teamName, teamNumber]) => {
-              if (
-                selfSlot?.slot &&
-                teamName.match(/host/i) &&
-                Object.values(this.slots).filter(
+        if (this.moveToSpec) {
+          if (specTeams.length > 0 && selfSlot) {
+            let target =
+              specTeams.find(
+                ([teamName, teamNumber]) =>
+                  teamName.match(/host/i) &&
+                  Object.values(this.slots).find(
+                    (player) => player.team === teamNumber && player.slotStatus === 0
+                  )
+              ) ??
+              specTeams.find(([teamName, teamNumber]) =>
+                Object.values(this.slots).find(
                   (player) => player.team === teamNumber && player.slotStatus === 0
-                ).length > 0
-              ) {
-                this.emitInfo("Found host slot to move to: " + teamName);
-                this.emitMessage("SetTeam", {
-                  slot: selfSlot.slot,
-                  team: teamNumber,
-                });
-                return true;
-              }
-            }) === false
-          ) {
-            specTeams.some(([teamName, teamNumber]) => {
-              if (
-                selfSlot?.slot &&
-                Object.values(this.slots).filter(
-                  (player) => player.team === teamNumber && player.slotStatus === 0
-                ).length > 0
-              ) {
-                this.emitMessage("SetTeam", {
-                  slot: selfSlot.slot,
-                  team: teamNumber,
-                });
-              }
-            });
+                )
+              );
+            console.log(target);
+            if (target) {
+              this.emitInfo("Found spec slot to move to: " + target[0]);
+              this.emitMessage("SetTeam", {
+                slot: selfSlot.slot,
+                team: target[1],
+              });
+            } else {
+              this.emitInfo("No available spec team found");
+            }
+          } else {
+            this.emitInfo("Either I'm not in the lobby, or there are no spec teams");
           }
+        } else {
+          console.log("Not moving to spec");
         }
       }
     } else {
@@ -448,13 +445,24 @@ export class WarLobby extends EventEmitter {
   }
 
   autoBalance() {
+    let stoppingPoint = 0;
+    stoppingPoint = 1;
+    console.log(stoppingPoint);
     let teams = Object.entries(this.exportTeamStructure());
     if (this.eloAvailable && this.balanceTeams) {
-      if (!this.bestCombo) {
+      stoppingPoint = 2;
+      console.log(stoppingPoint);
+      if (this.bestCombo === undefined || this.bestCombo.length == 0) {
+        stoppingPoint = 3;
+        console.log(stoppingPoint);
         if (teams.length < 2) {
+          stoppingPoint = 4;
+          console.log(stoppingPoint);
           this.emitUpdate({ lobbyReady: true });
           return;
         } else if (teams.length === 2) {
+          stoppingPoint = 5;
+          console.log(stoppingPoint);
           let leastSwapTeam = "Team ?";
           let swaps: Array<Array<string>> = [];
           let players = Object.entries(this.playerData);
@@ -492,6 +500,8 @@ export class WarLobby extends EventEmitter {
             (this.excludeHostFromSwap &&
               this.bestCombo.includes(this.lobbyStatic?.playerHost || ""))
           ) {
+            stoppingPoint = 6;
+            console.log(stoppingPoint);
             // Go through team 1 and grab everyone who is not in the best combo
             leastSwapTeam = teams[0][0];
             teams[0][1].forEach((user) => {
@@ -520,11 +530,13 @@ export class WarLobby extends EventEmitter {
           } else {
             for (let i = 0; i < swaps[0].length; i++) {
               if (!this.isLobbyReady()) {
+                this.emitInfo("Lobby no longer ready.");
                 break;
               }
               this.emitProgress("Swapping " + swaps[0][i] + " and " + swaps[1][i], 100);
               this.emitChat("!swap " + swaps[0][i] + " " + swaps[1][i]);
             }
+            this.emitUpdate({ lobbyReady: true });
           }
         } else {
           this.bestCombo = this.lobbyCombinations(
@@ -604,9 +616,14 @@ export class WarLobby extends EventEmitter {
             }
           }
         }
+        this.emitUpdate({ lobbyReady: true });
         this.emitChat("ELO data provided by: " + this.eloType);
+      } else {
+        console.log("Combo already running?");
       }
     } else {
+      console.log("autoBalance done");
+      this.emitInfo("Starting without elo");
       this.emitUpdate({ lobbyReady: true });
     }
   }
@@ -691,7 +708,6 @@ export class WarLobby extends EventEmitter {
 
   export() {
     if (this.lobbyStatic) {
-      console.log(this.playerData);
       return {
         lobbyStatic: this.lobbyStatic,
         playerData: this.playerData,

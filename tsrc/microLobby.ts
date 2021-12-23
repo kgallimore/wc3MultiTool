@@ -15,13 +15,12 @@ export class MicroLobby {
   chatMessages: MicroLobbyData["chatMessages"];
 
   constructor(data: MicroLobbyData) {
-    if (data?.region.includes("us")) data.region = "us";
     let dataTest = InvalidData("MicroLobbyData", data, "object", {
       lookupName: "string",
       wc3StatsVariant: "string",
       eloAvailable: "boolean",
       eloType: ["off", "wc3stats"],
-      region: ["us", "eu"],
+      region: ["us", "eu", "usw"],
       slots: "object",
       lobbyStatic: {
         playerHost: "string",
@@ -50,7 +49,7 @@ export class MicroLobby {
             "Referees",
             "Full Observers",
           ],
-          typeObservers: [0, 1, 2, 3],
+          typeObservers: "number",
           settingVisibility: [
             "Default",
             "Hide Terrain",
@@ -125,7 +124,7 @@ export class MicroLobby {
               slotTypeChangeEnabled: "boolean",
               id: "number",
               name: "string",
-              playerRegion: ["eu", "us", ""],
+              playerRegion: ["eu", "us", "usw"],
               playerGateway: "number",
               color: [
                 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
@@ -133,7 +132,7 @@ export class MicroLobby {
               ],
               colorChangeEnabled: "boolean",
               teamChangeEnabled: "boolean",
-              race: [0, 1, 2, 3, 4],
+              race: [0, 1, 2, 3, 4, 32],
               raceChangeEnabled: "boolean",
               handicap: "number",
               handicapChangeEnabled: "boolean",

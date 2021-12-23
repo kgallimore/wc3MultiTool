@@ -364,8 +364,11 @@ export function InvalidData(
     for (const [key, value] of Object.entries(objectKeys)) {
       if (Array.isArray(value)) {
         if (!value.includes(data[key])) {
+          console.log(data);
           return (
-            "Value is not expected. Expected: " +
+            "Value for " +
+            name +
+            "  not expected. Expected: " +
             value.join(",") +
             ", received: " +
             data[key]

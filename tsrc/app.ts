@@ -380,6 +380,11 @@ function updateSetting(setting: keyof AppSettings, key: SettingsKeys, value: any
         lobby.excludeHostFromSwap = value;
       }
     }
+    if (setting === "autoHost") {
+      if (key === "moveToSpec") {
+        lobby.moveToSpec = value;
+      }
+    }
     sendSocket(setting + "Settings", settings[setting]);
     sendWindow("updateSettingSingle", {
       update: {
@@ -717,8 +722,8 @@ function lobbySetup() {
   lobby.on("sendChat", (data: string) => {
     sendChatMessage(data);
   });
-  lobby.on("sendMessage", (data: string) => {
-    sendMessage(data);
+  lobby.on("sendMessage", (data: { type: string; payload: any }) => {
+    sendMessage(data.type, data.payload);
   });
   lobby.on("error", (data: string) => {
     log.error(data);
@@ -1303,8 +1308,6 @@ function handleChatMessage(payload: GameClientMessage) {
 
         if (discClient && notSpam) {
           discClient.sendMessage(payload.message.sender + ": " + payload.message.content);
-        } else {
-          console.log(discClient, notSpam);
         }
 
         if ((!settings.autoHost.private || !app.isPackaged) && notSpam) {
