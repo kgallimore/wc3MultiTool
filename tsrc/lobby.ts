@@ -468,24 +468,13 @@ export class WarLobby extends EventEmitter {
   }
 
   autoBalance() {
-    let stoppingPoint = 0;
-    stoppingPoint = 1;
-    console.log(stoppingPoint);
     let teams = Object.entries(this.exportTeamStructure());
     if (this.eloAvailable && this.#appSettings.balanceTeams) {
-      stoppingPoint = 2;
-      console.log(stoppingPoint);
       if (this.bestCombo === undefined || this.bestCombo.length == 0) {
-        stoppingPoint = 3;
-        console.log(stoppingPoint);
         if (teams.length < 2) {
-          stoppingPoint = 4;
-          console.log(stoppingPoint);
           this.emitUpdate({ lobbyReady: true });
           return;
         } else if (teams.length === 2) {
-          stoppingPoint = 5;
-          console.log(stoppingPoint);
           let leastSwapTeam = "Team ?";
           let swaps: Array<Array<string>> = [];
           let players = Object.entries(this.playerData);
@@ -523,8 +512,6 @@ export class WarLobby extends EventEmitter {
             (this.#appSettings.excludeHostFromSwap &&
               this.bestCombo.includes(this.lobbyStatic?.playerHost || ""))
           ) {
-            stoppingPoint = 6;
-            console.log(stoppingPoint);
             // Go through team 1 and grab everyone who is not in the best combo
             leastSwapTeam = teams[0][0];
             teams[0][1].forEach((user) => {

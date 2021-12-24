@@ -143,6 +143,7 @@ export class DisClient extends EventEmitter {
       newEmbed.setColor("#228B22");
       newEmbed.setURL("");
       newEmbed.fields.forEach((field) => {
+        // TODO append results
         for (const [playerName, value] of Object.entries(results.list)) {
           if (field.value.match(new RegExp(playerName, "i"))) {
           }

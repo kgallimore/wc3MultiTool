@@ -1,4 +1,14 @@
-import { screen, getActiveWindow, mouse, getWindows, centerOf } from "@nut-tree/nut-js";
+import {
+  screen,
+  getActiveWindow,
+  mouse,
+  getWindows,
+  centerOf,
+  imageResource,
+  keyboard,
+  Key,
+} from "@nut-tree/nut-js";
+require("@nut-tree/template-matcher");
 import {
   app,
   BrowserWindow,
@@ -50,6 +60,10 @@ const db = new sqlite3(app.getPath("userData") + "/wc3mt.db");
 autoUpdater.logger = log;
 
 screen.config.confidence = 0.8;
+screen.height().then((height) => {
+  setResourceDir(height);
+});
+
 if (!app.isPackaged) {
   screen.config.autoHighlight = true;
   screen.config.highlightDurationMs = 1500;
@@ -208,12 +222,6 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 app.setAsDefaultProtocolClient("wc3mt");
-
-if (!app.isPackaged) {
-  screen.config.resourceDirectory = path.join(__dirname, "images");
-} else {
-  screen.config.resourceDirectory = path.join(app.getAppPath(), "\\..\\..\\images");
-}
 
 app.on("open-url", function (event, url) {
   if (url.substring(0, 5) === "wc3mt") {
@@ -758,23 +766,29 @@ function sendToHub(
 async function triggerOBS() {
   if (settings.obs.type === "hotkeys") {
     if (inGame && settings.obs.inGameHotkey) {
-      let modifiers = [];
-      if (settings.obs.inGameHotkey.altKey) {
-        modifiers.push("alt");
+      let modifiers: Array<string> = [];
+      if (settings.obs.inGameHotkey) {
+        if (settings.obs.inGameHotkey.altKey) {
+          modifiers.push("alt");
+          //modifiers.push(Key.LeftAlt);
+        }
+        if (settings.obs.inGameHotkey.ctrlKey) {
+          modifiers.push("control");
+          //modifiers.push(Key.LeftControl);
+        }
+        if (settings.obs.inGameHotkey.shiftKey) {
+          modifiers.push("shift");
+          //modifiers.push(Key.LeftShift);
+        }
+        robot.keyTap(settings.obs.inGameHotkey.key, modifiers);
+        /*try {
+          console.log("Trying to tap key", settings.obs.inGameHotkey.key, modifiers);
+          console.log(Key[settings.obs.inGameHotkey.key.toUpperCase()]);
+          await keyboard.type(...modifiers, Key[settings.obs.inGameHotkey.key.toUpperCase()]);
+        } catch (e) {
+          console.log(e);
+        }*/
       }
-      if (settings.obs.inGameHotkey.ctrlKey) {
-        modifiers.push("control");
-      }
-      if (settings.obs.inGameHotkey.shiftKey) {
-        modifiers.push("shift");
-      }
-      robot.keyTap(settings.obs.inGameHotkey.key, modifiers);
-      /*await keyboard.type(
-          obs.inGameHotkey.altKey ? Key.LeftAlt : "",
-          obs.inGameHotkey.ctrlKey ? Key.LeftControl : "",
-          obs.inGameHotkey.shiftKey ? Key.LeftShift : "",
-          obs.inGameHotkey.key
-        );*/
     } else if (
       gameState.menuState === "SCORE_SCREEN" &&
       !inGame &&
@@ -960,7 +974,9 @@ function handleClientMessage(message: { data: string }) {
                     mostModified.mtime > clientState.latestUploadedReplay
                   ) {
                     // TODO parse file for results and update discord etc
-                    //if(discClient)discClient.lobbyEnded();
+                    analyzeGame(mostModified.file).then((results) => {
+                      if (discClient) discClient.lobbyEnded(results);
+                    });
                     clientState.latestUploadedReplay = mostModified.mtime;
                     store.set("latestUploadedReplay", clientState.latestUploadedReplay);
                     if (settings.elo.type === "wc3stats") {
@@ -1203,21 +1219,6 @@ function handleChatMessage(payload: GameClientMessage) {
           }
         } else {
           sendChatMessage("Data not available");
-        }
-      } else if (payload.message.content.match(/^\?elo/)) {
-        if (lobby.eloAvailable) {
-          let data = lobby.getPlayerData(sender);
-          if (data) {
-            if (data.rating === -1) {
-              sendChatMessage("ELO pending");
-            } else {
-              sendChatMessage(sender + " ELO: " + data.rating);
-            }
-          } else {
-            sendChatMessage("No ELO available or pending.");
-          }
-        } else {
-          sendChatMessage("ELO not available");
         }
       } else if (payload.message.content.match(/^\?ban/i)) {
         if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
@@ -1521,16 +1522,12 @@ async function findQuit() {
   if ((inGame || gameState.menuState === "LOADING_SCREEN") && socket?.OPEN) {
     await activeWindowWar();
     if (warcraftInFocus) {
-      let targetRes = "1080/";
-      if (warcraftRegion.height > 1440) {
-        targetRes = "2160/";
-      }
       let foundTarget = false;
       let searchFiles = ["quitNormal.png", "quitHLW.png"];
 
       for (const file of searchFiles) {
         try {
-          const foundImage = await screen.find(`${targetRes + file}`);
+          const foundImage = await screen.find(imageResource(file));
           if (foundImage) {
             foundTarget = true;
             break;
@@ -1548,7 +1545,7 @@ async function findQuit() {
         foundTarget = false;
         robot.keyTap("f12");
         try {
-          const foundImage = await screen.find(`${targetRes}closeScoreboard.png`, {
+          const foundImage = await screen.find(imageResource("closeScoreboard.png"), {
             confidence: 0.8,
           });
           if (foundImage) {
@@ -1560,7 +1557,7 @@ async function findQuit() {
           //log.error(e);
         }
         try {
-          const foundImage = await screen.find(`${targetRes}soloObserver.png`, {
+          const foundImage = await screen.find(imageResource("soloObserver.png"), {
             confidence: 0.8,
           });
           if (foundImage) {
@@ -1663,31 +1660,34 @@ function sendChatMessage(content: string) {
 
 async function activeWindowWar() {
   const warcraftOpenCheck = await isWarcraftOpen();
+  let targetRes = "1080/";
+  let height = 1080;
   if (warcraftIsOpen && !warcraftOpenCheck) {
     warcraftIsOpen = warcraftOpenCheck;
     new Notification({
       title: "Warcraft is not open",
       body: "An action was attempted but Warcraft was not open",
     }).show();
-    return;
+    height = await screen.height();
   } else {
     warcraftIsOpen = warcraftOpenCheck;
+    let activeWindow = await getActiveWindow();
+    let title = await activeWindow.title;
+    const focused = title === "Warcraft III";
+    // Ensure that a notification is only sent the first time, if warcraft was focused before, but is no longer
+    if (!focused && warcraftInFocus) {
+      new Notification({
+        title: "Warcraft is not in focus",
+        body: "An action was attempted but Warcraft was not in focus",
+      }).show();
+    }
+    warcraftInFocus = focused;
+    if (warcraftInFocus) {
+      warcraftRegion = await activeWindow.region;
+      height = warcraftRegion.height;
+    }
   }
-
-  let activeWindow = await getActiveWindow();
-  let title = await activeWindow.title;
-  const focused = title === "Warcraft III";
-  // Ensure that a notification is only sent the first time, if warcraft was focused before, but is no longer
-  if (!focused && warcraftInFocus) {
-    new Notification({
-      title: "Warcraft is not in focus",
-      body: "An action was attempted but Warcraft was not in focus",
-    }).show();
-  }
-  warcraftInFocus = focused;
-  if (warcraftInFocus) {
-    warcraftRegion = await activeWindow.region;
-  }
+  setResourceDir(height);
 }
 
 async function isWarcraftOpen() {
@@ -1703,12 +1703,7 @@ async function openWarcraft2() {
   warcraftIsOpen = await isWarcraftOpen();
   if (!warcraftIsOpen) {
     shell.openPath(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe");
-    let targetRes = "1080/";
-    let screenHeight = await screen.height();
-    if (screenHeight > 1440) {
-      targetRes = "2160/";
-    }
-    let playPosition = await centerOf(screen.waitFor(targetRes + "play.png", 15000));
+    let playPosition = await centerOf(screen.waitFor(imageResource("play.png"), 15000));
     await mouse.setPosition(playPosition);
     await mouse.leftClick();
   }
@@ -1716,27 +1711,34 @@ async function openWarcraft2() {
 
 function openWarcraft() {
   shell.openPath(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe");
-  let targetRes = "1080/";
   screen
-    .height()
-    .then((height) => {
-      if (height > 1440) {
-        targetRes = "2160/";
-      }
+    .waitFor(imageResource("play.png"), 25000, 500, {
+      confidence: 0.98,
     })
-    .then(() => {
-      screen
-        .waitFor(targetRes + "play.png", 25000, {
-          confidence: 0.98,
-        })
-        .then((result) => {
-          centerOf(result).then((position) => {
-            mouse.setPosition(position).then(() => mouse.leftClick());
-          });
-        })
-        .catch((e) => {
-          log.error(e);
-          //setTimeout(openWarcraft, 5000);
-        });
+    .then((result) => {
+      centerOf(result).then((position) => {
+        mouse.setPosition(position).then(() => mouse.leftClick());
+      });
+    })
+    .catch((e) => {
+      console.log(e);
+      log.error(e);
+      //setTimeout(openWarcraft, 5000);
     });
+}
+
+function setResourceDir(height: number) {
+  let targetRes = "1080/";
+  if (height > 1440) {
+    targetRes = "2160/";
+  }
+  if (!app.isPackaged) {
+    screen.config.resourceDirectory = path.join(__dirname, "images", targetRes);
+  } else {
+    screen.config.resourceDirectory = path.join(
+      app.getAppPath(),
+      "\\..\\..\\images",
+      targetRes
+    );
+  }
 }
