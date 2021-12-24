@@ -212,7 +212,7 @@
     e.preventDefault();
     let newValue:
       | { key: string; shiftKey: boolean; ctrlKey: boolean; altKey: boolean }
-      | false;
+      | boolean = false;
     if (e.key.toLowerCase() !== "backspace") {
       if (
         e.key !== "Control" &&
@@ -235,9 +235,8 @@
       }
     } else {
       (e.target as HTMLInputElement).value = "";
-      newValue = false;
     }
-    if (newValue != null) {
+    if (newValue) {
       let key = (e.target as HTMLElement).getAttribute("data-key");
       if (key) {
         toMain({

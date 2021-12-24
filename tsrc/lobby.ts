@@ -19,6 +19,7 @@ export class WarLobby extends EventEmitter {
 
   lookupName: string = "";
   eloAvailable: boolean = false;
+  #isTargetMap: boolean = true;
   bestCombo: Array<string> | Array<Array<string>> = [];
   region: "us" | "eu" = "eu";
   voteStartVotes: Array<string> = [];
@@ -44,7 +45,8 @@ export class WarLobby extends EventEmitter {
     balanceTeams: boolean,
     excludeHostFromSwap: boolean,
     moveToSpec: boolean,
-    closeSlots: Array<number>
+    closeSlots: Array<number>,
+    mapPath: string
   ) {
     super();
     this.#appSettings = {
@@ -54,6 +56,7 @@ export class WarLobby extends EventEmitter {
       wc3StatsVariant,
       excludeHostFromSwap,
       closeSlots,
+      mapPath,
     };
   }
 
@@ -117,6 +120,20 @@ export class WarLobby extends EventEmitter {
         Object.values(payload.players).find((slot) => slot.isSelf) !== undefined
       ) {
         this.lobbyStatic = staticFields;
+        if (
+          staticFields.mapData.mapPath.split(/\/|\\/).slice(-1)[0] !==
+          this.#appSettings.mapPath.split(/\/|\\/).slice(-1)[0]
+        ) {
+          console.log(
+            "Map path not the same",
+            staticFields.mapData.mapPath,
+            this.#appSettings.mapPath
+          );
+          this.#isTargetMap = false;
+        } else {
+          console.log("Map path met");
+          this.#isTargetMap = true;
+        }
         this.region = region;
         this.lobbyStatic.mapData.mapPath = staticFields.mapData.mapPath.substring(
           staticFields.mapData.mapPath.lastIndexOf("/") + 1
@@ -191,7 +208,6 @@ export class WarLobby extends EventEmitter {
                   (player) => player.team === teamNumber && player.slotStatus === 0
                 )
               );
-            console.log(target);
             if (target) {
               this.emitInfo("Found spec slot to move to: " + target[0]);
               this.emitMessage("SetTeam", {
@@ -287,56 +303,60 @@ export class WarLobby extends EventEmitter {
       } else if (this.eloAvailable) {
         if (this.#appSettings.eloType === "wc3stats") {
           let buildVariant = "";
-          Object.entries(JSON.parse(this.#appSettings.wc3StatsVariant)).forEach(
-            ([key, value]) => {
+          if (this.#isTargetMap && this.#appSettings.wc3StatsVariant) {
+            for (const [key, value] of Object.entries(
+              JSON.parse(this.#appSettings.wc3StatsVariant)
+            )) {
               if (value) buildVariant += "&" + key + "=" + value;
             }
+          }
+          buildVariant = encodeURI(buildVariant);
+          console.log(
+            `https://api.wc3stats.com/leaderboard&map=${
+              this.lookupName
+            }${buildVariant}&search=${encodeURI(name)}`
           );
-          if (this.eloAvailable) {
-            let jsonData: { body: Array<PlayerData & { name: string }> } = await (
-              await fetch(
-                `https://api.wc3stats.com/leaderboard&map=${this.lookupName}${
-                  this.lobbyStatic?.isHost ? encodeURI(buildVariant) : ""
-                }&search=${encodeURI(name)}`
-              )
-            ).json();
-            let elo = 500;
-            let data: PlayerData | undefined;
-            if (this.lookupName === "Footmen%20Vs%20Grunts") {
-              elo = 1000;
-            }
-            if (jsonData.body.length > 0) {
-              let { name, slot, ...desiredData } = jsonData.body[0];
-              data = { slot: this.playerData[name].slot, ...desiredData };
-            }
-            data = data ?? {
-              played: 0,
-              wins: 0,
-              losses: 0,
-              rating: elo,
-              lastChange: 0,
-              rank: 9999,
-              slot: this.playerData[name].slot,
-            };
-            // If they haven't left, set real ELO
-            if (this.playerData[name]) {
-              this.playerData[name] = data;
-              this.emitUpdate({
-                playerData: {
-                  data,
-                  name,
-                },
-              });
-              this.emitInfo(name + " stats received and saved.");
-              if (this.isLobbyReady()) {
-                this.emitInfo("Lobby is ready, auto-balancing.");
-                this.autoBalance();
-              }
-            } else {
-              this.emitInfo(name + " left before ELO was found");
+          let jsonData: { body: Array<PlayerData & { name: string }> } = await (
+            await fetch(
+              `https://api.wc3stats.com/leaderboard&map=${this.lookupName}${encodeURI(
+                buildVariant
+              )}&search=${encodeURI(name)}`
+            )
+          ).json();
+          let elo = 500;
+          let data: PlayerData | undefined;
+          if (this.lookupName === "Footmen%20Vs%20Grunts") {
+            elo = 1000;
+          }
+          if (jsonData.body.length > 0) {
+            let { name, slot, ...desiredData } = jsonData.body[0];
+            data = { slot: this.playerData[name].slot, ...desiredData };
+          }
+          data = data ?? {
+            played: 0,
+            wins: 0,
+            losses: 0,
+            rating: elo,
+            lastChange: 0,
+            rank: 9999,
+            slot: this.playerData[name].slot,
+          };
+          // If they haven't left, set real ELO
+          if (this.playerData[name]) {
+            this.playerData[name] = data;
+            this.emitUpdate({
+              playerData: {
+                data,
+                name,
+              },
+            });
+            this.emitInfo(name + " stats received and saved.");
+            if (this.isLobbyReady()) {
+              this.emitInfo("Lobby is ready, auto-balancing.");
+              this.autoBalance();
             }
           } else {
-            this.emitInfo("Elo not available. Skipping");
+            this.emitInfo(name + " left before ELO was found");
           }
         } else {
           //this.emitInfo("No elo enabled");

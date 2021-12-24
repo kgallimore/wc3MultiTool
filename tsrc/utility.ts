@@ -351,6 +351,7 @@ export interface LobbyAppSettings {
   moveToSpec: boolean;
   eloType: "wc3stats" | "pyroTD" | "off";
   closeSlots: Array<number>;
+  mapPath: string;
 }
 
 export function InvalidData(

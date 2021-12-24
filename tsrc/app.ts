@@ -5,8 +5,6 @@ import {
   getWindows,
   centerOf,
   imageResource,
-  keyboard,
-  Key,
 } from "@nut-tree/nut-js";
 require("@nut-tree/template-matcher");
 import {
@@ -320,19 +318,24 @@ ipcMain.on("toMain", (event, args: WindowSend) => {
         })
         .then((result) => {
           if (!result.canceled) {
-            let newMapPath = result.filePaths[0];
-            let mapName = newMapPath.split("\\").pop();
-            if (!settings.autoHost.mapPath.includes("\\Maps\\")) {
-              log.info("Map path is potentially dangerous. Copying map to safe path.");
-              let copyDir = `${app.getPath(
-                "home"
-              )}\\Documents\\Warcraft III\\Maps\\MultiTool\\`;
+            let newMapPath = result.filePaths[0].replace(/\\/g, "/");
+            let mapName = newMapPath.split("/").pop();
+            if (!newMapPath.includes("/Maps/")) {
+              log.info("Map path is potentially dangerous.");
+              let copyDir = `${app
+                .getPath("home")
+                .replace(/\\/g, "/")}/Documents/Warcraft III/Maps/MultiTool/`;
               if (!fs.existsSync(copyDir)) {
                 fs.mkdirSync(copyDir);
               }
               newMapPath = copyDir + mapName;
               try {
-                fs.copyFileSync(result.filePaths[0], newMapPath);
+                if (!fs.existsSync(newMapPath)) {
+                  log.info("Copying map to safe path.");
+                  fs.copyFileSync(result.filePaths[0], newMapPath);
+                } else {
+                  log.info("Map already exists, not copying.");
+                }
               } catch (e) {
                 log.error(e);
                 return;
@@ -381,7 +384,7 @@ function updateSetting(setting: keyof AppSettings, key: SettingsKeys, value: any
     (typeof settings[setting][key] === typeof value ||
       // @ts-ignore
       ((key === "inGameHotkey" || key === "outOfGameHotkey") &&
-        (typeof value === "boolean" || Array.isArray(value)))) &&
+        (typeof value === "boolean" || typeof value === "object"))) &&
     // @ts-ignore
     settings[setting][key] !== value
   ) {
@@ -670,7 +673,8 @@ function lobbySetup() {
     settings.elo.balanceTeams,
     settings.elo.excludeHostFromSwap,
     settings.autoHost.moveToSpec,
-    settings.autoHost.closeSlots
+    settings.autoHost.closeSlots,
+    settings.autoHost.mapPath
   );
   lobby.on("update", (update: LobbyUpdates) => {
     if (
@@ -766,6 +770,7 @@ function sendToHub(
 async function triggerOBS() {
   if (settings.obs.type === "hotkeys") {
     if (inGame && settings.obs.inGameHotkey) {
+      log.info("Triggering OBS In-Game");
       let modifiers: Array<string> = [];
       if (settings.obs.inGameHotkey) {
         if (settings.obs.inGameHotkey.altKey) {
@@ -781,36 +786,42 @@ async function triggerOBS() {
           //modifiers.push(Key.LeftShift);
         }
         robot.keyTap(settings.obs.inGameHotkey.key, modifiers);
-        /*try {
-          console.log("Trying to tap key", settings.obs.inGameHotkey.key, modifiers);
-          console.log(Key[settings.obs.inGameHotkey.key.toUpperCase()]);
-          await keyboard.type(...modifiers, Key[settings.obs.inGameHotkey.key.toUpperCase()]);
+        /*console.log(Key[settings.obs.inGameHotkey.key.toUpperCase()]);
+        try {
+          await keyboard.type(
+            ...modifiers,
+            // @ts-ignore
+            Key[settings.obs.inGameHotkey.key.toUpperCase()]
+          );
         } catch (e) {
           console.log(e);
         }*/
       }
-    } else if (
-      gameState.menuState === "SCORE_SCREEN" &&
-      !inGame &&
-      settings.obs.outOfGameHotkey
-    ) {
-      let modifiers = [];
+    } else if (!inGame && settings.obs.outOfGameHotkey) {
+      let modifiers: Array<string> = [];
       if (settings.obs.outOfGameHotkey.altKey) {
         modifiers.push("alt");
+        //modifiers.push(Key.LeftAlt);
       }
       if (settings.obs.outOfGameHotkey.ctrlKey) {
         modifiers.push("control");
+        //modifiers.push(Key.LeftControl);
       }
       if (settings.obs.outOfGameHotkey.shiftKey) {
         modifiers.push("shift");
+        //modifiers.push(Key.LeftShift);
       }
       robot.keyTap(settings.obs.outOfGameHotkey.key, modifiers);
-      /*await keyboard.type(
-          obs.outOfGameHotkey.altKey ? Key.LeftAlt : "",
-          obs.outOfGameHotkey.ctrlKey ? Key.LeftControl : "",
-          obs.outOfGameHotkey.shiftKey ? Key.LeftShift : "",
-          obs.outOfGameHotkey.key
-        );*/
+      /*console.log(...modifiers, Key[settings.obs.outOfGameHotkey.key.toUpperCase()]);
+      try {
+        await keyboard.type(
+          ...modifiers,
+          // @ts-ignore
+          Key[settings.obs.outOfGameHotkey.key.toUpperCase()]
+        );
+      } catch (e) {
+        console.log(e);
+      }*/
     }
   }
 }
