@@ -61,6 +61,7 @@
     },
     client: {
       restartOnUpdate: false,
+      checkForUpdates: true,
     },
   };
   let currentStatus: {
@@ -319,6 +320,15 @@
                       // @ts-ignore
                       updateSettingSingle("client", "restartOnUpdate", e.target.checked)}
                   />
+                  <SettingsCheckbox
+                    frontFacingName="Check for updates"
+                    setting="client"
+                    key="checkForUpdates"
+                    checked={settings.client.checkForUpdates}
+                    on:change={(e) =>
+                      // @ts-ignore
+                      updateSettingSingle("client", "checkForUpdates", e.target.checked)}
+                  />
                 </div>
               </div>
             </form>
@@ -384,7 +394,11 @@
                             {#await wc3statsOptions}
                               <option>Fetching options...</option>
                             {:then value}
-                              <option>Select a value</option>
+                              <option
+                                value=""
+                                selected={"" === settings.elo.wc3statsVariant}
+                                >Select a value</option
+                              >
                               {#each value as option}
                                 <option
                                   selected={JSON.stringify(option.key) ===

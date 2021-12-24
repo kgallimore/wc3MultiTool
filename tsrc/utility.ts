@@ -8,6 +8,7 @@ export interface AppSettings {
 
 export interface ClientSettings {
   restartOnUpdate: boolean;
+  checkForUpdates: boolean;
 }
 export interface AutoHostSettings {
   type: "off" | "lobbyHost" | "rapidHost" | "smartHost";
@@ -46,7 +47,8 @@ export type SettingsKeys =
   | keyof ObsSettings
   | keyof AutoHostSettings
   | keyof EloSettings
-  | keyof DiscordSettings;
+  | keyof DiscordSettings
+  | keyof ClientSettings;
 export interface ObsHotkeys {
   key: string;
   altKey: boolean;

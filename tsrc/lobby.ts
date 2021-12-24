@@ -1,5 +1,6 @@
 import fetch from "cross-fetch";
 import EventEmitter from "events";
+import Player from "w3gjs/dist/types/Player";
 import type {
   GameClientLobbyPayload,
   GameClientLobbyPayloadStatic,
@@ -697,6 +698,32 @@ export class WarLobby extends EventEmitter {
           slot: slotNumber,
         });
       }
+    }
+  }
+
+  kickSlot(slot: number) {
+    this.emitMessage("KickPlayerFromGameLobby", { slot });
+  }
+
+  banSlot(slot: number) {
+    this.emitMessage("BanPlayerFromGameLobby", { slot });
+  }
+
+  kickPlayer(player: string) {
+    let targetSlot = Object.values(this.slots).find((slot) => slot.name === player);
+    if (targetSlot) {
+      this.kickSlot(targetSlot.slot);
+    } else {
+      this.emitChat("Player not found");
+    }
+  }
+
+  banPlayer(player: string) {
+    let targetSlot = Object.values(this.slots).find((slot) => slot.name === player);
+    if (targetSlot) {
+      this.banSlot(targetSlot.slot);
+    } else {
+      this.emitChat("Player not found");
     }
   }
 

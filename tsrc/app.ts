@@ -164,6 +164,7 @@ var settings: AppSettings = <AppSettings>{
   },
   client: {
     restartOnUpdate: store.get("client.restartOnUpdate") ?? false,
+    checkForUpdates: store.get("client.checkForUpdates") ?? true,
   },
 };
 let lobby: WarLobby;
@@ -531,7 +532,9 @@ const createWindow = () => {
 
 app.on("ready", function () {
   setInterval(() => {
-    autoUpdater.checkForUpdatesAndNotify();
+    if (settings.client.checkForUpdates) {
+      autoUpdater.checkForUpdatesAndNotify();
+    }
   }, 30 * 60 * 1000);
   log.info("App ready");
   db.exec(
@@ -585,7 +588,9 @@ app.on("ready", function () {
   });
   globalShortcut.register("Alt+CommandOrControl+O", () => {});
   createWindow();
-  autoUpdater.checkForUpdatesAndNotify();
+  if (settings.client.checkForUpdates) {
+    autoUpdater.checkForUpdatesAndNotify();
+  }
   connectToHub();
   if (process.argv[1] && process.argv[1] !== ".") {
     setTimeout(() => {
@@ -715,8 +720,31 @@ function lobbySetup() {
     } else if (update.playerLeft) {
       console.log("Player left: " + update.playerLeft);
     } else if (update.playerJoined) {
-      console.log("Player joined: " + update.playerJoined.name);
-      announcement();
+      if (update.playerJoined.name) {
+        db.open;
+        const row = db
+          .prepare("SELECT * FROM banList WHERE username = ? AND unban_date IS NULL")
+          .get(update.playerJoined.name);
+        if (row) {
+          lobby.banSlot(update.playerJoined.slot);
+          sendChatMessage(
+            update.playerJoined.name +
+              " is permanently banned" +
+              (row.reason ? ": " + row.reason : "")
+          );
+          log.info(
+            "Kicked " +
+              update.playerJoined.name +
+              " for being banned" +
+              (row.reason ? " for: " + row.reason : "")
+          );
+        } else {
+          console.log("Player joined: " + update.playerJoined.name);
+          announcement();
+        }
+      } else {
+        log.error("Nameless player joined");
+      }
     } else if (update.lobbyReady) {
       console.log("Lobby ready!");
       if (lobby?.lobbyStatic?.isHost) {
@@ -832,14 +860,6 @@ function sendProgress(step = "Nothing", progress = 0) {
 
 function sendStatus(status = false) {
   sendWindow("statusChange", { connected: status });
-}
-
-function kickSlot(slot: number) {
-  sendMessage("KickPlayerFromGameLobby", { slot });
-}
-
-function banSlot(slot: number) {
-  sendMessage("BanPlayerFromGameLobby", { slot });
 }
 
 async function handleWSMessage(message: string) {
@@ -1231,6 +1251,22 @@ function handleChatMessage(payload: GameClientMessage) {
         } else {
           sendChatMessage("Data not available");
         }
+      } else if (payload.message.content.match(/^\?kick/i)) {
+        if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          var kickTarget = payload.message.content.split(" ")[1];
+          if (kickTarget) {
+            let targets = lobby.searchPlayer(kickTarget);
+            if (targets.length === 1) {
+              lobby.kickPlayer(targets[0]);
+            } else if (targets.length > 1) {
+              sendChatMessage("Multiple matches found. Please be more specific.");
+            } else {
+              sendChatMessage("No matches found.");
+            }
+          } else {
+            sendChatMessage("Kick target required");
+          }
+        }
       } else if (payload.message.content.match(/^\?ban/i)) {
         if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
           var banTarget = payload.message.content.split(" ")[1];
@@ -1370,9 +1406,8 @@ function banPlayer(
         value: "Banned " + player + " by " + admin + (reason ? " for " + reason : ""),
       });
       if (lobby?.getAllPlayers().includes(player)) {
-        sendChatMessage("!ban " + player);
-        sendChatMessage("!kick " + player);
-        sendChatMessage(player + " banned");
+        lobby.banPlayer(player);
+        sendChatMessage(player + " banned" + (reason ? " for " + reason : ""));
       }
     } else {
       log.info("Invalid battleTag");
