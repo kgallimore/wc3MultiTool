@@ -5,6 +5,10 @@ import {
   getWindows,
   centerOf,
   imageResource,
+  Point,
+  left,
+  right,
+  up,
 } from "@nut-tree/nut-js";
 require("@nut-tree/template-matcher");
 import {
@@ -1706,7 +1710,6 @@ function sendChatMessage(content: string) {
 
 async function activeWindowWar() {
   const warcraftOpenCheck = await isWarcraftOpen();
-  let targetRes = "1080/";
   let height = 1080;
   if (warcraftIsOpen && !warcraftOpenCheck) {
     warcraftIsOpen = warcraftOpenCheck;
@@ -1755,22 +1758,118 @@ async function openWarcraft2() {
   }
 }
 
-function openWarcraft() {
+async function openWarcraft() {
   shell.openPath(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe");
-  screen
-    .waitFor(imageResource("play.png"), 25000, 500, {
-      confidence: 0.98,
-    })
-    .then((result) => {
-      centerOf(result).then((position) => {
-        mouse.setPosition(position).then(() => mouse.leftClick());
+  let targetRegion = 3;
+  let battleNetWindow;
+  let windows = await getWindows();
+  for (let window of windows) {
+    let title = await window.title;
+    if (title === "Battle.net") battleNetWindow = window;
+  }
+  if (!battleNetWindow) {
+    console.log("Battle.net window not found");
+    setTimeout(openWarcraft, 1000);
+    return;
+  }
+  let activeWindow = await getActiveWindow();
+  let activeWindowTitle = await activeWindow.title;
+  if (activeWindowTitle !== "Battle.net") {
+    console.log("Battle.net window not active");
+    setTimeout(openWarcraft, 1000);
+    return;
+  }
+  let searchRegion = await activeWindow.region;
+  let screenSize = { width: await screen.width(), height: await screen.height() };
+  if (searchRegion.left < 0) {
+    console.log("Battle.net window left of screen");
+    let targetPosition = new Point(
+      searchRegion.left + searchRegion.width - searchRegion.width * 0.12,
+      searchRegion.top + 10
+    );
+    await mouse.setPosition(targetPosition);
+    await mouse.pressButton(0);
+    await mouse.move(right(searchRegion.left * -1 + 10));
+    await mouse.releaseButton(0);
+    searchRegion = await activeWindow.region;
+  }
+  if (searchRegion.left + searchRegion.width > screenSize.width) {
+    console.log("Battle.net window right of screen");
+    let targetPosition = new Point(searchRegion.left + 10, searchRegion.top + 10);
+    await mouse.setPosition(targetPosition);
+    await mouse.pressButton(0);
+    await mouse.move(
+      left(searchRegion.left - (screenSize.width - searchRegion.width) + 10)
+    );
+    await mouse.releaseButton(0);
+    searchRegion = await activeWindow.region;
+  }
+  if (searchRegion.top + searchRegion.height > screenSize.height) {
+    console.log("Battle.net window bottom of screen");
+    let targetPosition = new Point(
+      searchRegion.left + searchRegion.width / 2,
+      searchRegion.top + 10
+    );
+    await mouse.setPosition(targetPosition);
+    await mouse.pressButton(0);
+    await mouse.move(
+      up(searchRegion.top - (screenSize.height - searchRegion.height) + 10)
+    );
+    await mouse.releaseButton(0);
+    searchRegion = await activeWindow.region;
+  }
+  if (searchRegion.top < 0) {
+    console.log("Battle.net window top of screen");
+    return;
+  }
+  searchRegion.width = searchRegion.width * 0.5;
+  searchRegion.height = searchRegion.height * 0.5;
+  searchRegion.top = searchRegion.top + searchRegion.height;
+  if (true) {
+    screen
+      .find(imageResource("changeRegion.png"), { searchRegion, confidence: 0.98 })
+      .then((result) => {
+        centerOf(result).then((regionPosition) => {
+          mouse.setPosition(regionPosition).then(() =>
+            mouse.leftClick().then(() => {
+              screen.height().then((height) => {
+                regionPosition.y -= Math.round(height * (276 / 2160 / 3)) * targetRegion;
+                mouse.setPosition(regionPosition).then(() => {
+                  mouse.leftClick().then(() => {
+                    regionPosition.y +=
+                      Math.round(height * (276 / 2160 / 3)) * (targetRegion + 1);
+                    regionPosition.x -= Math.round(height * (276 / 2160));
+                    mouse.setPosition(regionPosition).then(() => {
+                      mouse.leftClick();
+                    });
+                  });
+                });
+              });
+            })
+          );
+        });
+      })
+      .catch((e) => {
+        console.log(e);
+        log.error(e);
+        //setTimeout(openWarcraft, 5000);
       });
-    })
-    .catch((e) => {
-      console.log(e);
-      log.error(e);
-      //setTimeout(openWarcraft, 5000);
-    });
+  } else {
+    screen
+      .waitFor(imageResource("play.png"), 25000, 500, {
+        confidence: 0.98,
+      })
+      .then((result) => {
+        centerOf(result).then((position) => {
+          mouse.setPosition(position).then(() => mouse.leftClick());
+        });
+      })
+      .catch((e) => {
+        console.log(e);
+        log.error(e);
+        //setTimeout(openWarcraft, 5000);
+      });
+  }
 }
 
 function setResourceDir(height: number) {
