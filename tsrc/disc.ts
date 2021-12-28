@@ -37,6 +37,7 @@ export class DisClient extends EventEmitter {
       this.client.user?.setActivity("Warcraft III", { type: "WATCHING" });
       this.client.user?.setStatus("online");
       this.client.user?.setUsername("WC3 MultiTool");
+      this.client.user?.setAvatar("./images/wc3_auto_balancer_v2.png");
       console.log(`Logged in as ${this.client?.user?.tag}!`);
       this.client.channels.cache.forEach((channel) => {
         if (channel.isText()) {

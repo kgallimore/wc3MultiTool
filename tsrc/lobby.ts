@@ -17,6 +17,7 @@ var { Combination, Permutation } = require("js-combinatorics");
 
 export class WarLobby extends EventEmitter {
   #appSettings: LobbyAppSettings;
+  #refreshing: boolean = false;
 
   lookupName: string = "";
   eloAvailable: boolean = false;
@@ -127,14 +128,8 @@ export class WarLobby extends EventEmitter {
           staticFields.mapData.mapPath.split(/\/|\\/).slice(-1)[0] !==
           this.#appSettings.mapPath.split(/\/|\\/).slice(-1)[0]
         ) {
-          console.log(
-            "Map path not the same",
-            staticFields.mapData.mapPath,
-            this.#appSettings.mapPath
-          );
           this.#isTargetMap = false;
         } else {
-          console.log("Map path met");
           this.#isTargetMap = true;
         }
         this.region = region;
@@ -265,9 +260,7 @@ export class WarLobby extends EventEmitter {
           playerUpdates.push(player);
         }
       });
-      if (playerUpdates) {
-        this.emitUpdate({ playerPayload: playerUpdates });
-      }
+      let playersChanged = false;
       for (const slot of Object.values(this.slots)) {
         if (slot.playerRegion && !this.playerData[slot.name]) {
           this.emitUpdate({ playerJoined: slot });
@@ -281,16 +274,23 @@ export class WarLobby extends EventEmitter {
             slot: slot.slot,
           };
           this.fetchStats(slot.name);
+          playersChanged = true;
         }
       }
       for (const player of Object.keys(this.playerData)) {
         if (!this.getAllPlayers(true).includes(player)) {
           this.emitUpdate({ playerLeft: player });
           this.playerLeave(player);
+          playersChanged = true;
         }
       }
-      if (this.isLobbyReady()) {
-        this.autoBalance();
+      if ((this.#refreshing && playersChanged) || !this.#refreshing) {
+        if (playerUpdates) {
+          this.emitUpdate({ playerPayload: playerUpdates });
+        }
+        if (this.isLobbyReady()) {
+          this.autoBalance();
+        }
       }
     }
   }
@@ -314,17 +314,12 @@ export class WarLobby extends EventEmitter {
             }
           }
           buildVariant = encodeURI(buildVariant);
-          console.log(
-            `https://api.wc3stats.com/leaderboard&map=${
-              this.lookupName
-            }${buildVariant}&search=${encodeURI(name)}`
-          );
+          let targetUrl = `https://api.wc3stats.com/leaderboard&map=${
+            this.lookupName
+          }${buildVariant}&search=${encodeURI(name)}`;
+          this.emitInfo(targetUrl);
           let jsonData: { body: Array<PlayerData & { name: string }> } = await (
-            await fetch(
-              `https://api.wc3stats.com/leaderboard&map=${this.lookupName}${encodeURI(
-                buildVariant
-              )}&search=${encodeURI(name)}`
-            )
+            await fetch(targetUrl)
           ).json();
           let elo = 500;
           let data: PlayerData | undefined;
@@ -651,11 +646,8 @@ export class WarLobby extends EventEmitter {
         }
         this.emitUpdate({ lobbyReady: true });
         this.emitChat("ELO data provided by: " + this.#appSettings.eloType);
-      } else {
-        console.log("Combo already running?");
       }
     } else {
-      console.log("autoBalance done");
       this.emitInfo("Starting without elo");
       this.emitUpdate({ lobbyReady: true });
     }
@@ -725,6 +717,15 @@ export class WarLobby extends EventEmitter {
     }
   }
 
+  setPlayerHandicap(player: string, handicap: number) {
+    let targetSlot = Object.values(this.slots).find((slot) => slot.name === player);
+    if (targetSlot) {
+      this.setHandicapSlot(targetSlot.slot, handicap);
+    } else {
+      this.emitChat("Player not found");
+    }
+  }
+
   banSlot(slotNumber: number) {
     return this.#slotInteraction("BanPlayerFromGameLobby", slotNumber);
   }
@@ -741,6 +742,14 @@ export class WarLobby extends EventEmitter {
     return this.#slotInteraction("OpenSlot", slotNumber);
   }
 
+  setHandicapSlot(slotNumber: number, handicap: number) {
+    //50|60|70|80|90|100
+    this.emitMessage("SetHandicap", {
+      slot: slotNumber,
+      handicap,
+    });
+  }
+
   #slotInteraction(action: string, slotNumber: number) {
     if (this.lobbyStatic?.isHost) {
       let targetSlot = Object.values(this.slots).find(
@@ -752,6 +761,22 @@ export class WarLobby extends EventEmitter {
         });
         return targetSlot;
       }
+    }
+  }
+
+  refreshGame() {
+    if (this.lobbyStatic?.isHost) {
+      this.#refreshing = true;
+      let targetSlots = Object.values(this.slots)
+        .filter((slot) => slot.slotStatus === 0)
+        .map((slot) => slot.slot);
+      for (const slot of targetSlots) {
+        this.closeSlot(slot);
+      }
+      for (const slot of targetSlots) {
+        this.openSlot(slot);
+      }
+      setTimeout(() => (this.#refreshing = false), 150);
     }
   }
 

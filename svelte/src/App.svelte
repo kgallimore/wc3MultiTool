@@ -5,6 +5,7 @@
     WindowReceive,
     WindowSend,
   } from "../../tsrc/utility";
+  import { getTargetRegion } from "../../tsrc/utility";
   import { MicroLobby } from "../../tsrc/microLobby";
   import CloseSlot from "./components/CloseSlot.svelte";
   import SettingsCheckbox from "./components/SettingsCheckbox.svelte";
@@ -36,6 +37,9 @@
       flagRandomHero: false,
       settingVisibility: "0",
       leaveAlternate: false,
+      regionChange: false,
+      regionChangeTimeEU: "11:00",
+      regionChangeTimeNA: "01:00",
     },
     obs: {
       type: "off",
@@ -81,6 +85,21 @@
   let battleTag = "";
   let banReason = "";
   let lastAction = "";
+  $: region = getTargetRegion(
+    settings.autoHost.regionChangeTimeEU,
+    settings.autoHost.regionChangeTimeNA
+  );
+  let utcTime =
+    ("0" + new Date().getUTCHours().toString()).slice(-2) +
+    ":" +
+    ("0" + new Date().getUTCMinutes().toString()).slice(-2);
+  setInterval(() => {
+    utcTime =
+      ("0" + new Date().getUTCHours().toString()).slice(-2) +
+      ":" +
+      ("0" + new Date().getUTCMinutes().toString()).slice(-2);
+  }, 60000);
+
   let structuredTeamData = currentStatus.lobby
     ? Object.entries(currentStatus.lobby.exportTeamStructure(false))
     : [];
@@ -494,7 +513,8 @@
                       >
                       Starts a lobby with specified settings.<br />
                       <strong>Rapid Host:</strong> Hosts lobbies, auto starts, leaves the
-                      game after specified timer(minutes).<br />
+                      game after specified timer(minutes). (-1 will force quit at loading
+                      screen)<br />
                       <strong>Smart Host:</strong> Hosts lobbies, auto starts, quits the
                       game if this end screen pops up:
                       <img class="img-fluid" src="quitNormal.png" alt="Quit Normal" />
@@ -690,6 +710,19 @@
                               e.target.checked
                             )}
                         />
+                        <SettingsCheckbox
+                          key="regionChange"
+                          setting="autoHost"
+                          frontFacingName="Auto Change Regions"
+                          checked={settings.autoHost.regionChange}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "autoHost",
+                              "regionChange",
+                              // @ts-ignore
+                              e.target.checked
+                            )}
+                        />
                       </div>
                     </div>
 
@@ -861,7 +894,6 @@
                       </div>
                     </div>
                   </div>
-
                   <div class="row p-2">
                     {#if settings.autoHost.voteStart && ["rapidHost", "smartHost"].includes(settings.autoHost.type)}
                       <div class="col">
@@ -898,7 +930,7 @@
                           class="form-control"
                           data-key="rapidHostTimer"
                           data-setting="autoHost"
-                          min="0"
+                          min="-1"
                           max="360"
                           value={settings.autoHost.rapidHostTimer}
                           on:change={(e) =>
@@ -906,7 +938,7 @@
                               "autoHost",
                               "rapidHostTimer",
                               // @ts-ignore
-                              e.target.value
+                              parseInt(e.target.value)
                             )}
                         />
                       </div>
@@ -970,6 +1002,56 @@
                             updateSettingSingle(
                               "autoHost",
                               "announceRestingInterval",
+                              // @ts-ignore
+                              e.target.value
+                            )}
+                        />
+                      </div>
+                    </div>
+                  {/if}
+                  {#if settings.autoHost.regionChange}
+                    <div class="row p-2">
+                      <div class="col flex text-center">
+                        Current UTC time is: {utcTime}
+                        Target: {region}
+                      </div>
+                    </div>
+                    <div class="row p-2">
+                      <div class="col">
+                        <label for="regionChangeTimeNA" class="form-label"
+                          >UTC time to swap to NA</label
+                        >
+                        <input
+                          type="time"
+                          id="regionChangeTimeNA"
+                          class="form-control"
+                          data-key="regionChangeTimeNA"
+                          data-setting="autoHost"
+                          value={settings.autoHost.regionChangeTimeNA}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "autoHost",
+                              "regionChangeTimeNA",
+                              // @ts-ignore
+                              e.target.value
+                            )}
+                        />
+                      </div>
+                      <div class="col">
+                        <label for="regionChangeTimeEU" class="form-label"
+                          >UTC time to swap to EU</label
+                        >
+                        <input
+                          type="time"
+                          id="regionChangeTimeEU"
+                          class="form-control"
+                          data-key="regionChangeTimeEU"
+                          data-setting="autoHost"
+                          value={settings.autoHost.regionChangeTimeEU}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "autoHost",
+                              "regionChangeTimeEU",
                               // @ts-ignore
                               e.target.value
                             )}

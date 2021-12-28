@@ -37,6 +37,9 @@ export interface AutoHostSettings {
   flagRandomHero: boolean;
   settingVisibility: "0" | "1" | "2" | "3";
   leaveAlternate: boolean;
+  regionChange: boolean;
+  regionChangeTimeEU: string;
+  regionChangeTimeNA: string;
 }
 export interface ObsSettings {
   type: string;
@@ -405,4 +408,29 @@ export function InvalidData(
     }
   }
   return false;
+}
+
+export function getTargetRegion(
+  regionChangeTimeEU: string,
+  regionChangeTimeNA: string
+): "us" | "eu" {
+  let currentTime = new Date().getUTCHours() * 100 + new Date().getUTCMinutes();
+  let targetTimes = {
+    eu: parseInt(regionChangeTimeEU.replace(":", "")),
+    us: parseInt(regionChangeTimeNA.replace(":", "")),
+  };
+  if (targetTimes.us > targetTimes.eu) {
+    console.log("US later", currentTime, targetTimes);
+    if (currentTime > targetTimes.eu && currentTime < targetTimes.us) {
+      return "eu";
+    } else {
+      return "us";
+    }
+  } else {
+    if (currentTime > targetTimes.us && currentTime < targetTimes.eu) {
+      return "us";
+    } else {
+      return "eu";
+    }
+  }
 }
