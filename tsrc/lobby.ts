@@ -104,7 +104,7 @@ export class WarLobby extends EventEmitter {
         return { name: "Broken%20Alliances", elo: true };
       } else {
         let name = encodeURI(
-          mapName.trim().replace(/\s*v?\.?(\d+\.)?(\*|\d+)\w*\s*$/gi, "")
+          encodeURI(mapName.trim().replace(/\s*v?\.?(\d+\.)?(\*|\d+)\w*\s*$/gi, ""))
         );
         let test = await (await fetch(`https://api.wc3stats.com/maps/${name}`)).json();
         return { name, elo: test.status === "ok" };
