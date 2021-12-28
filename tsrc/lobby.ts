@@ -98,8 +98,10 @@ export class WarLobby extends EventEmitter {
         return { name: "Pyro%20TD", elo: true };
       } else if (mapName.match(/(vampirism\s*fire)/i)) {
         return { name: "Vampirism%20Fire", elo: true };
-      } else if (mapName.match(/(footmen.?vs.?grunts)/i)) {
+      } else if (mapName.match(/(footmen.*vs.*grunts)/i)) {
         return { name: "Footmen%20Vs%20Grunts", elo: true };
+      } else if (mapName.match(/Broken.*Alliances/i)) {
+        return { name: "Broken%20Alliances", elo: true };
       } else {
         let name = encodeURI(
           mapName.trim().replace(/\s*v?\.?(\d+\.)?(\*|\d+)\w*\s*$/gi, "")
@@ -687,26 +689,22 @@ export class WarLobby extends EventEmitter {
     return true;
   }
 
-  closeSlot(slotNumber: number) {
-    if (this.lobbyStatic?.isHost) {
-      if (
-        Object.values(this.slots).find(
-          (slot) => slot.slot === slotNumber && !slot.isSelf && slot.slotTypeChangeEnabled
-        )
-      ) {
-        this.emitMessage("CloseSlot", {
-          slot: slotNumber,
-        });
-      }
+  banPlayer(player: string) {
+    let targetSlot = Object.values(this.slots).find((slot) => slot.name === player);
+    if (targetSlot) {
+      this.banSlot(targetSlot.slot);
+    } else {
+      this.emitChat("Player not found");
     }
   }
 
-  kickSlot(slot: number) {
-    this.emitMessage("KickPlayerFromGameLobby", { slot });
-  }
-
-  banSlot(slot: number) {
-    this.emitMessage("BanPlayerFromGameLobby", { slot });
+  closePlayer(player: string) {
+    let targetSlot = Object.values(this.slots).find((slot) => slot.name === player);
+    if (targetSlot) {
+      this.closeSlot(targetSlot.slot);
+    } else {
+      this.emitChat("Player not found");
+    }
   }
 
   kickPlayer(player: string) {
@@ -718,12 +716,42 @@ export class WarLobby extends EventEmitter {
     }
   }
 
-  banPlayer(player: string) {
+  openPlayer(player: string) {
     let targetSlot = Object.values(this.slots).find((slot) => slot.name === player);
     if (targetSlot) {
-      this.banSlot(targetSlot.slot);
+      this.closeSlot(targetSlot.slot);
     } else {
       this.emitChat("Player not found");
+    }
+  }
+
+  banSlot(slotNumber: number) {
+    return this.#slotInteraction("BanPlayerFromGameLobby", slotNumber);
+  }
+
+  closeSlot(slotNumber: number) {
+    return this.#slotInteraction("CloseSlot", slotNumber);
+  }
+
+  kickSlot(slotNumber: number) {
+    return this.#slotInteraction("KickPlayerFromGameLobby", slotNumber);
+  }
+
+  openSlot(slotNumber: number) {
+    return this.#slotInteraction("OpenSlot", slotNumber);
+  }
+
+  #slotInteraction(action: string, slotNumber: number) {
+    if (this.lobbyStatic?.isHost) {
+      let targetSlot = Object.values(this.slots).find(
+        (slot) => slot.slot === slotNumber && !slot.isSelf && slot.slotTypeChangeEnabled
+      );
+      if (targetSlot) {
+        this.emitMessage(action, {
+          slot: slotNumber,
+        });
+        return targetSlot;
+      }
     }
   }
 

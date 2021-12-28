@@ -579,7 +579,7 @@ app.on("ready", function () {
   wss.on("error", function (err) {
     if (err.message.includes("EADDRINUSE")) {
       throw new Error(
-        "The app is already open. Check your taskbar or task manager for another instance."
+        "The app may already be open. Check your taskbar or task manager for another instance, or clear port 8888"
       );
     } else {
       log.error(err.message);
@@ -1188,9 +1188,10 @@ function handleChatMessage(payload: GameClientMessage) {
           ["rapidHost", "smartHost"].includes(settings.autoHost.type)
         ) {
           if (lobby.voteStartVotes.length === 0) {
-            if (!lobby.allPlayerTeamsContainPlayers()) {
+            if (lobby.allPlayerTeamsContainPlayers()) {
               voteTimer = setTimeout(cancelVote, 60000);
               sendChatMessage("You have 60 seconds to ?votestart.");
+              return;
             } else {
               sendChatMessage("Unavailable. Not all teams have players.");
             }
@@ -1255,17 +1256,70 @@ function handleChatMessage(payload: GameClientMessage) {
         } else {
           sendChatMessage("Data not available");
         }
+      } else if (payload.message.content.match(/^\?shuffle/i)) {
+        // TODO: Shuffle
+        if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          let players = lobby.exportTeamStructure();
+        }
+      } else if (payload.message.content.match(/^\?start/i)) {
+        if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          startGame();
+        }
+      } else if (payload.message.content.match(/^\?close/i)) {
+        if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          var target = payload.message.content.split(" ")[1];
+          if (target) {
+            if (parseInt(target) && parseInt(target) < 25 && parseInt(target) > 0) {
+              lobby.closeSlot(parseInt(target) - 1);
+            } else {
+              let targets = lobby.searchPlayer(target);
+              if (targets.length === 1) {
+                lobby.closePlayer(targets[0]);
+              } else if (targets.length > 1) {
+                sendChatMessage("Multiple matches found. Please be more specific.");
+              } else {
+                sendChatMessage("No matches found.");
+              }
+            }
+          } else {
+            sendChatMessage("Kick target required");
+          }
+        }
+      } else if (payload.message.content.match(/^\?open/i)) {
+        if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          var target = payload.message.content.split(" ")[1];
+          if (target) {
+            if (parseInt(target) && parseInt(target) < 25 && parseInt(target) > 0) {
+              lobby.openSlot(parseInt(target) - 1);
+            } else {
+              let targets = lobby.searchPlayer(target);
+              if (targets.length === 1) {
+                lobby.kickPlayer(targets[0]);
+              } else if (targets.length > 1) {
+                sendChatMessage("Multiple matches found. Please be more specific.");
+              } else {
+                sendChatMessage("No matches found.");
+              }
+            }
+          } else {
+            sendChatMessage("Kick target required");
+          }
+        }
       } else if (payload.message.content.match(/^\?kick/i)) {
         if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
-          var kickTarget = payload.message.content.split(" ")[1];
-          if (kickTarget) {
-            let targets = lobby.searchPlayer(kickTarget);
-            if (targets.length === 1) {
-              lobby.kickPlayer(targets[0]);
-            } else if (targets.length > 1) {
-              sendChatMessage("Multiple matches found. Please be more specific.");
+          var target = payload.message.content.split(" ")[1];
+          if (target) {
+            if (parseInt(target) && parseInt(target) < 25 && parseInt(target) > 0) {
+              lobby.kickSlot(parseInt(target) - 1);
             } else {
-              sendChatMessage("No matches found.");
+              let targets = lobby.searchPlayer(target);
+              if (targets.length === 1) {
+                lobby.kickPlayer(targets[0]);
+              } else if (targets.length > 1) {
+                sendChatMessage("Multiple matches found. Please be more specific.");
+              } else {
+                sendChatMessage("No matches found.");
+              }
             }
           } else {
             sendChatMessage("Kick target required");
@@ -1276,17 +1330,26 @@ function handleChatMessage(payload: GameClientMessage) {
           var banTarget = payload.message.content.split(" ")[1];
           if (banTarget) {
             var banReason = payload.message.content.split(" ").slice(2).join(" ") || "";
-            if (banTarget.match(/^\D\S{2,11}#\d{4,8}$/)) {
-              sendChatMessage("Banning out of lobby player.");
-              banPlayer(banTarget, sender, lobby.region, banReason);
+            if (
+              parseInt(banTarget) &&
+              parseInt(banTarget) < 25 &&
+              parseInt(banTarget) > 0
+            ) {
+              lobby.banSlot(parseInt(banTarget) - 1);
+              banPlayer(lobby.slots[banTarget].name, sender, lobby.region, banReason);
             } else {
-              let targets = lobby.searchPlayer(banTarget);
-              if (targets.length === 1) {
-                banPlayer(targets[0], sender, lobby.region, banReason);
-              } else if (targets.length > 1) {
-                sendChatMessage("Multiple matches found. Please be more specific.");
+              if (banTarget.match(/^\D\S{2,11}#\d{4,8}$/)) {
+                sendChatMessage("Banning out of lobby player.");
+                banPlayer(banTarget, sender, lobby.region, banReason);
               } else {
-                sendChatMessage("No matches found.");
+                let targets = lobby.searchPlayer(banTarget);
+                if (targets.length === 1) {
+                  banPlayer(targets[0], sender, lobby.region, banReason);
+                } else if (targets.length > 1) {
+                  sendChatMessage("Multiple matches found. Please be more specific.");
+                } else {
+                  sendChatMessage("No matches found.");
+                }
               }
             }
           } else {
@@ -1361,8 +1424,12 @@ function handleChatMessage(payload: GameClientMessage) {
             sendChatMessage("?voteStart: Starts or accepts a vote to start");
           }
           if (checkRole(sender, "moderator")) {
-            sendChatMessage("?ban <name> <?reason>: Bans a player forever");
-            sendChatMessage("?unban <name>: un-bans a player");
+            sendChatMessage("?ban <name|slotNumber> <?reason>: Bans a player forever");
+            sendChatMessage("?open <name|slotNumber> <?reason>: Opens a slot/player");
+            sendChatMessage("?close <name|slotNumber> <?reason>: Closes a slot/player");
+            sendChatMessage("?kick <name|slotNumber> <?reason>: Kicks a slot/player");
+            sendChatMessage("?unban <name>: Un-bans a player");
+            sendChatMessage("?start: Starts game");
           }
           if (checkRole(sender, "admin")) {
             sendChatMessage(
@@ -1758,9 +1825,8 @@ async function openWarcraft2() {
   }
 }
 
-async function openWarcraft() {
+async function openWarcraft(region: "us" | "eu" | "" = "") {
   shell.openPath(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe");
-  let targetRegion = 3;
   let battleNetWindow;
   let windows = await getWindows();
   for (let window of windows) {
@@ -1825,7 +1891,8 @@ async function openWarcraft() {
   searchRegion.width = searchRegion.width * 0.5;
   searchRegion.height = searchRegion.height * 0.5;
   searchRegion.top = searchRegion.top + searchRegion.height;
-  if (true) {
+  let targetRegion = { asia: 1, eu: 2, us: 3, "": 0 }[region];
+  if (targetRegion > 0 && gameState.selfRegion !== region) {
     screen
       .find(imageResource("changeRegion.png"), { searchRegion, confidence: 0.98 })
       .then((result) => {
@@ -1856,7 +1923,7 @@ async function openWarcraft() {
       });
   } else {
     screen
-      .waitFor(imageResource("play.png"), 25000, 500, {
+      .find(imageResource("play.png"), {
         confidence: 0.98,
       })
       .then((result) => {
