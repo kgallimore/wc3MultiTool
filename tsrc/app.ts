@@ -1934,16 +1934,6 @@ async function isWarcraftOpen() {
   return false;
 }
 
-async function openWarcraft2() {
-  warcraftIsOpen = await isWarcraftOpen();
-  if (!warcraftIsOpen) {
-    shell.openPath(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe");
-    let playPosition = await centerOf(screen.waitFor(imageResource("play.png"), 15000));
-    await mouse.setPosition(playPosition);
-    await mouse.leftClick();
-  }
-}
-
 async function openWarcraft(region: Regions | "" = "") {
   shell.openPath(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe");
   let battleNetWindow;
@@ -2017,7 +2007,7 @@ async function openWarcraft(region: Regions | "" = "") {
   let targetRegion = { asia: 1, eu: 2, us: 3, "": 0 }[region];
   if (targetRegion > 0 && gameState.selfRegion !== region) {
     screen
-      .find(imageResource("changeRegion.png"), { searchRegion, confidence: 0.98 })
+      .find(imageResource("changeRegion.png"), { searchRegion, confidence: 0.94 })
       .then((result) => {
         centerOf(result).then((regionPosition) => {
           mouse.setPosition(regionPosition).then(() =>
@@ -2029,7 +2019,7 @@ async function openWarcraft(region: Regions | "" = "") {
               mouse.setPosition(newRegionPosition).then(() => {
                 mouse.leftClick().then(() => {
                   screen
-                    .find(imageResource("play.png"), { searchRegion, confidence: 0.98 })
+                    .find(imageResource("play.png"), { searchRegion, confidence: 0.94 })
                     .then((result) => {
                       centerOf(result).then((position) => {
                         mouse.setPosition(position).then(() => mouse.leftClick());
@@ -2046,7 +2036,7 @@ async function openWarcraft(region: Regions | "" = "") {
       });
   } else {
     screen
-      .find(imageResource("play.png"), { searchRegion, confidence: 0.98 })
+      .find(imageResource("play.png"), { searchRegion, confidence: 0.94 })
       .then((result) => {
         centerOf(result).then((position) => {
           mouse.setPosition(position).then(() => mouse.leftClick());
