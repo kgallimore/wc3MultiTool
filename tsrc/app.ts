@@ -835,19 +835,14 @@ if (!gotLock) {
         let modifiers: Array<Key> = [];
         if (settings.obs.inGameHotkey) {
           if (settings.obs.inGameHotkey.altKey) {
-            //modifiers.push("alt");
             modifiers.push(Key.LeftAlt);
           }
           if (settings.obs.inGameHotkey.ctrlKey) {
-            //modifiers.push("control");
             modifiers.push(Key.LeftControl);
           }
           if (settings.obs.inGameHotkey.shiftKey) {
-            //modifiers.push("shift");
             modifiers.push(Key.LeftShift);
           }
-          //robot.keyTap(settings.obs.inGameHotkey.key, modifiers);
-          //console.log(Key[settings.obs.inGameHotkey.key.toUpperCase()]);
           try {
             await keyboard.type(
               ...modifiers,
@@ -860,29 +855,23 @@ if (!gotLock) {
           }
         }
       } else if (!inGame && settings.obs.outOfGameHotkey) {
-        // Test!
+        log.info("Triggering OBS Out of Game");
         let modifiers: Array<Key> = [];
         if (settings.obs.outOfGameHotkey.altKey) {
-          //modifiers.push("alt");
           modifiers.push(Key.LeftAlt);
         }
         if (settings.obs.outOfGameHotkey.ctrlKey) {
-          //modifiers.push("control");
           modifiers.push(Key.LeftControl);
         }
         if (settings.obs.outOfGameHotkey.shiftKey) {
-          //modifiers.push("shift");
           modifiers.push(Key.LeftShift);
         }
-        //robot.keyTap(settings.obs.outOfGameHotkey.key, modifiers);
-        //console.log(...modifiers, Key[settings.obs.outOfGameHotkey.key.toUpperCase()]);
         try {
           await keyboard.type(
             ...modifiers,
             // @ts-ignore
             Key[settings.obs.outOfGameHotkey.key.toUpperCase()]
           );
-          console.log("Pressed out!");
         } catch (e) {
           console.log(e);
         }
