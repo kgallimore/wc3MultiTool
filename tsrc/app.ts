@@ -953,7 +953,8 @@ if (!gotLock) {
           settings.autoHost.regionChangeTimeNA
         );
       }
-      if (gameState.selfRegion && gameState.selfRegion !== targetRegion) {
+      if (gameState.selfRegion && targetRegion && gameState.selfRegion !== targetRegion) {
+        log.info(`Changing autohost region to ${targetRegion}`);
         await exitGame();
         openWarcraft(targetRegion);
       } else {
@@ -1242,19 +1243,23 @@ if (!gotLock) {
     lobby?.clear();
   }
 
-  function openParamsJoin() {
+  async function openParamsJoin() {
     if (
       openLobbyParams?.lobbyName ||
       (openLobbyParams?.gameId && openLobbyParams.mapFile)
     ) {
-      if (inGame || lobby.lookupName) {
-        leaveGame();
+      updateSetting("autoHost", "type", "off");
+      if (
+        (openLobbyParams.region && openLobbyParams.region !== gameState.selfRegion) ||
+        gameState.menuState === "LOADING_SCREEN"
+      ) {
+        log.info(`Changing region to match lobby of region ${openLobbyParams.region}`);
+        await exitGame();
+        openWarcraft(openLobbyParams.region);
         return;
       }
-      updateSetting("autoHost", "type", "off");
-
-      if (openLobbyParams.region && openLobbyParams.region !== gameState.selfRegion) {
-        // TODO close warcraft then re-open with new region
+      if (inGame || lobby.lookupName) {
+        leaveGame();
         return;
       }
       if (openLobbyParams.lobbyName) {
@@ -1723,14 +1728,15 @@ if (!gotLock) {
   }
 
   async function exitGame(): Promise<boolean> {
-    log.info("Exit Game");
     if (await isWarcraftOpen()) {
       if (gameState.menuState === "LOADING_SCREEN") {
+        log.info("Warcraft is loading game, forcing quit");
         return await forceQuit();
       } else {
+        log.info("Exit Game");
         sendMessage("ExitGame", {});
-        await sleep(100);
-        return await exitGame();
+        await sleep(200);
+        return exitGame();
       }
     } else {
       return true;
