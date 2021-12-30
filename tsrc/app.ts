@@ -11,6 +11,7 @@ import {
   up,
   Key,
   keyboard,
+  Region,
 } from "@nut-tree/nut-js";
 require("@nut-tree/template-matcher");
 import {
@@ -256,37 +257,34 @@ if (!gotLock) {
     lobby?.clear();
   });
 
-  function protocolHandler(url: string) {
+  async function protocolHandler(url: string) {
     if (url) {
       openLobbyParams = getQueryVariables(url.split("?", 2)[1]);
       if (openLobbyParams.lobbyName || openLobbyParams.gameId) {
         log.info(openLobbyParams);
-        isWarcraftOpen().then((isOpen) => {
-          warcraftIsOpen = isOpen;
-          if (!isOpen) {
-            log.info(
-              "Warcraft is not open, opening. " + openLobbyParams?.region
-                ? openLobbyParams?.region
-                : ""
-            );
-            try {
-              openWarcraft(openLobbyParams?.region);
-            } catch (e) {
-              log.error(e);
-            }
+        if (await isWarcraftOpen()) {
+          if (
+            openLobbyParams?.region &&
+            openLobbyParams?.region !== gameState.selfRegion
+          ) {
+            log.info(`Changing region to ${openLobbyParams.region}`);
+            await exitGame();
+            openWarcraft(openLobbyParams?.region);
           } else {
-            if (
-              openLobbyParams?.region &&
-              openLobbyParams?.region !== gameState.selfRegion
-            ) {
-              exitGame();
-              setTimeout(() => {
-                openWarcraft(openLobbyParams?.region);
-              }, 3000);
-            }
             openParamsJoin();
           }
-        });
+        } else {
+          log.info(
+            "Warcraft is not open, opening. " + openLobbyParams?.region
+              ? openLobbyParams?.region
+              : ""
+          );
+          try {
+            openWarcraft(openLobbyParams?.region);
+          } catch (e) {
+            log.error(e);
+          }
+        }
       }
     }
   }
@@ -673,7 +671,7 @@ if (!gotLock) {
   }
 
   function hubHeartbeat() {
-    if (hubWebSocket) {
+    if (hubWebSocket?.OPEN) {
       sendToHub("heartbeat");
       setTimeout(hubHeartbeat, 30000);
     }
@@ -790,7 +788,7 @@ if (!gotLock) {
           ) {
             sendProgress("Starting Game", 100);
             // Wait a quarter second to make sure no one left
-            setTimeout(async () => {
+            setTimeout(() => {
               if (lobby.isLobbyReady()) {
                 startGame();
               }
@@ -923,8 +921,8 @@ if (!gotLock) {
                 leaveGame();
               } else if (settings.autoHost.rapidHostTimer === -1) {
                 log.info("Rapid Host exit game immediately");
-                forceQuit();
-                setTimeout(openWarcraft, 1000);
+                await forceQuit();
+                openWarcraft();
               }
             }
           }
@@ -956,7 +954,7 @@ if (!gotLock) {
     }
   }
 
-  function autoHostGame() {
+  async function autoHostGame() {
     if (settings.autoHost.type !== "off") {
       let targetRegion = gameState.selfRegion;
       if (settings.autoHost.regionChange) {
@@ -966,10 +964,8 @@ if (!gotLock) {
         );
       }
       if (gameState.selfRegion && gameState.selfRegion !== targetRegion) {
-        exitGame();
-        setTimeout(() => {
-          openWarcraft(targetRegion);
-        }, 500);
+        await exitGame();
+        openWarcraft(targetRegion);
       } else {
         createGame();
       }
@@ -1022,9 +1018,9 @@ if (!gotLock) {
     if (["CUSTOM_LOBBIES", "MAIN_MENU"].includes(screen)) {
       gameState.menuState = screen;
       if (openLobbyParams?.lobbyName) {
-        openParamsJoin();
+        setTimeout(openParamsJoin, 250);
       } else {
-        setTimeout(autoHostGame, 500);
+        setTimeout(autoHostGame, 250);
       }
     } else if (screen === "LOADING_SCREEN") {
       discClient?.sendMessage(
@@ -1736,35 +1732,34 @@ if (!gotLock) {
     sendMessage("LeaveGame", {});
   }
 
-  async function exitGame() {
+  async function exitGame(): Promise<boolean> {
     log.info("Exit Game");
-    if (gameState.menuState === "LOADING_SCREEN") {
-      forceQuit();
+    if (await isWarcraftOpen()) {
+      if (gameState.menuState === "LOADING_SCREEN") {
+        return await forceQuit();
+      } else {
+        sendMessage("ExitGame", {});
+        await sleep(100);
+        return await exitGame();
+      }
     } else {
-      sendMessage("ExitGame", {});
+      return true;
     }
   }
 
   async function forceQuit(): Promise<boolean> {
-    log.info("Force Quit");
-    let { stdout2, stderr2 } = await exec(
-      'tasklist /FI "IMAGENAME eq Warcraft III.exe" /FO CSV'
-    );
-    if (stderr2) {
-      log.error(stderr2);
-      return false;
-    }
-    if (stdout2.split("\n").length > 1) {
-      log.error("Warcraft III.exe is still running");
+    if (await isWarcraftOpen()) {
+      log.info("Warcraft III.exe is still running, forcing quit");
       let { stdout, stderr } = await exec('taskkill /F /IM "Warcraft III.exe"');
       if (stderr) {
         log.error(stderr);
         return false;
       }
-      await new Promise((r) => setTimeout(r, 100));
-      return forceQuit();
+      await sleep(100);
+      return await forceQuit();
+    } else {
+      return true;
     }
-    return true;
   }
 
   function announcement() {
@@ -1999,117 +1994,126 @@ if (!gotLock) {
     return false;
   }
 
-  async function openWarcraft(region: Regions | "" = "") {
-    shell.openPath(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe");
-    let battleNetWindow;
-    let windows = await getWindows();
-    for (let window of windows) {
-      let title = await window.title;
-      if (title === "Battle.net") battleNetWindow = window;
-    }
-    if (!battleNetWindow) {
-      setTimeout(openWarcraft, 1000);
-      return;
-    }
-    let activeWindow = await getActiveWindow();
-    let activeWindowTitle = await activeWindow.title;
-    if (activeWindowTitle !== "Battle.net") {
-      setTimeout(openWarcraft, 1000);
-      return;
-    }
-    let searchRegion = await activeWindow.region;
-    let screenSize = { width: await screen.width(), height: await screen.height() };
-    if (searchRegion.left < 0) {
-      //Battle.net window left of screen
-      let targetPosition = new Point(
-        searchRegion.left + searchRegion.width - searchRegion.width * 0.12,
-        searchRegion.top + 10
-      );
-      await mouse.setPosition(targetPosition);
-      await mouse.pressButton(0);
-      await mouse.move(right(searchRegion.left * -1 + 10));
-      await mouse.releaseButton(0);
-      searchRegion = await activeWindow.region;
-    }
-    if (searchRegion.left + searchRegion.width > screenSize.width) {
-      //Battle.net window right of screen
-      let targetPosition = new Point(searchRegion.left + 10, searchRegion.top + 10);
-      await mouse.setPosition(targetPosition);
-      await mouse.pressButton(0);
-      await mouse.move(
-        left(searchRegion.left - (screenSize.width - searchRegion.width) + 10)
-      );
-      await mouse.releaseButton(0);
-      searchRegion = await activeWindow.region;
-    }
-    if (searchRegion.top + searchRegion.height > screenSize.height) {
-      //Battle.net window bottom of screen
-      let targetPosition = new Point(
-        searchRegion.left + searchRegion.width / 2,
-        searchRegion.top + 10
-      );
-      await mouse.setPosition(targetPosition);
-      await mouse.pressButton(0);
-      await mouse.move(
-        up(searchRegion.top - (screenSize.height - searchRegion.height) + 10)
-      );
-      await mouse.releaseButton(0);
-      searchRegion = await activeWindow.region;
-    }
-    if (searchRegion.top < 0) {
-      // Battle.net window top of screen
-      return;
-    }
-    searchRegion.width = searchRegion.width * 0.5;
-    searchRegion.height = searchRegion.height * 0.5;
-    searchRegion.top = searchRegion.top + searchRegion.height;
-    if (!region && settings.autoHost.regionChange) {
-      region = getTargetRegion(
-        settings.autoHost.regionChangeTimeEU,
-        settings.autoHost.regionChangeTimeNA
-      );
-    }
-    let targetRegion = { asia: 1, eu: 2, us: 3, "": 0 }[region];
-    if (targetRegion > 0 && gameState.selfRegion !== region) {
-      screen
-        .find(imageResource("changeRegion.png"), { searchRegion, confidence: 0.85 })
-        .then((result) => {
-          centerOf(result).then((regionPosition) => {
-            mouse.setPosition(regionPosition).then(() =>
-              mouse.leftClick().then(() => {
-                let newRegionPosition = new Point(
-                  regionPosition.x,
-                  regionPosition.y - result.height * targetRegion - result.height / 2
-                );
-                mouse.setPosition(newRegionPosition).then(() => {
-                  mouse.leftClick().then(() => {
-                    screen
-                      .find(imageResource("play.png"), { searchRegion, confidence: 0.85 })
-                      .then((result) => {
-                        centerOf(result).then((position) => {
-                          mouse.setPosition(position).then(() => mouse.leftClick());
-                        });
-                      });
-                  });
-                });
-              })
-            );
-          });
-        })
-        .catch((e) => {
-          log.error(e);
+  async function openWarcraft(region: Regions | "" = ""): Promise<boolean> {
+    try {
+      if (await isWarcraftOpen()) {
+        return true;
+      }
+      shell.openPath(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe");
+      let battleNetWindow;
+      let windows = await getWindows();
+      for (let window of windows) {
+        let title = await window.title;
+        if (title === "Battle.net") battleNetWindow = window;
+      }
+      if (!battleNetWindow) {
+        await sleep(1000);
+        return await openWarcraft(region);
+      }
+      let activeWindow = await getActiveWindow();
+      let activeWindowTitle = await activeWindow.title;
+      if (activeWindowTitle !== "Battle.net") {
+        await sleep(1000);
+        return await openWarcraft(region);
+      }
+      let searchRegion = await activeWindow.region;
+      let screenSize = { width: await screen.width(), height: await screen.height() };
+      if (searchRegion.left < 0) {
+        //Battle.net window left of screen
+        let targetPosition = new Point(
+          searchRegion.left + searchRegion.width - searchRegion.width * 0.12,
+          searchRegion.top + 10
+        );
+        await mouse.setPosition(targetPosition);
+        await mouse.pressButton(0);
+        await mouse.move(right(searchRegion.left * -1 + 10));
+        await mouse.releaseButton(0);
+        searchRegion = await activeWindow.region;
+      }
+      if (searchRegion.left + searchRegion.width > screenSize.width) {
+        //Battle.net window right of screen
+        let targetPosition = new Point(searchRegion.left + 10, searchRegion.top + 10);
+        await mouse.setPosition(targetPosition);
+        await mouse.pressButton(0);
+        await mouse.move(
+          left(searchRegion.left - (screenSize.width - searchRegion.width) + 10)
+        );
+        await mouse.releaseButton(0);
+        searchRegion = await activeWindow.region;
+      }
+      if (searchRegion.top + searchRegion.height > screenSize.height) {
+        //Battle.net window bottom of screen
+        let targetPosition = new Point(
+          searchRegion.left + searchRegion.width / 2,
+          searchRegion.top + 10
+        );
+        await mouse.setPosition(targetPosition);
+        await mouse.pressButton(0);
+        await mouse.move(
+          up(searchRegion.top - (screenSize.height - searchRegion.height) + 10)
+        );
+        await mouse.releaseButton(0);
+        searchRegion = await activeWindow.region;
+      }
+      if (searchRegion.top < 0) {
+        // Battle.net window top of screen
+        return false;
+      }
+      searchRegion.width = searchRegion.width * 0.5;
+      searchRegion.height = searchRegion.height * 0.5;
+      searchRegion.top = searchRegion.top + searchRegion.height;
+      if (!region && settings.autoHost.regionChange) {
+        region = getTargetRegion(
+          settings.autoHost.regionChangeTimeEU,
+          settings.autoHost.regionChangeTimeNA
+        );
+      }
+      let targetRegion = { asia: 1, eu: 2, us: 3, "": 0 }[region];
+      if (targetRegion > 0 && gameState.selfRegion !== region) {
+        let changeRegionPosition = await screen.find(imageResource("changeRegion.png"), {
+          searchRegion,
+          confidence: 0.85,
         });
-    } else {
-      screen
-        .find(imageResource("play.png"), { searchRegion, confidence: 0.85 })
-        .then((result) => {
-          centerOf(result).then((position) => {
-            mouse.setPosition(position).then(() => mouse.leftClick());
-          });
-        })
-        .catch((e) => {
-          log.error(e);
-        });
+        let changeRegionPositionCenter = await centerOf(changeRegionPosition);
+        await mouse.setPosition(changeRegionPositionCenter);
+        await mouse.leftClick();
+        let newRegionPosition = new Point(
+          changeRegionPositionCenter.x,
+          changeRegionPositionCenter.y -
+            changeRegionPosition.height * targetRegion -
+            changeRegionPosition.height / 2
+        );
+        await mouse.setPosition(newRegionPosition);
+        await mouse.leftClick();
+      }
+      if (await findPlay(searchRegion)) {
+        for (let i = 0; i < 10; i++) {
+          if (await isWarcraftOpen()) {
+            return true;
+          }
+          await sleep(100);
+        }
+        return false;
+      } else {
+        return false;
+      }
+    } catch (e) {
+      log.error(e);
+      return false;
+    }
+  }
+
+  async function findPlay(searchRegion: Region) {
+    try {
+      let playRegionCenter = await centerOf(
+        screen.find(imageResource("play.png"), { searchRegion, confidence: 0.85 })
+      );
+      await mouse.setPosition(playRegionCenter);
+      await mouse.leftClick();
+      return true;
+    } catch (e) {
+      log.error(e);
+      return false;
     }
   }
 
@@ -2130,4 +2134,8 @@ if (!gotLock) {
       );
     }
   }
+}
+
+async function sleep(milliseconds: number) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
