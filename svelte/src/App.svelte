@@ -914,7 +914,7 @@
                               "autoHost",
                               "voteStartPercent",
                               // @ts-ignore
-                              e.target.value
+                              parseInt(e.target.value)
                             )}
                         />
                       </div>
@@ -1003,7 +1003,7 @@
                               "autoHost",
                               "announceRestingInterval",
                               // @ts-ignore
-                              e.target.value
+                              parseInt(e.target.value)
                             )}
                         />
                       </div>

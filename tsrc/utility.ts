@@ -359,6 +359,13 @@ export interface LobbyAppSettings {
   mapPath: string;
 }
 
+export interface OpenLobbyParams {
+  lobbyName?: string;
+  gameId?: string;
+  mapFile?: string;
+  region?: Regions;
+}
+
 export function InvalidData(
   name: string,
   data: any,
