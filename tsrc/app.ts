@@ -440,7 +440,8 @@ if (!gotLock) {
       });
       store.set(setting, settings[setting]);
       log.info(setting + " settings changed:", settings[setting]);
-    } else {
+      //@ts-ignore
+    } else if (settings[setting][key] !== value) {
       log.error("Invalid update:", setting, key, value);
     }
   }
@@ -2086,31 +2087,18 @@ if (!gotLock) {
         await mouse.setPosition(newRegionPosition);
         await mouse.leftClick();
       }
-      if (await findPlay(searchRegion)) {
-        for (let i = 0; i < 10; i++) {
-          if (await isWarcraftOpen()) {
-            return true;
-          }
-          await sleep(100);
-        }
-        return false;
-      } else {
-        return false;
-      }
-    } catch (e) {
-      log.error(e);
-      return false;
-    }
-  }
-
-  async function findPlay(searchRegion: Region) {
-    try {
       let playRegionCenter = await centerOf(
         screen.find(imageResource("play.png"), { searchRegion, confidence: 0.85 })
       );
       await mouse.setPosition(playRegionCenter);
       await mouse.leftClick();
-      return true;
+      for (let i = 0; i < 10; i++) {
+        if (await isWarcraftOpen()) {
+          return true;
+        }
+        await sleep(100);
+      }
+      return false;
     } catch (e) {
       log.error(e);
       return false;
