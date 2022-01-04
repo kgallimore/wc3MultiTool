@@ -11,9 +11,8 @@ import {
   up,
   Key,
   keyboard,
-  Region,
 } from "@nut-tree/nut-js";
-require("@nut-tree/template-matcher");
+require("@nut-tree/nl-matcher");
 import {
   app,
   BrowserWindow,
@@ -183,6 +182,7 @@ if (!gotLock) {
     client: {
       restartOnUpdate: store.get("client.restartOnUpdate") ?? false,
       checkForUpdates: store.get("client.checkForUpdates") ?? true,
+      performanceMode: store.get("client.performanceMode") ?? false,
     },
   };
   let lobby: WarLobby;
@@ -429,7 +429,9 @@ if (!gotLock) {
       if (lobby) {
         lobby.updateSetting(key as keyof LobbyAppSettings, value);
       }
-
+      if (key === "performanceMode") {
+        togglePerformanceMode(value);
+      }
       sendSocket(setting + "Settings", settings[setting]);
       sendWindow("updateSettingSingle", {
         update: {
@@ -461,7 +463,23 @@ if (!gotLock) {
       }
     }
   }
-
+  function togglePerformanceMode(enabled: boolean) {
+    if (enabled) {
+      if (fs.existsSync(warInstallLoc + "\\_retail_\\webui\\GlueManagerAltered.js")) {
+        fs.renameSync(
+          warInstallLoc + "\\_retail_\\webui\\GlueManagerAltered.js",
+          warInstallLoc + "\\_retail_\\webui\\GlueManagerAltered.js.bak"
+        );
+      }
+    } else {
+      if (fs.existsSync(warInstallLoc + "\\_retail_\\webui\\GlueManagerAltered.js.bak")) {
+        fs.renameSync(
+          warInstallLoc + "\\_retail_\\webui\\GlueManagerAltered.js.bak",
+          warInstallLoc + "\\_retail_\\webui\\GlueManagerAltered.js"
+        );
+      }
+    }
+  }
   autoUpdater.on("checking-for-update", () => {
     // Do nothing for now
     log.info("checking-for-update");
@@ -559,6 +577,7 @@ if (!gotLock) {
   };
 
   app.on("ready", function () {
+    togglePerformanceMode(settings.client.performanceMode);
     setInterval(() => {
       if (settings.client.checkForUpdates) {
         autoUpdater.checkForUpdatesAndNotify();
@@ -794,7 +813,8 @@ if (!gotLock) {
                 startGame();
               }
             }, 250);
-          } else if (settings.autoHost.type === "lobbyHost" && settings.autoHost.sounds) {
+          }
+          if (settings.autoHost.sounds) {
             playSound("ready.wav");
           }
         }
@@ -849,7 +869,6 @@ if (!gotLock) {
               // @ts-ignore
               Key[settings.obs.inGameHotkey.key.toUpperCase()]
             );
-            console.log("Pressed!");
           } catch (e) {
             console.log(e);
           }
@@ -964,7 +983,9 @@ if (!gotLock) {
   }
 
   function createGame() {
-    if (!["CUSTOM_GAME_LOBBY", "LOADING_SCREEN"].includes(gameState.menuState)) {
+    if (
+      !["CUSTOM_GAME_LOBBY", "LOADING_SCREEN", "GAME_LOBBY"].includes(gameState.menuState)
+    ) {
       gameNumber += 1;
       const lobbyName =
         settings.autoHost.gameName +
@@ -1100,6 +1121,11 @@ if (!gotLock) {
         if (openLobbyParams?.lobbyName) {
           openParamsJoin();
         }
+        if (settings.client.performanceMode) {
+          setTimeout(function () {
+            createGame();
+          }, 10000);
+        }
       });
       clientWebSocket.on(
         "message",
@@ -1129,7 +1155,7 @@ if (!gotLock) {
               break;
             case "SetGlueScreen":
               if (data.payload.screen) {
-                //handleGlueScreen(data.payload.screen);
+                handleGlueScreen(data.payload.screen);
               }
               break;
             case "GameLobbySetup":
@@ -1141,7 +1167,6 @@ if (!gotLock) {
                 handleGameList(data.payload);
               } else {
                 log.info("GameList received, trying to find self.");
-                console.log(data.payload);
               }
               break;
             case "OnChannelUpdate":
@@ -1190,7 +1215,7 @@ if (!gotLock) {
                 if (data.messageType === "GameList") {
                   //console.log(data.payload.games);
                 } else {
-                  console.log(data);
+                  //console.log(data);
                 }
               }
           }
@@ -1759,7 +1784,10 @@ if (!gotLock) {
   }
 
   function announcement() {
-    if (gameState.menuState === "CUSTOM_GAME_LOBBY" && lobby.lobbyStatic?.isHost) {
+    if (
+      gameState.menuState === "CUSTOM_GAME_LOBBY" ||
+      (gameState.menuState === "GAME_LOBBY" && lobby.lobbyStatic?.isHost)
+    ) {
       let currentTime = Date.now();
       if (
         currentTime >

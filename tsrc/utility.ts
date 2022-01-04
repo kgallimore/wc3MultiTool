@@ -9,6 +9,7 @@ export interface AppSettings {
 export interface ClientSettings {
   restartOnUpdate: boolean;
   checkForUpdates: boolean;
+  performanceMode: boolean;
 }
 export interface AutoHostSettings {
   type: "off" | "lobbyHost" | "rapidHost" | "smartHost";

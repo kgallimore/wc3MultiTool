@@ -66,6 +66,7 @@
     client: {
       restartOnUpdate: false,
       checkForUpdates: true,
+      performanceMode: false,
     },
   };
   let currentStatus: {
@@ -330,24 +331,52 @@
             <form id="clientForm" name="client" class="p-2">
               <div class="row border m-2">
                 <div class="col p-2">
-                  <SettingsCheckbox
-                    frontFacingName="Restart on update"
-                    setting="client"
-                    key="restartOnUpdate"
-                    checked={settings.client.restartOnUpdate}
-                    on:change={(e) =>
-                      // @ts-ignore
-                      updateSettingSingle("client", "restartOnUpdate", e.target.checked)}
-                  />
-                  <SettingsCheckbox
-                    frontFacingName="Check for updates"
-                    setting="client"
-                    key="checkForUpdates"
-                    checked={settings.client.checkForUpdates}
-                    on:change={(e) =>
-                      // @ts-ignore
-                      updateSettingSingle("client", "checkForUpdates", e.target.checked)}
-                  />
+                  <div
+                    class="btn-group btn-group-sm"
+                    style="flex-wrap: wrap;"
+                    role="group"
+                  >
+                    <SettingsCheckbox
+                      frontFacingName="Restart on update"
+                      setting="client"
+                      key="restartOnUpdate"
+                      checked={settings.client.restartOnUpdate}
+                      on:change={(e) =>
+                        updateSettingSingle(
+                          "client",
+                          "restartOnUpdate",
+                          // @ts-ignore
+                          e.target.checked
+                        )}
+                    />
+                    <SettingsCheckbox
+                      frontFacingName="Check for updates"
+                      setting="client"
+                      key="checkForUpdates"
+                      checked={settings.client.checkForUpdates}
+                      on:change={(e) =>
+                        updateSettingSingle(
+                          "client",
+                          "checkForUpdates",
+                          // @ts-ignore
+                          e.target.checked
+                        )}
+                    />
+                    <SettingsCheckbox
+                      frontFacingName="Performance Mode(Beta)"
+                      setting="client"
+                      key="performanceMode"
+                      checked={settings.client.performanceMode}
+                      on:change={(e) =>
+                        // @ts-ignore
+                        updateSettingSingle(
+                          "client",
+                          "performanceMode",
+                          // @ts-ignore
+                          e.target.checked
+                        )}
+                    />
+                  </div>
                 </div>
               </div>
             </form>

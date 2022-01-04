@@ -26,11 +26,11 @@
     "copyright": "Trenchguns",
     "extraFiles": [
       {
-        "from": "./webui.html",
+        "from": "./src/webui.html",
         "to": "."
       },
       {
-        "from": "./webui.js",
+        "from": "./src/webui.js",
         "to": "."
       },
       {
@@ -138,8 +138,8 @@
     "typescript": "^4.5.2"
   },
   "dependencies": {
+    "@nut-tree/nl-matcher": "^1.0.1",
     "@nut-tree/nut-js": "^2.0.0-next.20211229220351",
-    "@nut-tree/template-matcher": "^0.0.3-next.20211211120941",
     "@types/better-sqlite3": "^7.4.1",
     "better-sqlite3": "^7.4.4",
     "cross-fetch": "^3.1.4",
