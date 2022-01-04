@@ -535,7 +535,6 @@ if (!gotLock) {
         preload: path.join(__dirname, "preload.js"),
         nodeIntegration: false,
         contextIsolation: true,
-        enableRemoteModule: false,
       },
     });
     win.setMenuBarVisibility(false);
@@ -1052,6 +1051,31 @@ if (!gotLock) {
       ) {
         setTimeout(leaveGame, settings.autoHost.rapidHostTimer * 1000 * 60);
       }
+    } else if (gameState.menuState === "LOGIN_DOORS") {
+      if (settings.client.performanceMode) {
+        [
+          "GetLocalPlayerName",
+          "FriendsGetInvitations",
+          "FriendsGetFriends",
+          "MultiplayerSendRecentPlayers",
+          "ClanGetClanInfo",
+          "ClanGetMembers",
+          "StopOverworldMusic",
+          "StopAmbientSound",
+          "LoginDoorClose",
+          "StopAmbientSound",
+          "StopAmbientSound",
+          "OnWebUILoad",
+        ].forEach(function (message, index) {
+          setTimeout(() => {
+            clientSend(message);
+            sendSocket("info", message);
+          }, 100 * index);
+        });
+        setTimeout(function () {
+          createGame();
+        }, 10000);
+      }
     } else {
       triggerOBS();
       inGame = false;
@@ -1120,11 +1144,6 @@ if (!gotLock) {
       clientWebSocket.on("open", function open() {
         if (openLobbyParams?.lobbyName) {
           openParamsJoin();
-        }
-        if (settings.client.performanceMode) {
-          setTimeout(function () {
-            createGame();
-          }, 10000);
         }
       });
       clientWebSocket.on(
@@ -2023,24 +2042,27 @@ if (!gotLock) {
       if (await isWarcraftOpen()) {
         return true;
       }
-      shell.openPath(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe");
       let battleNetWindow;
       let windows = await getWindows();
       for (let window of windows) {
         let title = await window.title;
-        if (title === "Battle.net") battleNetWindow = window;
-      }
-      if (!battleNetWindow) {
-        await sleep(1000);
-        return await openWarcraft(region);
+        if (title === "Battle.net Login") {
+          await sleep(250);
+          return await openWarcraft(region);
+        }
+        if (title === "Battle.net") {
+          battleNetWindow = window;
+        }
       }
       let activeWindow = await getActiveWindow();
       let activeWindowTitle = await activeWindow.title;
-      if (activeWindowTitle !== "Battle.net") {
+      if (!battleNetWindow || activeWindowTitle !== "Battle.net") {
+        shell.openPath(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe");
         await sleep(1000);
         return await openWarcraft(region);
       }
       let searchRegion = await activeWindow.region;
+      searchRegion.width = searchRegion.width * 0.4;
       let screenSize = { width: await screen.width(), height: await screen.height() };
       if (searchRegion.left < 0) {
         //Battle.net window left of screen
@@ -2063,7 +2085,6 @@ if (!gotLock) {
           left(searchRegion.left - (screenSize.width - searchRegion.width) + 10)
         );
         await mouse.releaseButton(0);
-        searchRegion = await activeWindow.region;
       }
       if (searchRegion.top + searchRegion.height > screenSize.height) {
         //Battle.net window bottom of screen
@@ -2077,14 +2098,14 @@ if (!gotLock) {
           up(searchRegion.top - (screenSize.height - searchRegion.height) + 10)
         );
         await mouse.releaseButton(0);
-        searchRegion = await activeWindow.region;
       }
       if (searchRegion.top < 0) {
         // Battle.net window top of screen
         return false;
       }
-      searchRegion.width = searchRegion.width * 0.5;
+      searchRegion = await activeWindow.region;
       searchRegion.height = searchRegion.height * 0.5;
+      searchRegion.width = searchRegion.width * 0.4;
       searchRegion.top = searchRegion.top + searchRegion.height;
       if (!region && settings.autoHost.regionChange) {
         region = getTargetRegion(
@@ -2093,33 +2114,41 @@ if (!gotLock) {
         );
       }
       let targetRegion = { asia: 1, eu: 2, us: 3, "": 0 }[region];
-      if (targetRegion > 0 && gameState.selfRegion !== region) {
-        let changeRegionPosition = await screen.find(imageResource("changeRegion.png"), {
-          searchRegion,
-          confidence: 0.85,
-        });
-        let changeRegionPositionCenter = await centerOf(changeRegionPosition);
-        await mouse.setPosition(changeRegionPositionCenter);
-        await mouse.leftClick();
-        let newRegionPosition = new Point(
-          changeRegionPositionCenter.x,
-          changeRegionPositionCenter.y -
-            changeRegionPosition.height * targetRegion -
-            changeRegionPosition.height / 2
-        );
-        await mouse.setPosition(newRegionPosition);
-        await mouse.leftClick();
-      }
-      let playRegionCenter = await centerOf(
-        screen.find(imageResource("play.png"), { searchRegion, confidence: 0.85 })
-      );
-      await mouse.setPosition(playRegionCenter);
-      await mouse.leftClick();
-      for (let i = 0; i < 10; i++) {
-        if (await isWarcraftOpen()) {
-          return true;
+      try {
+        if (targetRegion > 0 && gameState.selfRegion !== region) {
+          let changeRegionPosition = await screen.find(
+            imageResource("changeRegion.png"),
+            {
+              searchRegion,
+              confidence: 0.85,
+            }
+          );
+          let changeRegionPositionCenter = await centerOf(changeRegionPosition);
+          await mouse.setPosition(changeRegionPositionCenter);
+          await mouse.leftClick();
+          let newRegionPosition = new Point(
+            changeRegionPositionCenter.x,
+            changeRegionPositionCenter.y -
+              changeRegionPosition.height * targetRegion -
+              changeRegionPosition.height / 2
+          );
+          await mouse.setPosition(newRegionPosition);
+          await mouse.leftClick();
         }
-        await sleep(100);
+        let playRegionCenter = await centerOf(
+          screen.find(imageResource("play.png"), { searchRegion, confidence: 0.87 })
+        );
+        await mouse.setPosition(playRegionCenter);
+        await mouse.leftClick();
+        for (let i = 0; i < 10; i++) {
+          if (await isWarcraftOpen()) {
+            return true;
+          }
+          await sleep(100);
+        }
+      } catch (e) {
+        log.error("Failed image recognition: ", e);
+        return false;
       }
       return false;
     } catch (e) {
@@ -2135,6 +2164,7 @@ if (!gotLock) {
     } else if (height < 900) {
       targetRes = "720/";
     }
+    mouse.config.mouseSpeed = parseInt(targetRes) * 2;
     if (!app.isPackaged) {
       screen.config.resourceDirectory = path.join(__dirname, "images", targetRes);
     } else {
@@ -2146,7 +2176,6 @@ if (!gotLock) {
     }
   }
 }
-
 async function sleep(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }

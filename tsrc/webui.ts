@@ -45,25 +45,6 @@ function clientWSSetup() {
     clientWS.onopen = function (event) {
       clientConnected = true;
       sendSocket("info", "Webui Connected!");
-      [
-        "GetLocalPlayerName",
-        "FriendsGetInvitations",
-        "FriendsGetFriends",
-        "MultiplayerSendRecentPlayers",
-        "ClanGetClanInfo",
-        "ClanGetMembers",
-        "StopOverworldMusic",
-        "StopAmbientSound",
-        "LoginDoorClose",
-        "StopAmbientSound",
-        "StopAmbientSound",
-        "OnWebUILoad",
-      ].forEach(function (message, index) {
-        setTimeout(() => {
-          clientSend(message);
-          sendSocket("info", message);
-        }, 100 * index);
-      });
       clientWS.onclose = function (event) {
         clientConnected = false;
         sendSocket("info", "clientWS closed");
