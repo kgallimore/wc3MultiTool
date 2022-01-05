@@ -97,7 +97,7 @@ if (!gotLock) {
   // @ts-ignore
   var inGame = false;
   var wss: WebSocket.Server | null = null;
-  var socket: WebSocket | null = null;
+  var webUISocket: WebSocket | null = null;
   var clientWebSocket: WebSocket;
   var hubWebSocket: WebSocket | null;
   var warcraftInFocus = false;
@@ -607,13 +607,13 @@ if (!gotLock) {
     wss = new WebSocket.Server({ port: 8888 });
     wss.on("connection", function connection(ws) {
       log.info("Connection");
-      socket = ws;
+      webUISocket = ws;
       sendSocket("autoHost", settings.autoHost);
       sendStatus(true);
-      ws.on("message", handleWSMessage);
+      ws.on("message", handleWebUIMessage);
       ws.on("close", function close() {
         log.warn("Socket closed");
-        socket = null;
+        webUISocket = null;
         sendProgress();
         sendStatus(false);
       });
@@ -905,7 +905,7 @@ if (!gotLock) {
     sendWindow("statusChange", { connected: status });
   }
 
-  async function handleWSMessage(message: string) {
+  async function handleWebUIMessage(message: string) {
     let data = JSON.parse(message) as { messageType: string; data: any };
     switch (data.messageType) {
       case "state":
@@ -956,6 +956,9 @@ if (!gotLock) {
         break;
       case "echo":
         log.verbose(data);
+        break;
+      case "info":
+        log.info(JSON.stringify(data.data));
         break;
       default:
         log.info(data);
@@ -1068,13 +1071,19 @@ if (!gotLock) {
           "OnWebUILoad",
         ].forEach(function (message, index) {
           setTimeout(() => {
-            clientSend(message);
-            sendSocket("info", message);
+            sendMessage(message);
+            /*if (message === "StopAmbientSound") {
+              sendMessage("ScreenTransitionInfo", {
+                screen: "LOGIN_DOORS",
+                type: "Screen",
+                time: Date.now().toString(),
+              });
+            }*/
           }, 100 * index);
         });
         setTimeout(function () {
           createGame();
-        }, 10000);
+        }, 7000);
       }
     } else {
       triggerOBS();
@@ -1234,7 +1243,7 @@ if (!gotLock) {
                 if (data.messageType === "GameList") {
                   //console.log(data.payload.games);
                 } else {
-                  //console.log(data);
+                  //console.log(JSON.stringify(data));
                 }
               }
           }
@@ -1857,8 +1866,8 @@ if (!gotLock) {
   }
 
   function sendSocket(messageType = "info", data: string | object = "none") {
-    if (socket) {
-      socket.send(JSON.stringify({ messageType: messageType, data: data }));
+    if (webUISocket) {
+      webUISocket.send(JSON.stringify({ messageType: messageType, data: data }));
     }
   }
 
@@ -1871,7 +1880,7 @@ if (!gotLock) {
   }
 
   async function findQuit() {
-    if ((inGame || gameState.menuState === "LOADING_SCREEN") && socket?.OPEN) {
+    if ((inGame || gameState.menuState === "LOADING_SCREEN") && webUISocket?.OPEN) {
       await activeWindowWar();
       if (warcraftInFocus) {
         let foundTarget = false;

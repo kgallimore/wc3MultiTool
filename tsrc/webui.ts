@@ -6,7 +6,7 @@ let autoHost = {
 let state = {
   selfRegion: "",
   selfBattleTag: "",
-  menuState: "",
+  menuState: "LOGIN_DOORS",
   screenState: "",
   inGame: false,
 };
