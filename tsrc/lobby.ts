@@ -350,7 +350,7 @@ export class WarLobby extends EventEmitter {
             });
             this.emitInfo(name + " stats received and saved.");
             if (this.isLobbyReady()) {
-              this.emitInfo("Lobby is ready, auto-balancing.");
+              this.emitInfo("Lobby is ready.");
               this.autoBalance();
             }
           } else {
@@ -488,6 +488,7 @@ export class WarLobby extends EventEmitter {
   autoBalance() {
     let teams = Object.entries(this.exportTeamStructure());
     if (this.eloAvailable && this.#appSettings.balanceTeams) {
+      this.emitInfo("Auto balancing teams");
       if (this.bestCombo === undefined || this.bestCombo.length == 0) {
         if (teams.length < 2) {
           this.emitUpdate({ lobbyReady: true });
@@ -648,7 +649,6 @@ export class WarLobby extends EventEmitter {
         this.emitChat("ELO data provided by: " + this.#appSettings.eloType);
       }
     } else {
-      this.emitInfo("Starting without elo");
       this.emitUpdate({ lobbyReady: true });
     }
   }

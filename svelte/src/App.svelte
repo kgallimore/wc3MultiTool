@@ -328,8 +328,8 @@
         <div class="modal-body">
           <div class="container">
             <label for="clientForm"> Client Settings</label>
-            <form id="clientForm" name="client" class="p-2">
-              <div class="row border m-2">
+            <form id="clientForm" name="client" class="p-2 border">
+              <div class="row m-2">
                 <div class="col p-2">
                   <div
                     class="btn-group btn-group-sm"
@@ -377,6 +377,13 @@
                         )}
                     />
                   </div>
+                </div>
+              </div>
+              <div class="row m-2">
+                <div class="col p-2">
+                  Performance Mode completely disables the Warcraft 3 UI. This is meant
+                  for extremely low powered computers running Rapid Host with a time value
+                  of -1 or 0.
                 </div>
               </div>
             </form>

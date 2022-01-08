@@ -812,8 +812,7 @@ if (!gotLock) {
                 startGame();
               }
             }, 250);
-          }
-          if (settings.autoHost.sounds) {
+          } else if (settings.autoHost.sounds) {
             playSound("ready.wav");
           }
         }
@@ -909,14 +908,16 @@ if (!gotLock) {
     let data = JSON.parse(message) as { messageType: string; data: any };
     switch (data.messageType) {
       case "state":
-        gameState = data.data;
-        if (gameState.menuState) {
-          sendWindow("menusChange", { value: gameState.menuState });
-          setTimeout(() => handleGlueScreen(gameState.menuState), 250);
+        if (data.data.menuState) {
+          setTimeout(() => {
+            handleGlueScreen(data.data.menuState);
+            gameState = data.data;
+          }, 250);
+        } else {
+          gameState = data.data;
         }
         break;
       case "sendMessage":
-        console.log(data.data);
         if (data.data.message === "StopGameAdvertisements") {
           if (gameState.menuState !== "LOADING_SCREEN" && lobby.lookupName) {
             log.info("Re-hosting Stale Lobby");
@@ -1024,13 +1025,12 @@ if (!gotLock) {
     }
   }
 
-  function handleGlueScreen(screen: string) {
+  async function handleGlueScreen(screen: string) {
     // Create a new game at menu or if previously in game(score screen loads twice)
-    if (!screen || screen === "null") {
+    if (!screen || screen === "null" || screen === gameState.menuState) {
       return;
     }
     if (["CUSTOM_LOBBIES", "MAIN_MENU"].includes(screen)) {
-      gameState.menuState = screen;
       if (openLobbyParams?.lobbyName) {
         setTimeout(openParamsJoin, 250);
       } else {
@@ -1041,6 +1041,16 @@ if (!gotLock) {
         "Game start. End of chat for " + lobby.lobbyStatic?.lobbyName
       );
       discClient?.lobbyStarted();
+      if (settings.autoHost.type === "rapidHost") {
+        if (settings.autoHost.rapidHostTimer === 0) {
+          log.info("Rapid Host leave game immediately");
+          leaveGame();
+        } else if (settings.autoHost.rapidHostTimer === -1) {
+          log.info("Rapid Host exit game immediately");
+          await forceQuit();
+          openWarcraft();
+        }
+      }
     } else if (gameState.menuState === "LOADING_SCREEN" && screen === "SCORE_SCREEN") {
       // Game has finished loading in
       inGame = true;
@@ -1050,11 +1060,11 @@ if (!gotLock) {
       triggerOBS();
       if (
         settings.autoHost.type === "rapidHost" &&
-        settings.autoHost.rapidHostTimer > 0
+        settings.autoHost.rapidHostTimer > -1
       ) {
         setTimeout(leaveGame, settings.autoHost.rapidHostTimer * 1000 * 60);
       }
-    } else if (gameState.menuState === "LOGIN_DOORS") {
+    } else if (screen === "LOGIN_DOORS") {
       if (settings.client.performanceMode) {
         [
           "GetLocalPlayerName",
@@ -1079,11 +1089,8 @@ if (!gotLock) {
                 time: Date.now().toString(),
               });
             }*/
-          }, 100 * index);
+          }, 50 * index);
         });
-        setTimeout(function () {
-          createGame();
-        }, 7000);
       }
     } else {
       triggerOBS();
@@ -1186,15 +1193,23 @@ if (!gotLock) {
                 handleGlueScreen(data.payload.screen);
               }
               break;
+            case "OnNetProviderInitialized":
+              if (settings.client.performanceMode) {
+                setTimeout(autoHostGame, 1000);
+              }
+              break;
             case "GameLobbySetup":
               handleLobbyUpdate(data.payload);
               break;
             case "GameList":
-              if (openLobbyParams && openLobbyParams.lobbyName) {
+              if (
+                openLobbyParams &&
+                (openLobbyParams.lobbyName || openLobbyParams.gameId)
+              ) {
                 log.info("GameList received, trying to find lobby.");
                 handleGameList(data.payload);
               } else {
-                log.info("GameList received, trying to find self.");
+                handleGlueScreen("CUSTOM_LOBBIES");
               }
               break;
             case "OnChannelUpdate":
@@ -1207,6 +1222,11 @@ if (!gotLock) {
               break;
             case "MultiplayerGameLeave":
               clearLobby();
+              break;
+            case "MultiplayerGameCreateResult":
+              if (gameState.menuState === "GAME_LOBBY") {
+                handleGlueScreen("CUSTOM_LOBBIES");
+              }
               break;
             case "UpdateUserInfo":
               gameState.selfBattleTag = data.payload.user.battleTag;
@@ -1799,12 +1819,16 @@ if (!gotLock) {
   async function forceQuit(): Promise<boolean> {
     if (await isWarcraftOpen()) {
       log.info("Warcraft III.exe is still running, forcing quit");
-      let { stdout, stderr } = await exec('taskkill /F /IM "Warcraft III.exe"');
-      if (stderr) {
-        log.error(stderr);
-        return false;
+      try {
+        let { stdout, stderr } = await exec('taskkill /F /IM "Warcraft III.exe"');
+        if (stderr) {
+          log.error(stderr);
+          return false;
+        }
+      } catch (e) {
+        return true;
       }
-      await sleep(100);
+      await sleep(200);
       return await forceQuit();
     } else {
       return true;
@@ -1813,8 +1837,9 @@ if (!gotLock) {
 
   function announcement() {
     if (
-      gameState.menuState === "CUSTOM_GAME_LOBBY" ||
-      (gameState.menuState === "GAME_LOBBY" && lobby.lobbyStatic?.isHost)
+      (gameState.menuState === "CUSTOM_GAME_LOBBY" ||
+        gameState.menuState === "GAME_LOBBY") &&
+      lobby.lobbyStatic?.isHost
     ) {
       let currentTime = Date.now();
       if (
@@ -2125,8 +2150,10 @@ if (!gotLock) {
       let targetRegion = { asia: 1, eu: 2, us: 3, "": 0 }[region];
       try {
         if (targetRegion > 0 && gameState.selfRegion !== region) {
-          let changeRegionPosition = await screen.find(
+          let changeRegionPosition = await screen.waitFor(
             imageResource("changeRegion.png"),
+            5000,
+            250,
             {
               searchRegion,
               confidence: 0.85,
@@ -2145,7 +2172,10 @@ if (!gotLock) {
           await mouse.leftClick();
         }
         let playRegionCenter = await centerOf(
-          screen.find(imageResource("play.png"), { searchRegion, confidence: 0.87 })
+          screen.waitFor(imageResource("play.png"), 5000, 250, {
+            searchRegion,
+            confidence: 0.87,
+          })
         );
         await mouse.setPosition(playRegionCenter);
         await mouse.leftClick();
