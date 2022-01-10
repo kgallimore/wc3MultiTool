@@ -2052,7 +2052,7 @@ if (!gotLock) {
           keyboard.type(Key.F12);
           try {
             const foundImage = await screen.find(imageResource("closeScoreboard.png"), {
-              confidence: 0.8,
+              confidence: 0.85,
             });
             if (foundImage) {
               mouse.setPosition(await centerOf(foundImage));
@@ -2064,7 +2064,7 @@ if (!gotLock) {
           }
           try {
             const foundImage = await screen.find(imageResource("soloObserver.png"), {
-              confidence: 0.8,
+              confidence: 0.85,
             });
             if (foundImage) {
               foundTarget = true;
@@ -2313,7 +2313,7 @@ if (!gotLock) {
         }
       } catch (e) {
         log.error("Failed image recognition: ", e);
-        return await openWarcraft(region);
+        return false;
       }
       return false;
     } catch (e) {
