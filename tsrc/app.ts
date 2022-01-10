@@ -1962,29 +1962,33 @@ if (!gotLock) {
       ) {
         lastAnnounceTime = currentTime;
         if (
-          ["rapidHost", "smartHost"].includes(settings.autoHost.type) &&
-          settings.autoHost.announceIsBot
+          ["rapidHost", "smartHost"].includes(settings.autoHost.type)          
         ) {
-          let text = "Welcome. I am a bot.";
-          if (lobby.eloAvailable) {
-            text += " I will fetch ELO from " + settings.elo.type + ".";
-            if (settings.elo.balanceTeams) {
-              text += " I will try to balance teams before we start.";
+          if(settings.autoHost.announceIsBot){
+            let text = "Welcome. I am a bot.";
+            if (lobby.eloAvailable) {
+              text += " I will fetch ELO from " + settings.elo.type + ".";
+              if (settings.elo.balanceTeams) {
+                text += " I will try to balance teams before we start.";
+              }
             }
+            if (["smartHost", "rapidHost".includes(settings.autoHost.type)]) {
+              text += " I will start when slots are full.";
+            }
+            if (settings.autoHost.voteStart) {
+              text += " You can vote start with ?votestart";
+            }
+            if (settings.autoHost.regionChange){
+              text += " I switch regions."
+            }
+            sendChatMessage(text);
           }
-          if (["smartHost", "rapidHost".includes(settings.autoHost.type)]) {
-            text += " I will start when slots are full.";
-          }
-          if (settings.autoHost.voteStart) {
-            text += " You can vote start with ?votestart";
-          }
-          sendChatMessage(text);
-          if (settings.autoHost.announceCustom) {
+          if (settings.autoHost.announceCustom && settings.autoHost.customAnnouncement) {
             sendChatMessage(settings.autoHost.customAnnouncement);
           }
         } else if (
           settings.autoHost.type === "lobbyHost" &&
-          settings.autoHost.announceCustom
+          settings.autoHost.announceCustom && settings.autoHost.customAnnouncement
         ) {
           sendChatMessage(settings.autoHost.customAnnouncement);
         }
