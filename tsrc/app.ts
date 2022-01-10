@@ -930,7 +930,7 @@ if (!gotLock) {
                 leaveGame();
               } else if (settings.autoHost.rapidHostTimer === -1) {
                 log.info("Rapid Host exit game immediately");
-                await forceQuit();
+                await forceQuitWar();
                 openWarcraft();
               }
             }
@@ -1047,7 +1047,7 @@ if (!gotLock) {
           leaveGame();
         } else if (settings.autoHost.rapidHostTimer === -1) {
           log.info("Rapid Host exit game immediately");
-          await forceQuit();
+          await forceQuitWar();
           openWarcraft();
         }
       }
@@ -1225,7 +1225,9 @@ if (!gotLock) {
               break;
             case "MultiplayerGameCreateResult":
               if (gameState.menuState === "GAME_LOBBY") {
-                handleGlueScreen("CUSTOM_LOBBIES");
+                setTimeout(() => {
+                  handleGlueScreen("CUSTOM_LOBBIES");
+                }, 1000);
               }
               break;
             case "UpdateUserInfo":
@@ -1910,7 +1912,7 @@ if (!gotLock) {
     if (await isWarcraftOpen()) {
       if (gameState.menuState === "LOADING_SCREEN") {
         log.info("Warcraft is loading game, forcing quit");
-        return await forceQuit();
+        return await forceQuitWar();
       } else {
         log.info("Exit Game");
         sendMessage("ExitGame", {});
@@ -1922,11 +1924,15 @@ if (!gotLock) {
     }
   }
 
-  async function forceQuit(): Promise<boolean> {
-    if (await isWarcraftOpen()) {
-      log.info("Warcraft III.exe is still running, forcing quit");
+  async function forceQuitWar(): Promise<boolean> {
+    return await forceQuitProcess("Warcraft III.exe");
+  }
+
+  async function forceQuitProcess(processName: string): Promise<boolean> {
+    if (await checkProcess(processName)) {
+      log.info(processName + " is still running, forcing quit");
       try {
-        let { stdout, stderr } = await exec('taskkill /F /IM "Warcraft III.exe"');
+        let { stdout, stderr } = await exec(`taskkill /F /IM "${processName}"`);
         if (stderr) {
           log.error(stderr);
           return false;
@@ -1935,7 +1941,7 @@ if (!gotLock) {
         return true;
       }
       await sleep(200);
-      return await forceQuit();
+      return await forceQuitWar();
     } else {
       return true;
     }
@@ -2192,36 +2198,73 @@ if (!gotLock) {
   }
 
   async function isWarcraftOpen() {
-    let windows = await getWindows();
-    for (let window of windows) {
-      let title = await window.title;
-      if (title === "Warcraft III") return true;
-    }
-    return false;
+    return await checkProcess("Warcraft III.exe");
   }
 
-  async function openWarcraft(region: Regions | "" = ""): Promise<boolean> {
+  async function checkProcess(processName: string) {
+    let { stdout, stderr } = await exec(
+      `tasklist /NH /FI "STATUS eq RUNNING" /FI "USERNAME ne N/A" /FI "IMAGENAME eq ${processName}"`
+    );
+    if (stderr) {
+      log.error(stderr);
+      return false;
+    } else {
+      if (stdout.includes(processName)) {
+        console.log(`${processName} is running`);
+        return true;
+      } else {
+        console.log(`${processName} is not running`);
+        return false;
+      }
+    }
+  }
+
+  async function openWarcraft(
+    region: Regions | "" = "",
+    callCount = 0
+  ): Promise<boolean> {
     try {
+      if (callCount > 60) {
+        log.error("Failed to open Warcraft after 60 attempts");
+      }
       if (await isWarcraftOpen()) {
         return true;
+      }
+      let battleNetOpen = await checkProcess("Battle.net.exe");
+      if (battleNetOpen !== true) {
+        shell.openPath(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe");
+        await sleep(1000);
+        return await openWarcraft(region, callCount + 1);
       }
       let battleNetWindow;
       let windows = await getWindows();
       for (let window of windows) {
         let title = await window.title;
         if (title === "Battle.net Login") {
-          await sleep(500);
-          return await openWarcraft(region);
+          await sleep(1000);
+          return await openWarcraft(region, callCount + 1);
         }
         if (title === "Battle.net") {
           battleNetWindow = window;
         }
       }
+      if (!battleNetWindow) {
+        if (callCount % 2 == 0) {
+          shell.openPath(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe");
+        }
+        await sleep(3000);
+        return await openWarcraft(region, callCount + 3);
+      }
       let activeWindow = await getActiveWindow();
       let activeWindowTitle = await activeWindow.title;
-      if (!battleNetWindow || activeWindowTitle !== "Battle.net") {
-        shell.openPath(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe");
-        await sleep(5000);
+      if (activeWindowTitle !== "Battle.net") {
+        if (callCount % 2 == 0) {
+          if (callCount > 4) {
+            await forceQuitProcess("Battle.net.exe");
+          }
+          shell.openPath(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe");
+        }
+        await sleep(2000);
         return await openWarcraft(region);
       }
       let searchRegion = await activeWindow.region;
@@ -2316,7 +2359,8 @@ if (!gotLock) {
         }
       } catch (e) {
         log.error("Failed image recognition: ", e);
-        return false;
+        // Add 5 to call count since OCR takes longer
+        return await openWarcraft(region, callCount + 15);
       }
       return false;
     } catch (e) {
