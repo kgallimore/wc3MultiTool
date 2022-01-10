@@ -1443,10 +1443,39 @@ if (!gotLock) {
           } else {
             sendChatMessage("Data not available");
           }
-        } else if (payload.message.content.match(/^\?shuffle/i)) {
-          // TODO: Shuffle
+        } else if (payload.message.content.match(/^\?sp$/i)) {
+          // TODO: Shuffle players
+          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+            let players = lobby.getAllPlayers();
+            Object.values(players).forEach((player) => {
+              sendChatMessage(
+                "!swap " +
+                  player +
+                  " " +
+                  players[Math.floor(Math.random() * players.length)]
+              );
+            });
+          }
+        } else if (payload.message.content.match(/^\?sf$/i)) {
+          // TODO: Shuffle teams
           if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
             let players = lobby.exportTeamStructure();
+          }
+        } else if (payload.message.content.match(/^\?start$/i)) {
+          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+            startGame();
+          }
+        } else if (payload.message.content.match(/^\?a$/i)) {
+          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+            cancelStart();
+          }
+        } else if (payload.message.content.match(/^\?closeall$/i)) {
+          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+            sendChatMessage("!closeall");
+          }
+        } else if (payload.message.content.match(/^\?openall$/i)) {
+          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+            sendChatMessage("!openall");
           }
         } else if (payload.message.content.match(/^\?swap/i)) {
           if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
@@ -1463,14 +1492,6 @@ if (!gotLock) {
             } else {
               sendChatMessage("Invalid swap arguments");
             }
-          }
-        } else if (payload.message.content.match(/^\?start/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
-            startGame();
-          }
-        } else if (payload.message.content.match(/^\?a/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
-            cancelStart();
           }
         } else if (payload.message.content.match(/^\?handi/i)) {
           if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
@@ -1647,6 +1668,26 @@ if (!gotLock) {
               sendChatMessage("Target required");
             }
           }
+        } else if (payload.message.content.match(/^\?autohost/i)) {
+          if (lobby.lobbyStatic?.isHost && checkRole(sender, "admin")) {
+            var target = payload.message.content.split(" ")[1];
+            if (target) {
+              target = target.toLowerCase();
+              if (["off", "rapid", "lobby", "smart"].includes(target)) {
+                if (target !== "off") {
+                  target += "Host";
+                }
+                sendChatMessage("Setting autohost type to: " + target);
+                updateSetting("autoHost", "type", target);
+              } else {
+                sendChatMessage("Invalid autohost type");
+              }
+            } else {
+              sendChatMessage("Autohost current type: " + settings.autoHost.type);
+            }
+          } else {
+            sendChatMessage("You do not have permission to use this command.");
+          }
         } else if (payload.message.content.match(/^\?(help)|(commands)/i)) {
           if (lobby.lobbyStatic?.isHost) {
             if (lobby.eloAvailable) {
@@ -1664,13 +1705,20 @@ if (!gotLock) {
             if (checkRole(sender, "moderator")) {
               sendChatMessage("?a: Aborts game start");
               sendChatMessage("?ban <name|slotNumber> <?reason>: Bans a player forever");
-              sendChatMessage("?close <name|slotNumber>: Closes a slot/player");
+              sendChatMessage(
+                "?close<?all> <name|slotNumber>: Closes all / a slot/player"
+              );
               sendChatMessage(
                 "?handi <name|slotNumber> <50|60|70|80|100>: Sets slot/player handicap"
               );
               sendChatMessage("?kick <name|slotNumber> <?reason>: Kicks a slot/player");
-              sendChatMessage("?open <name|slotNumber> <?reason>: Opens a slot/player");
+              sendChatMessage(
+                "?open<?all> <name|slotNumber> <?reason>: Opens all / a slot/player"
+              );
               sendChatMessage("?unban <name>: Un-bans a player");
+              sendChatMessage(
+                "?swap <name|slotNumber> <name|slotNumber>: Swaps two slots"
+              );
               sendChatMessage("?start: Starts game");
             }
             if (checkRole(sender, "admin")) {
@@ -1678,6 +1726,9 @@ if (!gotLock) {
                 "?perm <name> <?admin|mod>: Promotes a player to admin or moderator (mod by default)"
               );
               sendChatMessage("?unperm <name>: Demotes player to normal");
+              sendChatMessage(
+                "?autohost <?off|rapid|lobby|smart>: Gets/?Sets autohost type"
+              );
             }
             sendChatMessage("?help: Shows commands with <required arg> <?optional arg>");
           }
@@ -1955,7 +2006,13 @@ if (!gotLock) {
 
   function sendSocket(messageType = "info", data: string | object = "none") {
     if (webUISocket) {
-      webUISocket.send(JSON.stringify({ messageType: messageType, data: data }));
+      if (webUISocket.readyState === 1) {
+        webUISocket.send(JSON.stringify({ messageType: messageType, data: data }));
+      } else if (webUISocket.readyState === 0) {
+        setTimeout(() => {
+          sendSocket(messageType, data);
+        }, 100);
+      }
     }
   }
 
@@ -2081,7 +2138,13 @@ if (!gotLock) {
 
   function sendMessage(message: string, payload: any = "") {
     if (clientWebSocket) {
-      clientWebSocket.send(JSON.stringify({ message: message, payload: payload }));
+      if (clientWebSocket.readyState === 1) {
+        clientWebSocket.send(JSON.stringify({ message: message, payload: payload }));
+      } else if (clientWebSocket.readyState === 0) {
+        setTimeout(() => {
+          sendMessage(message, payload);
+        }, 100);
+      }
     }
   }
 
@@ -2215,8 +2278,8 @@ if (!gotLock) {
         if (targetRegion > 0 && gameState.selfRegion !== region) {
           let changeRegionPosition = await screen.waitFor(
             imageResource("changeRegion.png"),
-            10000,
-            500,
+            30000,
+            100,
             {
               searchRegion,
               confidence: 0.85,
@@ -2235,7 +2298,7 @@ if (!gotLock) {
           await mouse.leftClick();
         }
         let playRegionCenter = await centerOf(
-          screen.waitFor(imageResource("play.png"), 10000, 500, {
+          screen.waitFor(imageResource("play.png"), 30000, 100, {
             searchRegion,
             confidence: 0.87,
           })
@@ -2250,7 +2313,7 @@ if (!gotLock) {
         }
       } catch (e) {
         log.error("Failed image recognition: ", e);
-        return false;
+        return await openWarcraft(region);
       }
       return false;
     } catch (e) {

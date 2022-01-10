@@ -310,7 +310,7 @@
     // @ts-ignore
     window.api.send("toMain", args);
   }
-</script>
+</script> 
 
 <main>
   <div class="modal fade" id="settingsModal" tabindex="-1" aria-hidden="true">
@@ -1456,6 +1456,7 @@
             ?perm (name) (?admin|mod): Promotes a player to admin or moderator (mod by default).<br
             />
             ?unperm (name): Demotes player to normal
+            ?autohost (?off|rapid|lobby|smart): Gets/?Sets autohost type
           </details>
         </div>
       </div>
