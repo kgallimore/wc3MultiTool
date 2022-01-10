@@ -2207,7 +2207,7 @@ if (!gotLock) {
       for (let window of windows) {
         let title = await window.title;
         if (title === "Battle.net Login") {
-          await sleep(250);
+          await sleep(500);
           return await openWarcraft(region);
         }
         if (title === "Battle.net") {
@@ -2218,7 +2218,7 @@ if (!gotLock) {
       let activeWindowTitle = await activeWindow.title;
       if (!battleNetWindow || activeWindowTitle !== "Battle.net") {
         shell.openPath(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe");
-        await sleep(1000);
+        await sleep(5000);
         return await openWarcraft(region);
       }
       let searchRegion = await activeWindow.region;
