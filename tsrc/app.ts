@@ -1961,10 +1961,8 @@ if (!gotLock) {
         lastAnnounceTime + 1000 * settings.autoHost.announceRestingInterval
       ) {
         lastAnnounceTime = currentTime;
-        if (
-          ["rapidHost", "smartHost"].includes(settings.autoHost.type)          
-        ) {
-          if(settings.autoHost.announceIsBot){
+        if (["rapidHost", "smartHost"].includes(settings.autoHost.type)) {
+          if (settings.autoHost.announceIsBot) {
             let text = "Welcome. I am a bot.";
             if (lobby.eloAvailable) {
               text += " I will fetch ELO from " + settings.elo.type + ".";
@@ -1978,8 +1976,8 @@ if (!gotLock) {
             if (settings.autoHost.voteStart) {
               text += " You can vote start with ?votestart";
             }
-            if (settings.autoHost.regionChange){
-              text += " I switch regions."
+            if (settings.autoHost.regionChange) {
+              text += " I switch regions.";
             }
             sendChatMessage(text);
           }
@@ -1988,7 +1986,8 @@ if (!gotLock) {
           }
         } else if (
           settings.autoHost.type === "lobbyHost" &&
-          settings.autoHost.announceCustom && settings.autoHost.customAnnouncement
+          settings.autoHost.announceCustom &&
+          settings.autoHost.customAnnouncement
         ) {
           sendChatMessage(settings.autoHost.customAnnouncement);
         }
