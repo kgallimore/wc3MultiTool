@@ -408,11 +408,11 @@ export class WarLobby extends EventEmitter {
     return target.map((slot) => slot.name);
   }
 
-  searchPlayer(name: string) {
+  searchPlayer(name: string): string[] {
     return this.getAllPlayers(true).filter((user) => user.match(new RegExp(name, "i")));
   }
 
-  testTeam(teamName: string) {
+  testTeam(teamName: string): "otherTeams" | "playerTeams" | "specTeams" {
     if (teamName.match(/((computer)|(creeps)|(summoned))/i)) {
       return "otherTeams";
     } else if (teamName.match(/((host)|(spectator)|(observer)|(referee))/i)) {

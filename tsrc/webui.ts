@@ -75,10 +75,10 @@ function wsSetup() {
       sendSocket("clientWebSocket", "ws://" + location.host + "/webui-socket/" + guid);
     }
     if (document.readyState !== "loading") {
-      modifyPages();
+      //modifyPages();
     } else {
       document.addEventListener("DOMContentLoaded", function () {
-        modifyPages();
+        //modifyPages();
       });
     }
   };

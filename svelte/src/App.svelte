@@ -1442,10 +1442,20 @@
         </div>
       </div>
       <div class="row justify-content-center p-2">
-        <div class="col d-flex ">
+        <div class="col d-flex text-xs">
           <details>
-            <summary>Permissions</summary><strong>Mod: </strong>May ban and unban players.<br
-            /> <strong>Admin:</strong> Mod + add/remove mods.
+            <summary>Permissions</summary><strong>Mod: </strong>
+            ?a: Aborts game start<br />
+            ?ban (name|slotNumber) (?reason): Bans a player forever<br />
+            ?close (name|slotNumber): Closes a slot/player<br />
+            ?handi (name|slotNumber) (50|60|70|80|100): Sets slot/player handicap<br />
+            ?kick (name|slotNumber) (?reason): Kicks a slot/player<br />
+            ?open (name|slotNumber) (?reason): Opens a slot/player<br />
+            ?unban (name): Un-bans a player<br />
+            ?start: Starts game<br /><strong>Admin:</strong><br />
+            ?perm (name) (?admin|mod): Promotes a player to admin or moderator (mod by default).<br
+            />
+            ?unperm (name): Demotes player to normal
           </details>
         </div>
       </div>

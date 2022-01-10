@@ -308,7 +308,7 @@ if (!gotLock) {
           if (args.perm.role === "moderator" || args.perm.role === "admin") {
             addAdmin(args.perm.player, "client", "client", args.perm.role);
           } else if (!args.perm.role) {
-            removeAdmin(args.perm.player);
+            removeAdmin(args.perm.player, "client");
           }
         } else {
           log.info("No player in perm");
@@ -1448,6 +1448,22 @@ if (!gotLock) {
           if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
             let players = lobby.exportTeamStructure();
           }
+        } else if (payload.message.content.match(/^\?swap/i)) {
+          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+            let [command, ...args] = payload.message.content.split(" ");
+            if (args.length === 2) {
+              if (
+                (isInt(args[1], 25) || lobby.searchPlayer(args[1]).length === 1) &&
+                (isInt(args[0], 25) || lobby.searchPlayer(args[0]).length === 1)
+              ) {
+                sendChatMessage("!swap " + args[1] + " " + args[0]);
+              } else {
+                sendChatMessage("All swap players not found, or too many matches.");
+              }
+            } else {
+              sendChatMessage("Invalid swap arguments");
+            }
+          }
         } else if (payload.message.content.match(/^\?start/i)) {
           if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
             startGame();
@@ -1462,7 +1478,7 @@ if (!gotLock) {
               var target = payload.message.content.split(" ")[1];
               var handicap = parseInt(payload.message.content.split(" ")[2]);
               if (handicap) {
-                if (parseInt(target)) {
+                if (isInt(target, 25)) {
                   lobby.setHandicapSlot(parseInt(target) - 1, handicap);
                 } else {
                   lobby.setPlayerHandicap(target, handicap);
@@ -1478,7 +1494,7 @@ if (!gotLock) {
           if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
             var target = payload.message.content.split(" ")[1];
             if (target) {
-              if (parseInt(target) && parseInt(target) < 25 && parseInt(target) > 0) {
+              if (isInt(target, 25) && parseInt(target) > 0) {
                 lobby.closeSlot(parseInt(target) - 1);
               } else {
                 let targets = lobby.searchPlayer(target);
@@ -1498,7 +1514,7 @@ if (!gotLock) {
           if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
             var target = payload.message.content.split(" ")[1];
             if (target) {
-              if (parseInt(target) && parseInt(target) < 25 && parseInt(target) > 0) {
+              if (isInt(target, 25) && parseInt(target) > 0) {
                 lobby.openSlot(parseInt(target) - 1);
               } else {
                 let targets = lobby.searchPlayer(target);
@@ -1518,7 +1534,7 @@ if (!gotLock) {
           if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
             var target = payload.message.content.split(" ")[1];
             if (target) {
-              if (parseInt(target) && parseInt(target) < 25 && parseInt(target) > 0) {
+              if (isInt(target, 25) && parseInt(target) > 0) {
                 lobby.kickSlot(parseInt(target) - 1);
               } else {
                 let targets = lobby.searchPlayer(target);
@@ -1539,11 +1555,7 @@ if (!gotLock) {
             var banTarget = payload.message.content.split(" ")[1];
             if (banTarget) {
               var banReason = payload.message.content.split(" ").slice(2).join(" ") || "";
-              if (
-                parseInt(banTarget) &&
-                parseInt(banTarget) < 25 &&
-                parseInt(banTarget) > 0
-              ) {
+              if (isInt(banTarget, 25) && parseInt(banTarget) > 0) {
                 lobby.banSlot(parseInt(banTarget) - 1);
                 banPlayer(lobby.slots[banTarget].name, sender, lobby.region, banReason);
               } else {
@@ -1591,11 +1603,15 @@ if (!gotLock) {
                 sendChatMessage("Assigning out of lobby player " + perm + ".");
                 addAdmin(target, sender, lobby.region, perm);
               } else {
-                let targets = lobby
-                  .getAllPlayers(true)
-                  .filter((user) => user.match(new RegExp(target, "i")));
+                let targets = lobby.searchPlayer(target);
                 if (targets.length === 1) {
-                  addAdmin(target, sender, lobby.region, perm);
+                  if (addAdmin(targets[0], sender, lobby.region, perm)) {
+                    sendChatMessage(targets[0] + " has been promoted to " + perm + ".");
+                  } else {
+                    sendChatMessage(
+                      "Could not promote " + targets[0] + " to " + perm + "."
+                    );
+                  }
                 } else if (targets.length > 1) {
                   sendChatMessage("Multiple matches found. Please be more specific.");
                 } else {
@@ -1611,10 +1627,21 @@ if (!gotLock) {
             var target = payload.message.content.split(" ")[1];
             if (target) {
               if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
-                sendChatMessage("Unbanning out of lobby player.");
-                removeAdmin(target);
+                sendChatMessage("Removed perm from out of lobby player: " + target);
+                removeAdmin(target, sender);
               } else {
-                sendChatMessage("Full battleTag required");
+                let targets = lobby.searchPlayer(target);
+                if (targets.length === 1) {
+                  if (removeAdmin(targets[0], sender)) {
+                    sendChatMessage(targets[0] + " has been demoted.");
+                  } else {
+                    sendChatMessage(targets[0] + " has no permissions.");
+                  }
+                } else if (targets.length > 1) {
+                  sendChatMessage("Multiple matches found. Please be more specific.");
+                } else {
+                  sendChatMessage("No matches found.");
+                }
               }
             } else {
               sendChatMessage("Target required");
@@ -1637,7 +1664,7 @@ if (!gotLock) {
             if (checkRole(sender, "moderator")) {
               sendChatMessage("?a: Aborts game start");
               sendChatMessage("?ban <name|slotNumber> <?reason>: Bans a player forever");
-              sendChatMessage("?close <name|slotNumber> <?reason>: Closes a slot/player");
+              sendChatMessage("?close <name|slotNumber>: Closes a slot/player");
               sendChatMessage(
                 "?handi <name|slotNumber> <50|60|70|80|100>: Sets slot/player handicap"
               );
@@ -1721,44 +1748,72 @@ if (!gotLock) {
   ) {
     if (checkRole(admin, "admin")) {
       if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
-        removeAdmin(player);
-        db.prepare(
-          "INSERT INTO adminList (username, admin, region, role) VALUES (?, ?, ?, ?)"
-        ).run(player, admin, region, role);
-        log.info("Added " + player + " to " + role + " by " + admin);
-        sendWindow("action", {
-          value: "Added " + player + " to " + role + " by " + admin,
-        });
+        if (checkRole(player, "moderator")) {
+          db.prepare("UPDATE adminList SET role = ?, admin = ?WHERE username = ?").run(
+            role,
+            admin,
+            player
+          );
+          log.info("Updated " + player + " to " + role + " by " + admin);
+          sendWindow("action", {
+            value: "Updated " + player + " to " + role + " by " + admin,
+          });
+          return true;
+        } else {
+          db.prepare(
+            "INSERT INTO adminList (username, admin, region, role) VALUES (?, ?, ?, ?)"
+          ).run(player, admin, region, role);
+          log.info("Added " + player + " to " + role + " by " + admin);
+          sendWindow("action", {
+            value: "Added " + player + " to " + role + " by " + admin,
+          });
+          return true;
+        }
       } else {
-        log.info("Invalid battleTag");
+        log.info("Invalid battleTag: " + player);
+        return false;
       }
     } else {
       log.info(admin + " is not an admin");
+      return false;
     }
   }
 
-  function removeAdmin(player: string) {
-    if (checkRole(player, "admin")) {
-      db.prepare("DELETE FROM adminList WHERE username = ?").run(player);
-      log.info("Removed permissions from " + player);
-      sendWindow("action", { value: "Removed permissions from " + player });
+  function removeAdmin(player: string, admin: string) {
+    if (checkRole(admin, "admin")) {
+      if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
+        if (checkRole(player, "moderator")) {
+          db.prepare("DELETE FROM adminList WHERE username = ?").run(player);
+          log.info("Removed permissions from " + player);
+          sendWindow("action", { value: "Removed permissions from " + player });
+        } else {
+          log.info(player + " is not a moderator");
+          return false;
+        }
+      } else {
+        log.info("Invalid battleTag");
+        return false;
+      }
+      return true;
     }
   }
 
   function checkRole(player: string, minPerms: "moderator" | "admin") {
-    if (player === gameState.selfBattleTag || "client") {
+    if (player === gameState.selfBattleTag || player === "client") {
       return true;
     }
     const targetRole = db
       .prepare("SELECT role FROM adminList WHERE username = ?")
-      .get(player).role;
-    if (
-      minPerms === "moderator" &&
-      (targetRole === "admin" || targetRole === "moderator")
-    ) {
-      return true;
-    } else if (minPerms === "admin" && targetRole === "admin") {
-      return true;
+      .get(player)?.role;
+    if (targetRole) {
+      if (
+        minPerms === "moderator" &&
+        (targetRole === "admin" || targetRole === "moderator")
+      ) {
+        return true;
+      } else if (minPerms === "admin" && targetRole === "admin") {
+        return true;
+      }
     }
     return false;
   }
@@ -1833,6 +1888,14 @@ if (!gotLock) {
     } else {
       return true;
     }
+  }
+
+  function isInt(string: string, max: number | boolean = false): boolean {
+    var isInt = /^-?\d+$/.test(string);
+    if (isInt && max !== false) {
+      return parseInt(string) <= max;
+    }
+    return isInt;
   }
 
   function announcement() {
@@ -2152,8 +2215,8 @@ if (!gotLock) {
         if (targetRegion > 0 && gameState.selfRegion !== region) {
           let changeRegionPosition = await screen.waitFor(
             imageResource("changeRegion.png"),
-            5000,
-            250,
+            10000,
+            500,
             {
               searchRegion,
               confidence: 0.85,
@@ -2172,7 +2235,7 @@ if (!gotLock) {
           await mouse.leftClick();
         }
         let playRegionCenter = await centerOf(
-          screen.waitFor(imageResource("play.png"), 5000, 250, {
+          screen.waitFor(imageResource("play.png"), 10000, 500, {
             searchRegion,
             confidence: 0.87,
           })
