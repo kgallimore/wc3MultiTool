@@ -1,6 +1,7 @@
 import Discord from "discord.js";
 import EventEmitter from "events";
-import type { mmdResults } from "./utility";
+import type { MicroLobbyData, mmdResults, PlayerTeamsData } from "./utility";
+import { DeColorName } from "./utility";
 export class DisClient extends EventEmitter {
   client: Discord.Client;
   announceChannel: Discord.TextChannel | null;
@@ -36,6 +37,7 @@ export class DisClient extends EventEmitter {
       this.client.user?.setActivity("Warcraft III", { type: "WATCHING" });
       this.client.user?.setStatus("online");
       this.client.user?.setUsername("WC3 MultiTool");
+      this.client.user?.setAvatar("./images/wc3_auto_balancer_v2.png");
       console.log(`Logged in as ${this.client?.user?.tag}!`);
       this.client.channels.cache.forEach((channel) => {
         if (channel.isText()) {
@@ -83,28 +85,41 @@ export class DisClient extends EventEmitter {
     });
   }
 
-  async sendNewLobby(
-    region: "us" | "eu",
-    lobby: string,
-    mapName: string,
-    priv: boolean,
-    observers: boolean
-  ) {
+  async sendNewLobby(lobbyData: MicroLobbyData, data: PlayerTeamsData) {
+    if (this.#embed && this.#sentEmbed) {
+      await this.lobbyClosed();
+    }
     this.#embed = new Discord.MessageEmbed()
-      .setTitle((region === "us" ? ":flag_us: " : ":flag_eu: ") + lobby)
+      .setTitle(
+        (lobbyData.region === "us" ? ":flag_us: " : ":flag_eu: ") +
+          lobbyData.lobbyStatic.lobbyName
+      )
       .setColor("#0099ff")
       .setDescription("Click above to launch WC3MT and join the lobby")
       .setURL(
         `https://${this.dev ? "dev" : "war"}.trenchguns.com/?lobbyName=${encodeURI(
-          lobby
+          lobbyData.lobbyStatic.lobbyName
         )}`
       )
       .addFields([
-        { name: "Map Name", value: mapName },
+        { name: "Map Name", value: DeColorName(lobbyData.lobbyStatic.mapData.mapName) },
         { name: "Created", value: `<t:${Math.floor(Date.now() / 1000)}:R> ` },
-        { name: "Private", value: priv ? "Yes" : "No", inline: true },
-        { name: "Observers", value: observers ? "Yes" : "No", inline: true },
+        {
+          name: "Observers",
+          value: lobbyData.lobbyStatic.mapFlags.typeObservers !== 0 ? "Yes" : "No",
+          inline: true,
+        },
       ]);
+    Object.entries(data).forEach(([teamName, data]) => {
+      let combinedData = data.map(
+        (data) =>
+          data.name +
+          (data.rating > -1
+            ? ": " + [data.rating, data.rank, data.wins, data.losses].join("/")
+            : "")
+      );
+      this.#embed?.addFields([{ name: teamName, value: combinedData.join("\n") ?? "" }]);
+    });
 
     this.#sentEmbed = await this.sendMessage(this.#embed, this.announceChannel);
   }
@@ -129,6 +144,7 @@ export class DisClient extends EventEmitter {
       newEmbed.setColor("#228B22");
       newEmbed.setURL("");
       newEmbed.fields.forEach((field) => {
+        // TODO append results
         for (const [playerName, value] of Object.entries(results.list)) {
           if (field.value.match(new RegExp(playerName, "i"))) {
           }
@@ -139,16 +155,42 @@ export class DisClient extends EventEmitter {
         { name: "Game Ended", value: `<t:${Math.floor(Date.now() / 1000)}:R>` },
       ]);
       this.#sentEmbed.edit(newEmbed);
+      this.#sentEmbed = null;
+      this.#embed = null;
     }
   }
 
-  async updateLobby(data: { [key: string]: Array<string> }) {
+  async lobbyClosed() {
     if (this.#embed && this.#sentEmbed) {
       let newEmbed = new Discord.MessageEmbed(this.#embed);
-      newEmbed.fields = this.#embed.fields.splice(0, 4);
+      newEmbed.setDescription("Lobby closed");
+      newEmbed.setColor("#36454F");
+      newEmbed.setURL("");
+      newEmbed.fields = this.#embed.fields.splice(0, 3);
       this.#embed = newEmbed;
-      Object.entries(data).forEach(([teamName, name]) => {
-        newEmbed.addFields([{ name: teamName, value: name.join("\n") || "" }]);
+      newEmbed.addFields([
+        { name: "Lobby Closed", value: `<t:${Math.floor(Date.now() / 1000)}:R>` },
+      ]);
+      this.#sentEmbed.edit(newEmbed);
+      this.#sentEmbed = null;
+      this.#embed = null;
+    }
+  }
+
+  async updateLobby(data: PlayerTeamsData) {
+    if (this.#embed && this.#sentEmbed) {
+      let newEmbed = new Discord.MessageEmbed(this.#embed);
+      newEmbed.fields = this.#embed.fields.splice(0, 3);
+      this.#embed = newEmbed;
+      Object.entries(data).forEach(([teamName, data]) => {
+        let combinedData = data.map(
+          (data) =>
+            data.name +
+            (data.rating > -1
+              ? ": " + [data.rating, data.rank, data.wins, data.losses].join("/")
+              : "")
+        );
+        newEmbed.addFields([{ name: teamName, value: combinedData.join("\n") ?? "" }]);
       });
       this.#sentEmbed.edit(newEmbed);
     }

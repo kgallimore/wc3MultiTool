@@ -1,11 +1,12 @@
 <script lang="ts">
   import type {
     AppSettings,
-    Lobby,
     SettingsKeys,
     WindowReceive,
     WindowSend,
   } from "../../tsrc/utility";
+  import { getTargetRegion } from "../../tsrc/utility";
+  import { MicroLobby } from "../../tsrc/microLobby";
   import CloseSlot from "./components/CloseSlot.svelte";
   import SettingsCheckbox from "./components/SettingsCheckbox.svelte";
   let settings: AppSettings = {
@@ -36,6 +37,9 @@
       flagRandomHero: false,
       settingVisibility: "0",
       leaveAlternate: false,
+      regionChange: false,
+      regionChangeTimeEU: "11:00",
+      regionChangeTimeNA: "01:00",
     },
     obs: {
       type: "off",
@@ -50,7 +54,6 @@
       lookupName: "",
       available: false,
       wc3statsVariant: "",
-      experimental: false,
       handleReplays: true,
     },
     discord: {
@@ -62,19 +65,45 @@
     },
     client: {
       restartOnUpdate: false,
+      checkForUpdates: true,
+      performanceMode: false,
     },
   };
-  let currentStatus = {
+  let currentStatus: {
+    connected: boolean;
+    menu: string;
+    progress: { percent: number; step: string };
+    lobby: MicroLobby | null;
+    updater: string;
+  } = {
     connected: false,
     menu: "Out of menus",
     progress: { percent: 0, step: "Waiting" },
-    lobby: {} as Lobby,
+    lobby: null,
     updater: "Up to date",
   };
   let wc3statsOptions = wc3EloModes(settings.elo.lookupName);
   let battleTag = "";
   let banReason = "";
   let lastAction = "";
+  $: region = getTargetRegion(
+    settings.autoHost.regionChangeTimeEU,
+    settings.autoHost.regionChangeTimeNA
+  );
+  let utcTime =
+    ("0" + new Date().getUTCHours().toString()).slice(-2) +
+    ":" +
+    ("0" + new Date().getUTCMinutes().toString()).slice(-2);
+  setInterval(() => {
+    utcTime =
+      ("0" + new Date().getUTCHours().toString()).slice(-2) +
+      ":" +
+      ("0" + new Date().getUTCMinutes().toString()).slice(-2);
+  }, 60000);
+
+  let structuredTeamData = currentStatus.lobby
+    ? Object.entries(currentStatus.lobby.exportTeamStructure(false))
+    : [];
   $: botAnnouncement = `Welcome. I am a bot. ${
     settings.elo.available && settings.elo.type !== "off"
       ? `I will fetch ELO from ${settings.elo.type}. ${
@@ -97,10 +126,17 @@
     });
   }
 
-  async function wc3EloModes(lookupName: string) {
+  async function wc3EloModes(lookupName: string): Promise<
+    Array<{
+      key: { mode: string; season: string; round: string; ladder: string };
+    }>
+  > {
     let stats = await fetch("https://api.wc3stats.com/maps/" + lookupName);
     let data = await stats.json();
-    return data.body.variants[0].stats;
+    if (data.body.variants) {
+      return data.body.variants[0].stats;
+    }
+    return [];
   }
 
   function init() {
@@ -125,7 +161,6 @@
         battleTag = "";
         break;
       case "updater":
-        console.log("updater", newData);
         currentStatus.updater = newData.value;
         break;
       case "statusChange":
@@ -138,17 +173,30 @@
       case "updateSettingSingle":
         let update = newData.update;
         if (update) {
+          // @ts-ignore
+          settings[update.setting][update.key] = update.value;
           if (update.key === "lookupName") {
             wc3statsOptions = wc3EloModes(settings.elo.lookupName);
           }
-          // @ts-ignore
-          settings[update.setting][update.key] = update.value;
         }
         break;
-      case "lobbyData":
-        let newLobby = newData.lobby;
-        if (newLobby) {
-          currentStatus.lobby = newLobby;
+      case "lobbyUpdate":
+        let lobbyData = newData.lobbyData;
+        if (lobbyData.newLobby) {
+          currentStatus.lobby = new MicroLobby(lobbyData.newLobby);
+          structuredTeamData = Object.entries(
+            currentStatus.lobby.exportTeamStructure(false)
+          );
+        } else if (lobbyData.playerPayload || lobbyData.playerData) {
+          if (currentStatus.lobby) {
+            currentStatus.lobby.ingestUpdate(lobbyData);
+            structuredTeamData = Object.entries(
+              currentStatus.lobby.exportTeamStructure(false)
+            );
+          }
+        } else if (lobbyData.leftLobby) {
+          currentStatus.lobby = null;
+          structuredTeamData = [];
         }
         break;
       case "progress":
@@ -185,7 +233,7 @@
     e.preventDefault();
     let newValue:
       | { key: string; shiftKey: boolean; ctrlKey: boolean; altKey: boolean }
-      | false;
+      | boolean = false;
     if (e.key.toLowerCase() !== "backspace") {
       if (
         e.key !== "Control" &&
@@ -208,9 +256,8 @@
       }
     } else {
       (e.target as HTMLInputElement).value = "";
-      newValue = false;
     }
-    if (newValue != null) {
+    if (newValue) {
       let key = (e.target as HTMLElement).getAttribute("data-key");
       if (key) {
         toMain({
@@ -263,7 +310,7 @@
     // @ts-ignore
     window.api.send("toMain", args);
   }
-</script>
+</script> 
 
 <main>
   <div class="modal fade" id="settingsModal" tabindex="-1" aria-hidden="true">
@@ -281,18 +328,62 @@
         <div class="modal-body">
           <div class="container">
             <label for="clientForm"> Client Settings</label>
-            <form id="clientForm" name="client" class="p-2">
-              <div class="row border m-2">
+            <form id="clientForm" name="client" class="p-2 border">
+              <div class="row m-2">
                 <div class="col p-2">
-                  <SettingsCheckbox
-                    frontFacingName="Restart on update"
-                    setting="client"
-                    key="restartOnUpdate"
-                    checked={settings.client.restartOnUpdate}
-                    on:change={(e) =>
-                      // @ts-ignore
-                      updateSettingSingle("client", "restartOnUpdate", e.target.checked)}
-                  />
+                  <div
+                    class="btn-group btn-group-sm"
+                    style="flex-wrap: wrap;"
+                    role="group"
+                  >
+                    <SettingsCheckbox
+                      frontFacingName="Restart on update"
+                      setting="client"
+                      key="restartOnUpdate"
+                      checked={settings.client.restartOnUpdate}
+                      on:change={(e) =>
+                        updateSettingSingle(
+                          "client",
+                          "restartOnUpdate",
+                          // @ts-ignore
+                          e.target.checked
+                        )}
+                    />
+                    <SettingsCheckbox
+                      frontFacingName="Check for updates"
+                      setting="client"
+                      key="checkForUpdates"
+                      checked={settings.client.checkForUpdates}
+                      on:change={(e) =>
+                        updateSettingSingle(
+                          "client",
+                          "checkForUpdates",
+                          // @ts-ignore
+                          e.target.checked
+                        )}
+                    />
+                    <SettingsCheckbox
+                      frontFacingName="Performance Mode(Beta)"
+                      setting="client"
+                      key="performanceMode"
+                      checked={settings.client.performanceMode}
+                      on:change={(e) =>
+                        // @ts-ignore
+                        updateSettingSingle(
+                          "client",
+                          "performanceMode",
+                          // @ts-ignore
+                          e.target.checked
+                        )}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div class="row m-2">
+                <div class="col p-2">
+                  Performance Mode completely disables the Warcraft 3 UI. This is meant
+                  for extremely low powered computers running Rapid Host with a time value
+                  of -1 or 0.
                 </div>
               </div>
             </form>
@@ -302,9 +393,6 @@
                   <label for="eloLookup" class="form-label">
                     <details>
                       <summary>ELO Lookup (click to expand)</summary>
-                      <strong>Experimental Swap:</strong>
-                      Only enable for games of more than 2 teams. It is very inefficient and
-                      largely untested.<br />
                       <strong>Handle Replay: </strong>Will automatically handle upload to
                       wc3stats.com at the end of each game.
                     </details></label
@@ -361,7 +449,11 @@
                             {#await wc3statsOptions}
                               <option>Fetching options...</option>
                             {:then value}
-                              <option>Select a value</option>
+                              <option
+                                value=""
+                                selected={"" === settings.elo.wc3statsVariant}
+                                >Select a value</option
+                              >
                               {#each value as option}
                                 <option
                                   selected={JSON.stringify(option.key) ===
@@ -397,29 +489,18 @@
                         >Balance Teams</label
                       >
                       <SettingsCheckbox
-                        key="experimental"
+                        key="excludeHostFromSwap"
                         setting="elo"
-                        frontFacingName="Experimental Swap"
-                        checked={settings.elo.experimental}
+                        frontFacingName="Don't swap host"
+                        checked={settings.elo.excludeHostFromSwap}
                         on:change={(e) =>
-                          // @ts-ignore
-                          updateSettingSingle("elo", "experimental", e.target.checked)}
+                          updateSettingSingle(
+                            "elo",
+                            "excludeHostFromSwap",
+                            // @ts-ignore
+                            e.target.checked
+                          )}
                       />
-                      {#if !settings.elo.experimental}
-                        <SettingsCheckbox
-                          key="excludeHostFromSwap"
-                          setting="elo"
-                          frontFacingName="Don't swap host"
-                          checked={settings.elo.excludeHostFromSwap}
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "elo",
-                              "excludeHostFromSwap",
-                              // @ts-ignore
-                              e.target.checked
-                            )}
-                        />
-                      {/if}
                       {#if settings.elo.type === "wc3stats"}
                         <SettingsCheckbox
                           key="handleReplays"
@@ -468,7 +549,8 @@
                       >
                       Starts a lobby with specified settings.<br />
                       <strong>Rapid Host:</strong> Hosts lobbies, auto starts, leaves the
-                      game after specified timer(minutes).<br />
+                      game after specified timer(minutes). (-1 will force quit at loading
+                      screen)<br />
                       <strong>Smart Host:</strong> Hosts lobbies, auto starts, quits the
                       game if this end screen pops up:
                       <img class="img-fluid" src="quitNormal.png" alt="Quit Normal" />
@@ -635,7 +717,7 @@
                                 e.target.checked
                               )}
                           />
-                          {#if settings.autoHost.type === "smartHost" && settings.autoHost.observers}
+                          {#if settings.autoHost.type === "smartHost"}
                             <SettingsCheckbox
                               frontFacingName="Intrusive check"
                               key="leaveAlternate"
@@ -660,6 +742,19 @@
                             updateSettingSingle(
                               "autoHost",
                               "advancedMapOptions",
+                              // @ts-ignore
+                              e.target.checked
+                            )}
+                        />
+                        <SettingsCheckbox
+                          key="regionChange"
+                          setting="autoHost"
+                          frontFacingName="Auto Change Regions"
+                          checked={settings.autoHost.regionChange}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "autoHost",
+                              "regionChange",
                               // @ts-ignore
                               e.target.checked
                             )}
@@ -835,7 +930,6 @@
                       </div>
                     </div>
                   </div>
-
                   <div class="row p-2">
                     {#if settings.autoHost.voteStart && ["rapidHost", "smartHost"].includes(settings.autoHost.type)}
                       <div class="col">
@@ -856,7 +950,7 @@
                               "autoHost",
                               "voteStartPercent",
                               // @ts-ignore
-                              e.target.value
+                              parseInt(e.target.value)
                             )}
                         />
                       </div>
@@ -872,7 +966,7 @@
                           class="form-control"
                           data-key="rapidHostTimer"
                           data-setting="autoHost"
-                          min="0"
+                          min="-1"
                           max="360"
                           value={settings.autoHost.rapidHostTimer}
                           on:change={(e) =>
@@ -880,7 +974,7 @@
                               "autoHost",
                               "rapidHostTimer",
                               // @ts-ignore
-                              e.target.value
+                              parseInt(e.target.value)
                             )}
                         />
                       </div>
@@ -944,6 +1038,56 @@
                             updateSettingSingle(
                               "autoHost",
                               "announceRestingInterval",
+                              // @ts-ignore
+                              parseInt(e.target.value)
+                            )}
+                        />
+                      </div>
+                    </div>
+                  {/if}
+                  {#if settings.autoHost.regionChange}
+                    <div class="row p-2">
+                      <div class="col flex text-center">
+                        Current UTC time is: {utcTime}
+                        Target: {region}
+                      </div>
+                    </div>
+                    <div class="row p-2">
+                      <div class="col">
+                        <label for="regionChangeTimeNA" class="form-label"
+                          >UTC time to swap to NA</label
+                        >
+                        <input
+                          type="time"
+                          id="regionChangeTimeNA"
+                          class="form-control"
+                          data-key="regionChangeTimeNA"
+                          data-setting="autoHost"
+                          value={settings.autoHost.regionChangeTimeNA}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "autoHost",
+                              "regionChangeTimeNA",
+                              // @ts-ignore
+                              e.target.value
+                            )}
+                        />
+                      </div>
+                      <div class="col">
+                        <label for="regionChangeTimeEU" class="form-label"
+                          >UTC time to swap to EU</label
+                        >
+                        <input
+                          type="time"
+                          id="regionChangeTimeEU"
+                          class="form-control"
+                          data-key="regionChangeTimeEU"
+                          data-setting="autoHost"
+                          value={settings.autoHost.regionChangeTimeEU}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "autoHost",
+                              "regionChangeTimeEU",
                               // @ts-ignore
                               e.target.value
                             )}
@@ -1297,6 +1441,25 @@
           </div>
         </div>
       </div>
+      <div class="row justify-content-center p-2">
+        <div class="col d-flex text-xs">
+          <details>
+            <summary>Permissions</summary><strong>Mod: </strong>
+            ?a: Aborts game start<br />
+            ?ban (name|slotNumber) (?reason): Bans a player forever<br />
+            ?close (name|slotNumber): Closes a slot/player<br />
+            ?handi (name|slotNumber) (50|60|70|80|100): Sets slot/player handicap<br />
+            ?kick (name|slotNumber) (?reason): Kicks a slot/player<br />
+            ?open (name|slotNumber) (?reason): Opens a slot/player<br />
+            ?unban (name): Un-bans a player<br />
+            ?start: Starts game<br /><strong>Admin:</strong><br />
+            ?perm (name) (?admin|mod): Promotes a player to admin or moderator (mod by default).<br
+            />
+            ?unperm (name): Demotes player to normal
+            ?autohost (?off|rapid|lobby|smart): Gets/?Sets autohost type
+          </details>
+        </div>
+      </div>
     </form>
 
     <table class="table table-sm">
@@ -1310,40 +1473,57 @@
       </thead>
       <tbody>
         <tr>
-          <td id="mapName">{currentStatus.lobby.mapName ?? ""}</td>
-          <td id="lobbyName">{currentStatus.lobby.lobbyName ?? ""}</td>
-          <td id="gameHost">{currentStatus.lobby.playerHost ?? ""}</td>
-          <td id="eloAvailable">{currentStatus.lobby.eloAvailable ?? ""}</td>
+          {#if currentStatus.lobby}
+            <td id="mapName">{currentStatus.lobby.lobbyStatic.mapData.mapName}</td>
+            <td id="lobbyName">{currentStatus.lobby.lobbyStatic.lobbyName}</td>
+            <td id="gameHost">{currentStatus.lobby.lobbyStatic.playerHost}</td>
+            <td id="eloAvailable">{currentStatus.lobby.eloAvailable}</td>
+          {:else}
+            <td id="mapName" />
+            <td id="lobbyName" />
+            <td id="gameHost" />
+            <td id="eloAvailable" />
+          {/if}
         </tr>
       </tbody>
     </table>
 
     <div class="p-2" id="tablesDiv">
-      {#if currentStatus.lobby?.processed?.teamList?.playerTeams?.data}
-        {#each Object.entries(currentStatus.lobby.processed.teamList.playerTeams.data) as [teamName, teamData]}
+      {#if structuredTeamData}
+        {#each structuredTeamData as [teamName, teamData]}
           <table class="table table-hover table-striped table-sm">
             <thead>
               <tr>
                 <th>{teamName} Players</th>
-                <th>ELO</th>
+                <th>ELO/Rank/Games/Wins/Losses</th>
               </tr>
             </thead>
             <tbody>
-              {#each teamData.slots as player}
+              {#each teamData as player}
                 <tr>
                   <td>
-                    {#if player !== "OPEN SLOT"}
+                    {#if player.slotStatus === 2 && player.realPlayer}
                       <button
                         class="btn btn-danger"
                         on:click={() =>
                           toMain({
                             messageType: "banPlayer",
-                            ban: { player, reason: banReason },
+                            ban: { player: player.name, reason: banReason },
                           })}>Ban</button
                       >
-                    {/if}{player}
+                    {/if}{player.name}
                   </td>
-                  <td>{currentStatus.lobby.processed.eloList[player] ?? "N/A"}</td>
+                  <td
+                    >{player.rating > -1
+                      ? [
+                          player.rating,
+                          player.rank,
+                          player.played,
+                          player.wins,
+                          player.losses,
+                        ].join(" / ")
+                      : "N/A"}</td
+                  >
                 </tr>
               {/each}
             </tbody>

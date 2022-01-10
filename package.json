@@ -1,6 +1,6 @@
 {
   "name": "wc3multitool",
-  "version": "0.6.7",
+  "version": "0.8.9",
   "description": "A multi-tool for Warcraft 3",
   "repository": {
     "type": "git",
@@ -26,11 +26,11 @@
     "copyright": "Trenchguns",
     "extraFiles": [
       {
-        "from": "./webui.html",
+        "from": "./src/webui.html",
         "to": "."
       },
       {
-        "from": "./webui.js",
+        "from": "./src/webui.js",
         "to": "."
       },
       {
@@ -120,40 +120,39 @@
     "@rollup/plugin-node-resolve": "^13.0.6",
     "@rollup/plugin-typescript": "^8.3.0",
     "@tsconfig/svelte": "^2.0.1",
+    "@types/better-sqlite3": "^7.4.2",
     "@types/request": "^2.48.7",
     "@types/sound-play": "^1.1.0",
     "@types/ws": "^8.2.1",
-    "concurrently": "^6.4.0",
-    "electron": "^13.6.2",
-    "electron-builder": "^22.11.7",
-    "electron-rebuild": "^3.1.1",
+    "concurrently": "^6.5.1",
+    "electron": "^16.0.6",
+    "electron-builder": "^22.14.5",
     "electron-reload": "^2.0.0-alpha.1",
-    "rollup": "^2.60.1",
+    "rollup": "^2.63.0",
     "rollup-plugin-css-only": "^3.1.0",
     "rollup-plugin-livereload": "^2.0.5",
     "rollup-plugin-svelte": "^7.1.0",
     "rollup-plugin-terser": "^7.0.2",
-    "svelte": "^3.44.2",
-    "svelte-preprocess": "^4.9.8",
-    "typescript": "^4.5.2"
+    "svelte": "^3.44.3",
+    "svelte-preprocess": "^4.10.1",
+    "typescript": "^4.5.4"
   },
   "dependencies": {
-    "@nut-tree/nut-js": "^1.7.0",
-    "@types/better-sqlite3": "^7.4.1",
-    "better-sqlite3": "^7.4.4",
+    "@nut-tree/nl-matcher": "^1.0.1-next.20220105214851",
+    "@nut-tree/nut-js": "^2.0.1-next.20220104200732",
+    "better-sqlite3": "^7.4.6",
     "cross-fetch": "^3.1.4",
     "discord.js": "^12.5.3",
-    "electron-log": "^4.4.1",
-    "electron-store": "^8.0.0",
-    "electron-updater": "^4.3.9",
+    "electron-log": "^4.4.4",
+    "electron-store": "^8.0.1",
+    "electron-updater": "^4.6.1",
     "esm": "^3.2.25",
     "form-data": "^2.3.3",
     "https": "^1.0.0",
-    "js-combinatorics": "^1.5.3",
-    "nanoid": "^3.1.25",
-    "robotjs": "^0.6.0",
+    "js-combinatorics": "^1.5.4",
+    "nanoid": "^3.1.30",
     "sound-play": "^1.1.0",
-    "w3gjs": "^2.4.2",
-    "ws": "^8.2.0"
+    "w3gjs": "^2.4.3",
+    "ws": "^8.4.0"
   }
 }
