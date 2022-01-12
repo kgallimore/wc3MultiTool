@@ -1,6 +1,5 @@
 import fetch from "cross-fetch";
 import EventEmitter from "events";
-import Player from "w3gjs/dist/types/Player";
 import type {
   GameClientLobbyPayload,
   GameClientLobbyPayloadStatic,
@@ -69,6 +68,9 @@ export class WarLobby extends EventEmitter {
     ) {
       // @ts-ignore
       this.#appSettings[setting] = value;
+      this.emitInfo(`Updated lobby: ${setting} to ${value}`);
+    } else {
+      this.emitError(`Lobby update failed. Unrecognized ${setting}, ${value}`);
     }
   }
 
@@ -296,72 +298,80 @@ export class WarLobby extends EventEmitter {
   }
 
   async fetchStats(name: string) {
-    try {
-      if (!this.lookupName) {
-        this.emitInfo("Waiting for lookup name");
-        setTimeout(() => {
-          this.fetchStats(name);
-        }, 1000);
-        return;
-      } else if (this.eloAvailable) {
-        if (this.#appSettings.eloType === "wc3stats") {
-          let buildVariant = "";
-          if (this.#isTargetMap && this.#appSettings.wc3StatsVariant) {
-            for (const [key, value] of Object.entries(
-              JSON.parse(this.#appSettings.wc3StatsVariant)
-            )) {
-              if (value) buildVariant += "&" + key + "=" + value;
+    if (this.#appSettings.eloType !== "off") {
+      try {
+        if (!this.lookupName) {
+          this.emitInfo("Waiting for lookup name");
+          setTimeout(() => {
+            this.fetchStats(name);
+          }, 1000);
+          return;
+        } else if (this.eloAvailable) {
+          if (this.#appSettings.eloType === "wc3stats") {
+            let buildVariant = "";
+            if (this.#isTargetMap && this.#appSettings.wc3StatsVariant) {
+              for (const [key, value] of Object.entries(
+                JSON.parse(this.#appSettings.wc3StatsVariant)
+              )) {
+                if (value) buildVariant += "&" + key + "=" + value;
+              }
             }
-          }
-          buildVariant = encodeURI(buildVariant);
-          let targetUrl = `https://api.wc3stats.com/leaderboard&map=${
-            this.lookupName
-          }${buildVariant}&search=${encodeURI(name)}`;
-          this.emitInfo(targetUrl);
-          let jsonData: { body: Array<PlayerData & { name: string }> } = await (
-            await fetch(targetUrl)
-          ).json();
-          let elo = 500;
-          let data: PlayerData | undefined;
-          if (this.lookupName === "Footmen%20Vs%20Grunts") {
-            elo = 1000;
-          }
-          if (jsonData.body.length > 0) {
-            let { name, slot, ...desiredData } = jsonData.body[0];
-            data = { slot: this.playerData[name].slot, ...desiredData };
-          }
-          data = data ?? {
-            played: 0,
-            wins: 0,
-            losses: 0,
-            rating: elo,
-            lastChange: 0,
-            rank: 9999,
-            slot: this.playerData[name].slot,
-          };
-          // If they haven't left, set real ELO
-          if (this.playerData[name]) {
-            this.playerData[name] = data;
-            this.emitUpdate({
-              playerData: {
-                data,
-                name,
-              },
-            });
-            this.emitInfo(name + " stats received and saved.");
-            if (this.isLobbyReady()) {
-              this.emitInfo("Lobby is ready.");
-              this.autoBalance();
+            buildVariant = encodeURI(buildVariant);
+            let targetUrl = `https://api.wc3stats.com/leaderboard&map=${
+              this.lookupName
+            }${buildVariant}&search=${encodeURI(name)}`;
+            this.emitInfo(targetUrl);
+            let jsonData: { body: Array<PlayerData & { name: string }> };
+            try {
+              jsonData = await (await fetch(targetUrl)).json();
+            } catch (e) {
+              this.emitError("Failed to fetch wc3stats data:");
+              this.emitError(e as string);
+              jsonData = { body: [] };
+            }
+            let elo = 500;
+            let data: PlayerData | undefined;
+            if (this.lookupName === "Footmen%20Vs%20Grunts") {
+              elo = 1000;
+            }
+            if (jsonData.body.length > 0) {
+              let { name, slot, ...desiredData } = jsonData.body[0];
+              data = { slot: this.playerData[name].slot, ...desiredData };
+            }
+            data = data ?? {
+              played: 0,
+              wins: 0,
+              losses: 0,
+              rating: elo,
+              lastChange: 0,
+              rank: 9999,
+              slot: this.playerData[name].slot,
+            };
+            // If they haven't left, set real ELO
+            if (this.playerData[name]) {
+              this.playerData[name] = data;
+              this.emitUpdate({
+                playerData: {
+                  data,
+                  name,
+                },
+              });
+              this.emitInfo(name + " stats received and saved.");
+              if (this.isLobbyReady()) {
+                this.emitInfo("Lobby is ready.");
+                this.autoBalance();
+              }
+            } else {
+              this.emitInfo(name + " left before ELO was found");
             }
           } else {
-            this.emitInfo(name + " left before ELO was found");
+            //this.emitInfo("No elo enabled");
           }
-        } else {
-          //this.emitInfo("No elo enabled");
         }
+      } catch (err: any) {
+        this.emitError("Failed to fetch stats:");
+        this.emitError(err);
       }
-    } catch (err: any) {
-      this.emitError(err);
     }
   }
 
@@ -384,7 +394,7 @@ export class WarLobby extends EventEmitter {
   }
 
   emitError(error: string) {
-    this.emit("err", error);
+    this.emit("error", error);
   }
 
   emitInfo(message: string) {
@@ -487,7 +497,11 @@ export class WarLobby extends EventEmitter {
 
   autoBalance() {
     let teams = Object.entries(this.exportTeamStructure());
-    if (this.eloAvailable && this.#appSettings.balanceTeams) {
+    if (
+      this.#appSettings.eloType !== "off" &&
+      this.eloAvailable &&
+      this.#appSettings.balanceTeams
+    ) {
       this.emitInfo("Auto balancing teams");
       if (this.bestCombo === undefined || this.bestCombo.length == 0) {
         if (teams.length < 2) {

@@ -67,9 +67,11 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
+  console.log(process.version);
   const db = new sqlite3(app.getPath("userData") + "/wc3mt.db");
 
   autoUpdater.logger = log;
+  log.catchErrors();
 
   screen.config.confidence = 0.8;
   screen.height().then((height) => {
@@ -220,12 +222,12 @@ if (!gotLock) {
                 log.info(`Change install location to ${warInstallLoc}`);
                 store.set("warInstallLoc", warInstallLoc);
               } else {
-                log.error("Invalid Warcraft file?");
+                log.warn("Invalid Warcraft file?");
               }
             }
           })
           .catch((err) => {
-            log.error(err.message, err.stack);
+            log.warn(err.message, err.stack);
           });
       }
     });
@@ -282,7 +284,7 @@ if (!gotLock) {
           try {
             openWarcraft(openLobbyParams?.region);
           } catch (e) {
-            log.error(e);
+            log.warn(e);
           }
         }
       }
@@ -362,7 +364,7 @@ if (!gotLock) {
                     log.info("Map already exists, not copying.");
                   }
                 } catch (e) {
-                  log.error(e);
+                  log.warn(e);
                   return;
                 }
               }
@@ -385,7 +387,7 @@ if (!gotLock) {
             }
           })
           .catch((err) => {
-            log.error(err.message, err.stack);
+            log.warn(err.message, err.stack);
           });
         break;
       case "updateSettingSingle":
@@ -401,15 +403,11 @@ if (!gotLock) {
   });
 
   function updateSetting(setting: keyof AppSettings, key: SettingsKeys, value: any) {
-    // TODO remove rapidHostTimer from typeof exception
     if (
       // @ts-ignore
       settings[setting]?.[key] !== undefined &&
       // @ts-ignore
       (typeof settings[setting][key] === typeof value ||
-        key === "rapidHostTimer" ||
-        key === "announceRestingInterval" ||
-        key === "voteStartPercent" ||
         ((key === "inGameHotkey" || key === "outOfGameHotkey") &&
           (typeof value === "boolean" || typeof value === "object"))) &&
       // @ts-ignore
@@ -427,7 +425,13 @@ if (!gotLock) {
         }
       }
       if (lobby) {
-        lobby.updateSetting(key as keyof LobbyAppSettings, value);
+        let updateKey: keyof LobbyAppSettings;
+        if (setting === "elo" && key === "type") {
+          updateKey = "eloType";
+        } else {
+          updateKey = key as keyof LobbyAppSettings;
+        }
+        lobby.updateSetting(updateKey, value);
       }
       if (key === "performanceMode") {
         togglePerformanceMode(value);
@@ -441,10 +445,10 @@ if (!gotLock) {
         },
       });
       store.set(setting, settings[setting]);
-      log.info(setting + " settings changed:", settings[setting]);
+      log.info(setting + " settings changed:", key, value);
       //@ts-ignore
     } else if (settings[setting][key] !== value) {
-      log.error("Invalid update:", setting, key, value);
+      log.warn("Invalid update:", setting, key, value);
     }
   }
 
@@ -496,7 +500,7 @@ if (!gotLock) {
       title: "Update Error",
       body: "There was an error with the auto updater!",
     }).show();
-    log.error(err);
+    log.warn(err);
     sendWindow("updater", { value: "Update error! Check logs." });
   });
   autoUpdater.on("download-progress", (progressObj) => {
@@ -577,11 +581,13 @@ if (!gotLock) {
 
   app.on("ready", function () {
     togglePerformanceMode(settings.client.performanceMode);
-    setInterval(() => {
-      if (settings.client.checkForUpdates) {
-        autoUpdater.checkForUpdatesAndNotify();
-      }
-    }, 30 * 60 * 1000);
+    if (app.isPackaged) {
+      setInterval(() => {
+        if (settings.client.checkForUpdates) {
+          autoUpdater.checkForUpdatesAndNotify();
+        }
+      }, 30 * 60 * 1000);
+    }
     log.info("App ready");
     db.exec(
       "CREATE TABLE IF NOT EXISTS banList(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, ban_date DATETIME default current_timestamp NOT NULL, admin TEXT NOT NULL, region TEXT NOT NULL, reason TEXT, unban_date DATETIME)"
@@ -624,7 +630,7 @@ if (!gotLock) {
           "The app may already be open. Check your taskbar or task manager for another instance, or clear port 8888"
         );
       } else {
-        log.error(err.message);
+        log.warn(err.message);
         throw err;
       }
     });
@@ -669,7 +675,7 @@ if (!gotLock) {
       hubWebSocket = new WebSocket("wss://wsdev.trenchguns.com/" + identifier);
     }
     hubWebSocket.onerror = function (error) {
-      if (app.isPackaged) log.error("Failed hub connection", error);
+      if (app.isPackaged) log.warn("Failed hub connection", error);
     };
     hubWebSocket.onopen = (ev) => {
       if (ev.target.readyState !== WebSocket.OPEN) return;
@@ -739,8 +745,10 @@ if (!gotLock) {
         } else if (update.newLobby) {
           refreshTimer = setInterval(() => {
             if (lobby.getAllPlayers(true).length < 2) {
+              log.info("Re-hosting possibly stale lobby");
               leaveGame();
             } else {
+              log.info("Refreshing possibly stale lobby");
               lobby.refreshGame();
             }
           }, 60000 * 30);
@@ -797,7 +805,7 @@ if (!gotLock) {
             announcement();
           }
         } else {
-          log.error("Nameless player joined");
+          log.warn("Nameless player joined");
         }
       } else if (update.lobbyReady) {
         if (lobby?.lobbyStatic?.isHost) {
@@ -809,6 +817,7 @@ if (!gotLock) {
             // Wait a quarter second to make sure no one left
             setTimeout(() => {
               if (lobby.isLobbyReady()) {
+                playSound("ready.wav");
                 startGame();
               }
             }, 250);
@@ -825,7 +834,7 @@ if (!gotLock) {
       sendMessage(data.type, data.payload);
     });
     lobby.on("error", (data: string) => {
-      log.error(data);
+      log.warn(data);
     });
     lobby.on("info", (data: string) => {
       log.info(data);
@@ -868,7 +877,7 @@ if (!gotLock) {
               Key[settings.obs.inGameHotkey.key.toUpperCase()]
             );
           } catch (e) {
-            console.log(e);
+            log.warn("Failed to trigger OBS In-Game", e);
           }
         }
       } else if (!inGame && settings.obs.outOfGameHotkey) {
@@ -890,7 +899,7 @@ if (!gotLock) {
             Key[settings.obs.outOfGameHotkey.key.toUpperCase()]
           );
         } catch (e) {
-          console.log(e);
+          log.warn("Failed to trigger OBS Out of Game", e);
         }
       }
     }
@@ -923,17 +932,6 @@ if (!gotLock) {
             log.info("Re-hosting Stale Lobby");
             sendChatMessage("Re-hosting Stale Lobby");
             leaveGame();
-          } else if (gameState.menuState === "LOADING_SCREEN") {
-            if (settings.autoHost.type === "rapidHost") {
-              if (settings.autoHost.rapidHostTimer === 0) {
-                log.info("Rapid Host leave game immediately");
-                leaveGame();
-              } else if (settings.autoHost.rapidHostTimer === -1) {
-                log.info("Rapid Host exit game immediately");
-                await forceQuitWar();
-                openWarcraft();
-              }
-            }
           }
         } else if (
           data.data.message === "ScreenTransitionInfo" &&
@@ -952,7 +950,7 @@ if (!gotLock) {
         sendSocket("autoHost", settings.autoHost);
       //sendWindow("autoHost", settings.autoHost);
       case "error":
-        log.error(data);
+        log.warn(data);
         win.webContents.send("fromMain", data);
         break;
       case "echo":
@@ -1030,16 +1028,15 @@ if (!gotLock) {
     if (!screen || screen === "null" || screen === gameState.menuState) {
       return;
     }
+    log.info("Screen changed to: ", screen);
     if (["CUSTOM_LOBBIES", "MAIN_MENU"].includes(screen)) {
+      log.info("Checking to see if we should auto host or join a lobby link.");
       if (openLobbyParams?.lobbyName) {
         setTimeout(openParamsJoin, 250);
       } else {
         setTimeout(autoHostGame, 250);
       }
     } else if (screen === "LOADING_SCREEN") {
-      discClient?.sendMessage(
-        "Game start. End of chat for " + lobby.lobbyStatic?.lobbyName
-      );
       discClient?.lobbyStarted();
       if (settings.autoHost.type === "rapidHost") {
         if (settings.autoHost.rapidHostTimer === 0) {
@@ -1052,16 +1049,18 @@ if (!gotLock) {
         }
       }
     } else if (gameState.menuState === "LOADING_SCREEN" && screen === "SCORE_SCREEN") {
-      // Game has finished loading in
+      log.info("Game has finished loading in.");
       inGame = true;
       if (settings.autoHost.type === "smartHost") {
+        log.info("Setting up smart host.");
         setTimeout(findQuit, 15000);
       }
       triggerOBS();
       if (
         settings.autoHost.type === "rapidHost" &&
-        settings.autoHost.rapidHostTimer > -1
+        settings.autoHost.rapidHostTimer > 0
       ) {
+        log.info("Setting rapid host timer to " + settings.autoHost.rapidHostTimer);
         setTimeout(leaveGame, settings.autoHost.rapidHostTimer * 1000 * 60);
       }
     } else if (screen === "LOGIN_DOORS") {
@@ -1306,23 +1305,23 @@ if (!gotLock) {
   }
 
   function clearLobby() {
+    // TODO: fix lobby close if game was started
     if (refreshTimer) clearInterval(refreshTimer);
     if (gameState.menuState !== "LOADING_SCREEN" && lobby.lobbyStatic?.lobbyName) {
       sendWindow("lobbyUpdate", { lobbyData: { leftLobby: true } });
       sendToHub("lobbyUpdate", { leftLobby: true });
-      discClient?.sendMessage(
-        "Lobby left. End of chat for " + lobby.lobbyStatic?.lobbyName
-      );
       discClient?.lobbyClosed();
     }
     lobby?.clear();
   }
 
   async function openParamsJoin() {
+    // TODO: make this more robust
     if (
       openLobbyParams?.lobbyName ||
       (openLobbyParams?.gameId && openLobbyParams.mapFile)
     ) {
+      log.info("Setting autoHost to off to join a lobby link.");
       updateSetting("autoHost", "type", "off");
       if (
         (openLobbyParams.region && openLobbyParams.region !== gameState.selfRegion) ||
@@ -1354,6 +1353,7 @@ if (!gotLock) {
   }
 
   function handleChatMessage(payload: GameClientMessage) {
+    // TODO: logging
     if (payload.message && payload.message.source === "gameChat") {
       if (payload.message.sender.includes("#")) {
         var sender = payload.message.sender;
@@ -1366,7 +1366,7 @@ if (!gotLock) {
       ) {
         sentMessages.splice(sentMessages.indexOf(payload.message.content), 1);
       } else {
-        if (payload.message.content.match(/^\?votestart/i)) {
+        if (payload.message.content.match(/^\?votestart$/i)) {
           if (
             settings.autoHost.voteStart &&
             lobby.voteStartVotes &&
@@ -1377,9 +1377,9 @@ if (!gotLock) {
               if (lobby.allPlayerTeamsContainPlayers()) {
                 voteTimer = setTimeout(cancelVote, 60000);
                 sendChatMessage("You have 60 seconds to ?votestart.");
-                return;
               } else {
                 sendChatMessage("Unavailable. Not all teams have players.");
+                return;
               }
             }
             if (!lobby.voteStartVotes.includes(sender) && voteTimer) {
@@ -1780,7 +1780,7 @@ if (!gotLock) {
           sendChatMessage(player + " banned" + (reason ? " for " + reason : ""));
         }
       } else {
-        log.info("Invalid battleTag");
+        log.warn("Failed to ban, invalid battleTag: " + player);
       }
     }
   }
@@ -1823,11 +1823,11 @@ if (!gotLock) {
           return true;
         }
       } else {
-        log.info("Invalid battleTag: " + player);
+        log.info("Failed to add admin, invalid battleTag: " + player);
         return false;
       }
     } else {
-      log.info(admin + " is not an admin");
+      log.info(admin + " is not an admin and can not set perms.");
       return false;
     }
   }
@@ -1844,7 +1844,7 @@ if (!gotLock) {
           return false;
         }
       } else {
-        log.info("Invalid battleTag");
+        log.warn("Failed to remove admin, invalid battleTag: " + player);
         return false;
       }
       return true;
@@ -1876,8 +1876,10 @@ if (!gotLock) {
       clearTimeout(voteTimer);
       voteTimer = null;
       sendChatMessage("Vote cancelled.");
+      log.info("Vote cancelled");
     } else {
       sendChatMessage("Vote timed out.");
+      log.info("Vote timed out");
     }
     if (lobby) {
       lobby.voteStartVotes = [];
@@ -1891,14 +1893,12 @@ if (!gotLock) {
   }
 
   function cancelStart() {
+    log.info("Cancelling start");
     sendMessage("LobbyCancel", {});
   }
 
   function startGame() {
     sendChatMessage("AutoHost functionality provided by WC3 MultiTool.");
-    if (settings.autoHost.sounds) {
-      playSound("ready.wav");
-    }
     log.info("Starting game");
     sendMessage("LobbyStart", {});
   }
@@ -1914,12 +1914,13 @@ if (!gotLock) {
         log.info("Warcraft is loading game, forcing quit");
         return await forceQuitWar();
       } else {
-        log.info("Exit Game");
+        log.info("Sending Exit Game");
         sendMessage("ExitGame", {});
         await sleep(200);
         return exitGame();
       }
     } else {
+      log.info("Warcraft is no longer open.");
       return true;
     }
   }
@@ -1934,15 +1935,17 @@ if (!gotLock) {
       try {
         let { stdout, stderr } = await exec(`taskkill /F /IM "${processName}"`);
         if (stderr) {
-          log.error(stderr);
-          return false;
+          log.warn(stderr);
+          return true;
         }
       } catch (e) {
-        return true;
+        await sleep(200);
+        return await forceQuitWar();
       }
       await sleep(200);
       return await forceQuitWar();
     } else {
+      log.info(processName + " force quit.");
       return true;
     }
   }
@@ -1970,7 +1973,7 @@ if (!gotLock) {
         if (["rapidHost", "smartHost"].includes(settings.autoHost.type)) {
           if (settings.autoHost.announceIsBot) {
             let text = "Welcome. I am a bot.";
-            if (lobby.eloAvailable) {
+            if (lobby.eloAvailable && settings.elo.type !== "off") {
               text += " I will fetch ELO from " + settings.elo.type + ".";
               if (settings.elo.balanceTeams) {
                 text += " I will try to balance teams before we start.";
@@ -2045,10 +2048,11 @@ if (!gotLock) {
             const foundImage = await screen.find(imageResource(file));
             if (foundImage) {
               foundTarget = true;
+              log.info("Found " + file + ", leaving game.");
               break;
             }
           } catch (e) {
-            log.error(e);
+            log.warn(e);
           }
         }
         if (foundTarget) {
@@ -2069,7 +2073,7 @@ if (!gotLock) {
             }
           } catch (e) {
             console.log(e);
-            //log.error(e);
+            //log.warn(e);
           }
           try {
             const foundImage = await screen.find(imageResource("soloObserver.png"), {
@@ -2077,10 +2081,11 @@ if (!gotLock) {
             });
             if (foundImage) {
               foundTarget = true;
+              log.info("Found soloObserver.png, leaving game.");
             }
           } catch (e) {
             console.log(e);
-            //log.error(e);
+            //log.warn(e);
           }
           keyboard.type(Key.Escape);
           if (foundTarget) {
@@ -2206,7 +2211,7 @@ if (!gotLock) {
       `tasklist /NH /FI "STATUS eq RUNNING" /FI "USERNAME ne N/A" /FI "IMAGENAME eq ${processName}"`
     );
     if (stderr) {
-      log.error(stderr);
+      log.warn(stderr);
       return false;
     } else {
       if (stdout.includes(processName)) {
@@ -2221,13 +2226,15 @@ if (!gotLock) {
 
   async function openWarcraft(
     region: Regions | "" = "",
-    callCount = 0
+    callCount = 0,
+    focusAttempted = false
   ): Promise<boolean> {
     try {
       if (callCount > 60) {
-        log.error("Failed to open Warcraft after 60 attempts");
+        log.warn("Failed to open Warcraft after 60 attempts");
       }
       if (await isWarcraftOpen()) {
+        log.info("Warcraft is now open");
         return true;
       }
       let battleNetOpen = await checkProcess("Battle.net.exe");
@@ -2244,6 +2251,10 @@ if (!gotLock) {
           await sleep(1000);
           return await openWarcraft(region, callCount + 1);
         }
+        if (title === "Blizzard Battle.net Login") {
+          log.warn("A login is required to open Warcraft");
+          return false;
+        }
         if (title === "Battle.net") {
           battleNetWindow = window;
         }
@@ -2257,21 +2268,34 @@ if (!gotLock) {
       }
       let activeWindow = await getActiveWindow();
       let activeWindowTitle = await activeWindow.title;
+      let screenSize = { width: await screen.width(), height: await screen.height() };
       if (activeWindowTitle !== "Battle.net") {
-        if (callCount % 2 == 0) {
-          if (callCount > 4) {
-            await forceQuitProcess("Battle.net.exe");
-          }
+        let bnetRegion = await battleNetWindow.region;
+        if (bnetRegion.left < -bnetRegion.width || bnetRegion.top < -bnetRegion.height) {
+          log.info("Battle.net window minimized. Attempting to open the window");
           shell.openPath(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe");
+          await sleep(1000);
+          return await openWarcraft(region, callCount + 1, false);
         }
-        await sleep(2000);
-        return await openWarcraft(region);
+        if (!focusAttempted) {
+          log.info("Attempting to focus Battle.net");
+          if (app.isPackaged) {
+            shell.openPath(path.join(app.getAppPath(), "../../focusWar.js"));
+          } else {
+            shell.openPath(path.join(__dirname, "../focusWar.js"));
+          }
+          await sleep(1000);
+          return await openWarcraft(region, callCount + 1, true);
+        } else {
+          log.warn("Failed to focus Battle.net");
+          return false;
+        }
       }
       let searchRegion = await activeWindow.region;
       searchRegion.width = searchRegion.width * 0.4;
-      let screenSize = { width: await screen.width(), height: await screen.height() };
       if (searchRegion.left < 0) {
         //Battle.net window left of screen
+        log.info("Move Battle.net window right");
         let targetPosition = new Point(
           searchRegion.left + searchRegion.width - searchRegion.width * 0.12,
           searchRegion.top + 10
@@ -2284,6 +2308,7 @@ if (!gotLock) {
       }
       if (searchRegion.left + searchRegion.width > screenSize.width) {
         //Battle.net window right of screen
+        log.info("Move Battle.net window left");
         let targetPosition = new Point(searchRegion.left + 10, searchRegion.top + 10);
         await mouse.setPosition(targetPosition);
         await mouse.pressButton(0);
@@ -2294,6 +2319,7 @@ if (!gotLock) {
       }
       if (searchRegion.top + searchRegion.height > screenSize.height) {
         //Battle.net window bottom of screen
+        log.info("Move Battle.net window up");
         let targetPosition = new Point(
           searchRegion.left + searchRegion.width / 2,
           searchRegion.top + 10
@@ -2307,7 +2333,9 @@ if (!gotLock) {
       }
       if (searchRegion.top < 0) {
         // Battle.net window top of screen
-        return false;
+        log.warn("Battle.net window in inaccessible region.");
+        await forceQuitProcess("Battle.net.exe");
+        return await openWarcraft(region, callCount + 1);
       }
       searchRegion = await activeWindow.region;
       searchRegion.height = searchRegion.height * 0.5;
@@ -2322,6 +2350,7 @@ if (!gotLock) {
       let targetRegion = { asia: 1, eu: 2, us: 3, "": 0 }[region];
       try {
         if (targetRegion > 0 && gameState.selfRegion !== region) {
+          log.info(`Changing region to ${region}`);
           let changeRegionPosition = await screen.waitFor(
             imageResource("changeRegion.png"),
             30000,
@@ -2342,6 +2371,7 @@ if (!gotLock) {
           );
           await mouse.setPosition(newRegionPosition);
           await mouse.leftClick();
+          log.info(`Changed region to ${region}`);
         }
         let playRegionCenter = await centerOf(
           screen.waitFor(imageResource("play.png"), 30000, 100, {
@@ -2351,20 +2381,23 @@ if (!gotLock) {
         );
         await mouse.setPosition(playRegionCenter);
         await mouse.leftClick();
+        log.info("Found and clicked play");
         for (let i = 0; i < 10; i++) {
           if (await isWarcraftOpen()) {
+            log.info("Warcraft is now open.");
             return true;
           }
           await sleep(100);
         }
       } catch (e) {
-        log.error("Failed image recognition: ", e);
+        log.warn("Failed image recognition: ", e);
         // Add 5 to call count since OCR takes longer
         return await openWarcraft(region, callCount + 15);
       }
+      log.warn("Failed to open Warcraft.");
       return false;
     } catch (e) {
-      log.error(e);
+      log.warn(e);
       return false;
     }
   }

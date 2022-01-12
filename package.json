@@ -1,6 +1,6 @@
 {
   "name": "wc3multitool",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "A multi-tool for Warcraft 3",
   "repository": {
     "type": "git",
@@ -31,6 +31,10 @@
       },
       {
         "from": "./src/webui.js",
+        "to": "."
+      },
+      {
+        "from": "./focusWar.js",
         "to": "."
       },
       {
@@ -138,11 +142,14 @@
     "typescript": "^4.5.4"
   },
   "dependencies": {
+    "@discordjs/rest": "^0.2.0-canary.0",
     "@nut-tree/nl-matcher": "^1.0.1-next.20220105214851",
     "@nut-tree/nut-js": "^2.0.1-next.20220104200732",
     "better-sqlite3": "^7.4.6",
+    "bufferutil": "^4.0.6",
     "cross-fetch": "^3.1.4",
-    "discord.js": "^12.5.3",
+    "discord-api-types": "^0.26.1",
+    "discord.js": "^13.5.1",
     "electron-log": "^4.4.4",
     "electron-store": "^8.0.1",
     "electron-updater": "^4.6.1",
