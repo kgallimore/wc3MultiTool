@@ -717,7 +717,7 @@
                                 e.target.checked
                               )}
                           />
-                          {#if settings.autoHost.type === "smartHost"}
+                          {#if settings.autoHost.type === "smartHost" && settings.autoHost.moveToSpec && settings.autoHost.observers}
                             <SettingsCheckbox
                               frontFacingName="Intrusive check"
                               key="leaveAlternate"

@@ -977,6 +977,23 @@ if (!gotLock) {
   }
 
   async function createGame(
+    customGameData:
+      | {
+          filename: string;
+          gameSpeed: number;
+          gameName: string;
+          mapSettings: {
+            flagLockTeams: boolean;
+            flagPlaceTeamsTogether: boolean;
+            flagFullSharedUnitControl: boolean;
+            flagRandomRaces: boolean;
+            flagRandomHero: boolean;
+            settingObservers: number;
+            settingVisibility: number;
+          };
+          privateGame: boolean;
+        }
+      | false = false,
     callCount: number = 0,
     lobbyName: string = ""
   ): Promise<boolean> {
@@ -992,7 +1009,7 @@ if (!gotLock) {
       lobbyName =
         settings.autoHost.gameName +
         (settings.autoHost.increment ? ` #${gameNumber}` : "");
-      const payloadData = {
+      const payloadData = customGameData || {
         filename: settings.autoHost.mapPath.replace(/\\/g, "/"),
         gameSpeed: 2,
         gameName: lobbyName,
@@ -1022,7 +1039,7 @@ if (!gotLock) {
       log.info("Sending autoHost payload", payloadData);
       sendMessage("CreateLobby", payloadData);
       await sleep(3000);
-      return await createGame(callCount + 1, lobbyName);
+      return await createGame(false, callCount + 1, lobbyName);
     } else if (lobby.lobbyStatic?.lobbyName === lobbyName) {
       log.info("Game successfully created");
       return true;
@@ -1031,13 +1048,18 @@ if (!gotLock) {
       return true;
     } else {
       log.warn("Failed to create game");
-      return false;
+      await sleep(500);
+      return await createGame(false, callCount + 1, lobbyName);
     }
   }
 
   async function handleGlueScreen(screen: string) {
     // Create a new game at menu or if previously in game(score screen loads twice)
-    if (!screen || screen === "null" || screen === gameState.menuState) {
+    if (
+      !screen ||
+      screen === "null" ||
+      (screen === gameState.menuState && screen !== "SCORE_SCREEN")
+    ) {
       return;
     }
     log.info("Screen changed to: ", screen);
@@ -2058,7 +2080,6 @@ if (!gotLock) {
       if (warcraftInFocus) {
         let foundTarget = false;
         let searchFiles = ["quitNormal.png", "quitHLW.png"];
-
         for (const file of searchFiles) {
           try {
             const foundImage = await screen.find(imageResource(file));
@@ -2076,12 +2097,15 @@ if (!gotLock) {
           if (settings.autoHost.sounds) {
             playSound("quit.wav");
           }
-        } else if (settings.autoHost.leaveAlternate) {
+        } else if (
+          settings.autoHost.leaveAlternate &&
+          !lobby.allPlayers.includes(gameState.selfBattleTag)
+        ) {
           foundTarget = false;
           keyboard.type(Key.F12);
           try {
             const foundImage = await screen.find(imageResource("closeScoreboard.png"), {
-              confidence: 0.85,
+              confidence: 0.65,
             });
             if (foundImage) {
               mouse.setPosition(await centerOf(foundImage));
@@ -2214,6 +2238,7 @@ if (!gotLock) {
         warcraftRegion = await activeWindow.region;
         height = warcraftRegion.height;
       }
+      return activeWindow;
     }
     setResourceDir(height);
   }

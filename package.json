@@ -143,8 +143,8 @@
   },
   "dependencies": {
     "@discordjs/rest": "^0.2.0-canary.0",
-    "@nut-tree/nl-matcher": "^1.0.1-next.20220105214851",
-    "@nut-tree/nut-js": "^2.0.1-next.20220104200732",
+    "@nut-tree/nl-matcher": "^1.0.2",
+    "@nut-tree/nut-js": "^2.0.1-next.20220112151704",
     "better-sqlite3": "^7.4.6",
     "bufferutil": "^4.0.6",
     "cross-fetch": "^3.1.4",
@@ -157,7 +157,7 @@
     "form-data": "^2.3.3",
     "https": "^1.0.0",
     "js-combinatorics": "^1.5.4",
-    "nanoid": "^3.1.30",
+    "nanoid": "^3.1.32",
     "sound-play": "^1.1.0",
     "w3gjs": "^2.4.3",
     "ws": "^8.4.0"
