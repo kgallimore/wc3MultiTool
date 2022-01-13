@@ -17,6 +17,10 @@ var { Combination, Permutation } = require("js-combinatorics");
 export class WarLobby extends EventEmitter {
   #appSettings: LobbyAppSettings;
   #refreshing: boolean = false;
+  #staleTimer: NodeJS.Timeout | null = null;
+
+  allPlayers: Array<string> = [];
+  nonSpecPlayers: Array<string> = [];
 
   lookupName: string = "";
   eloAvailable: boolean = false;
@@ -91,6 +95,10 @@ export class WarLobby extends EventEmitter {
     };
     this.#teamListLookup = {};
     this.bestCombo = [];
+    if (this.#staleTimer) {
+      clearTimeout(this.#staleTimer);
+      this.#staleTimer = null;
+    }
   }
 
   async cleanMapName(mapName: string) {
@@ -115,6 +123,24 @@ export class WarLobby extends EventEmitter {
     } else throw new Error("Unknown or unsupported type");
   }
 
+  staleLobby() {
+    if (this.allPlayers.length < 2) {
+      this.emitInfo("Try to refresh possibly stale lobby");
+      this.emitUpdate({ stale: true });
+    } else {
+      this.emitInfo("Refreshing possibly stale lobby");
+      this.refreshGame();
+    }
+  }
+
+  initStaleLobbyCheck() {
+    if (this.#staleTimer) {
+      clearTimeout(this.#staleTimer);
+      this.#staleTimer = null;
+    }
+    this.#staleTimer = setInterval(this.staleLobby.bind(this), 1000 * 60 * 15);
+  }
+
   async processLobby(payload: GameClientLobbyPayload, region: "us" | "eu") {
     const { teamData, availableTeamColors, players, ...staticFields } = payload;
     if (!this.lobbyStatic || this.lobbyStatic.lobbyName !== staticFields.lobbyName) {
@@ -125,6 +151,7 @@ export class WarLobby extends EventEmitter {
         payload.players[0] &&
         Object.values(payload.players).find((slot) => slot.isSelf) !== undefined
       ) {
+        this.initStaleLobbyCheck();
         this.lobbyStatic = staticFields;
         if (
           staticFields.mapData.mapPath.split(/\/|\\/).slice(-1)[0] !==
@@ -280,13 +307,22 @@ export class WarLobby extends EventEmitter {
         }
       }
       for (const player of Object.keys(this.playerData)) {
-        if (!this.getAllPlayers(true).includes(player)) {
+        if (!this.allPlayers.includes(player)) {
           this.emitUpdate({ playerLeft: player });
           this.playerLeave(player);
           playersChanged = true;
         }
       }
       if ((this.#refreshing && playersChanged) || !this.#refreshing) {
+        this.initStaleLobbyCheck();
+        this.nonSpecPlayers = Object.values(this.slots)
+          .filter((slot) => slot.playerRegion)
+          .map((slot) => slot.name);
+        this.allPlayers = Object.values(this.slots)
+          .filter(
+            (slot) => this.teamList.playerTeams.lookup[slot.team] && slot.playerRegion
+          )
+          .map((slot) => slot.name);
         if (playerUpdates) {
           this.emitUpdate({ playerPayload: playerUpdates });
         }
@@ -334,21 +370,21 @@ export class WarLobby extends EventEmitter {
             if (this.lookupName === "Footmen%20Vs%20Grunts") {
               elo = 1000;
             }
-            if (jsonData.body.length > 0) {
-              let { name, slot, ...desiredData } = jsonData.body[0];
-              data = { slot: this.playerData[name].slot, ...desiredData };
-            }
-            data = data ?? {
-              played: 0,
-              wins: 0,
-              losses: 0,
-              rating: elo,
-              lastChange: 0,
-              rank: 9999,
-              slot: this.playerData[name].slot,
-            };
             // If they haven't left, set real ELO
             if (this.playerData[name]) {
+              if (jsonData.body.length > 0) {
+                let { name, slot, ...desiredData } = jsonData.body[0];
+                data = { slot: this.playerData[name].slot, ...desiredData };
+              }
+              data = data ?? {
+                played: 0,
+                wins: 0,
+                losses: 0,
+                rating: elo,
+                lastChange: 0,
+                rank: 9999,
+                slot: this.playerData[name].slot,
+              };
               this.playerData[name] = data;
               this.emitUpdate({
                 playerData: {
@@ -409,17 +445,8 @@ export class WarLobby extends EventEmitter {
     this.emit("progress", { step, progress });
   }
 
-  getAllPlayers(includeNonPlayerTeams: boolean = false, withData: boolean = false) {
-    let target = includeNonPlayerTeams
-      ? Object.values(this.slots).filter((slot) => slot.playerRegion)
-      : Object.values(this.slots).filter(
-          (slot) => this.teamList.playerTeams.lookup[slot.team] && slot.playerRegion
-        );
-    return target.map((slot) => slot.name);
-  }
-
   searchPlayer(name: string): string[] {
-    return this.getAllPlayers(true).filter((user) => user.match(new RegExp(name, "i")));
+    return this.allPlayers.filter((user) => user.match(new RegExp(name, "i")));
   }
 
   testTeam(teamName: string): "otherTeams" | "playerTeams" | "specTeams" {

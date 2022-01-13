@@ -67,7 +67,6 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
-  console.log(process.version);
   const db = new sqlite3(app.getPath("userData") + "/wc3mt.db");
 
   autoUpdater.logger = log;
@@ -622,6 +621,7 @@ if (!gotLock) {
         webUISocket = null;
         sendProgress();
         sendStatus(false);
+        handleGlueScreen("Out of menus");
       });
     });
     wss.on("error", function (err) {
@@ -742,16 +742,6 @@ if (!gotLock) {
       ) {
         if (update.leftLobby) {
           clearLobby();
-        } else if (update.newLobby) {
-          refreshTimer = setInterval(() => {
-            if (lobby.getAllPlayers(true).length < 2) {
-              log.info("Re-hosting possibly stale lobby");
-              leaveGame();
-            } else {
-              log.info("Refreshing possibly stale lobby");
-              lobby.refreshGame();
-            }
-          }, 60000 * 30);
         }
         sendWindow("lobbyUpdate", { lobbyData: update });
         sendToHub("lobbyUpdate", update);
@@ -779,6 +769,8 @@ if (!gotLock) {
               update.playerData.data.lastChange
           );
         }
+      } else if (update.stale) {
+        leaveGame();
       } else if (update.playerLeft) {
         console.log("Player left: " + update.playerLeft);
       } else if (update.playerJoined) {
@@ -977,18 +969,27 @@ if (!gotLock) {
         log.info(`Changing autohost region to ${targetRegion}`);
         await exitGame();
         openWarcraft(targetRegion);
+        return true;
       } else {
-        createGame();
+        return await createGame();
       }
     }
   }
 
-  function createGame() {
+  async function createGame(
+    callCount: number = 0,
+    lobbyName: string = ""
+  ): Promise<boolean> {
     if (
+      !lobby.lobbyStatic?.lobbyName &&
       !["CUSTOM_GAME_LOBBY", "LOADING_SCREEN", "GAME_LOBBY"].includes(gameState.menuState)
     ) {
+      if (callCount > 5) {
+        log.warn("Failed to create game after 5 attempts");
+        return false;
+      }
       gameNumber += 1;
-      const lobbyName =
+      lobbyName =
         settings.autoHost.gameName +
         (settings.autoHost.increment ? ` #${gameNumber}` : "");
       const payloadData = {
@@ -1020,6 +1021,17 @@ if (!gotLock) {
       };
       log.info("Sending autoHost payload", payloadData);
       sendMessage("CreateLobby", payloadData);
+      await sleep(3000);
+      return await createGame(callCount + 1, lobbyName);
+    } else if (lobby.lobbyStatic?.lobbyName === lobbyName) {
+      log.info("Game successfully created");
+      return true;
+    } else if (!lobby.lobbyStatic?.lobbyName.includes(settings.autoHost.gameName)) {
+      log.info("Game created with incorrect increment.");
+      return true;
+    } else {
+      log.warn("Failed to create game");
+      return false;
     }
   }
 
@@ -1386,13 +1398,13 @@ if (!gotLock) {
               lobby.voteStartVotes.push(sender);
               if (
                 lobby.voteStartVotes.length >=
-                lobby.getAllPlayers().length * (settings.autoHost.voteStartPercent / 100)
+                lobby.nonSpecPlayers.length * (settings.autoHost.voteStartPercent / 100)
               ) {
                 startGame();
               } else {
                 sendChatMessage(
                   Math.ceil(
-                    lobby.getAllPlayers().length *
+                    lobby.nonSpecPlayers.length *
                       (settings.autoHost.voteStartPercent / 100) -
                       lobby.voteStartVotes.length
                   ).toString() + " more vote(s) required."
@@ -1401,7 +1413,11 @@ if (!gotLock) {
             }
           }
         } else if (payload.message.content.match(/^\?stats/)) {
-          if (lobby.eloAvailable) {
+          if (
+            lobby.lobbyStatic?.isHost &&
+            settings.elo.type !== "off" &&
+            lobby.eloAvailable
+          ) {
             let data: PlayerData;
             let playerTarget = payload.message.content.split(" ")[1];
             if (playerTarget) {
@@ -1448,7 +1464,7 @@ if (!gotLock) {
         } else if (payload.message.content.match(/^\?sp$/i)) {
           // TODO: Shuffle players
           if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
-            let players = lobby.getAllPlayers();
+            let players = lobby.nonSpecPlayers;
             Object.values(players).forEach((player) => {
               sendChatMessage(
                 "!swap " +
@@ -1693,7 +1709,6 @@ if (!gotLock) {
         } else if (payload.message.content.match(/^\?(help)|(commands)/i)) {
           if (lobby.lobbyStatic?.isHost) {
             if (lobby.eloAvailable) {
-              sendChatMessage("?elo: Return back your elo");
               sendChatMessage(
                 "?stats <?player>: Return back your stats, or target player stats"
               );
@@ -1722,6 +1737,7 @@ if (!gotLock) {
                 "?swap <name|slotNumber> <name|slotNumber>: Swaps two slots"
               );
               sendChatMessage("?start: Starts game");
+              sendChatMessage("?swap <name|slotNumber> <name|slotNumber>: Swaps players");
             }
             if (checkRole(sender, "admin")) {
               sendChatMessage(
@@ -1775,7 +1791,7 @@ if (!gotLock) {
         sendWindow("action", {
           value: "Banned " + player + " by " + admin + (reason ? " for " + reason : ""),
         });
-        if (lobby?.getAllPlayers().includes(player)) {
+        if (lobby?.allPlayers.includes(player)) {
           lobby.banPlayer(player);
           sendChatMessage(player + " banned" + (reason ? " for " + reason : ""));
         }

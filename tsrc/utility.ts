@@ -277,6 +277,7 @@ export interface LobbyUpdates {
   newLobby?: MicroLobbyData;
   slotOpened?: number;
   slotClosed?: number;
+  stale?: true;
   playerMoved?: { from: number; to: number };
   playerLeft?: string;
   playerJoined?: PlayerPayload;

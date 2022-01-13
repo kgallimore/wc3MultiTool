@@ -310,7 +310,7 @@
     // @ts-ignore
     window.api.send("toMain", args);
   }
-</script> 
+</script>
 
 <main>
   <div class="modal fade" id="settingsModal" tabindex="-1" aria-hidden="true">
@@ -1452,10 +1452,12 @@
             ?kick (name|slotNumber) (?reason): Kicks a slot/player<br />
             ?open (name|slotNumber) (?reason): Opens a slot/player<br />
             ?unban (name): Un-bans a player<br />
-            ?start: Starts game<br /><strong>Admin:</strong><br />
+            ?start: Starts game<br />
+            ?swap (name|slotNumber) (name|slotNumber): Swaps two players<br />
+            <strong>Admin:</strong><br />
             ?perm (name) (?admin|mod): Promotes a player to admin or moderator (mod by default).<br
             />
-            ?unperm (name): Demotes player to normal
+            ?unperm (name): Demotes player to normal<br />
             ?autohost (?off|rapid|lobby|smart): Gets/?Sets autohost type
           </details>
         </div>
