@@ -267,7 +267,6 @@ export class WarLobby extends EventEmitter {
                 .length > 0
             ) {
               // User is still in the lobby
-              // TODO find from to where
               this.emitUpdate({
                 type: "playerMoved",
                 move: { from: 0, to: player.slot },
@@ -289,9 +288,19 @@ export class WarLobby extends EventEmitter {
           playerUpdates.push(player);
         }
       });
-      let playersChanged = false;
-      for (const slot of Object.values(this.slots)) {
-        if (slot.playerRegion && !this.playerData[slot.name]) {
+      if (playerUpdates.length > 0) {
+        this.allPlayers = Object.values(this.slots)
+          .filter((slot) => slot.playerRegion)
+          .map((slot) => slot.name);
+        this.nonSpecPlayers = Object.values(this.slots)
+          .filter(
+            (slot) => this.teamList.playerTeams.lookup[slot.team] && slot.playerRegion
+          )
+          .map((slot) => slot.name);
+        let playersChanged = false;
+        for (const slot of Object.values(this.slots).filter(
+          (slot) => slot.playerRegion && !this.playerData[slot.name]
+        )) {
           this.emitUpdate({ playerJoined: slot });
           this.playerData[slot.name] = {
             wins: -1,
@@ -305,29 +314,20 @@ export class WarLobby extends EventEmitter {
           this.fetchStats(slot.name);
           playersChanged = true;
         }
-      }
-      for (const player of Object.keys(this.playerData)) {
-        if (!this.allPlayers.includes(player)) {
-          this.emitUpdate({ playerLeft: player });
+        for (const player of Object.keys(this.playerData).filter(
+          (player) => this.allPlayers.includes(player) === false
+        )) {
           this.playerLeave(player);
           playersChanged = true;
         }
-      }
-      if ((this.#refreshing && playersChanged) || !this.#refreshing) {
-        this.initStaleLobbyCheck();
-        this.nonSpecPlayers = Object.values(this.slots)
-          .filter((slot) => slot.playerRegion)
-          .map((slot) => slot.name);
-        this.allPlayers = Object.values(this.slots)
-          .filter(
-            (slot) => this.teamList.playerTeams.lookup[slot.team] && slot.playerRegion
-          )
-          .map((slot) => slot.name);
-        if (playerUpdates) {
-          this.emitUpdate({ playerPayload: playerUpdates });
-        }
-        if (this.isLobbyReady()) {
-          this.autoBalance();
+        if ((this.#refreshing && playersChanged) || !this.#refreshing) {
+          this.initStaleLobbyCheck();
+          if (playerUpdates) {
+            this.emitUpdate({ playerPayload: playerUpdates });
+          }
+          if (this.isLobbyReady()) {
+            this.autoBalance();
+          }
         }
       }
     }
@@ -416,6 +416,7 @@ export class WarLobby extends EventEmitter {
     if (this.playerData[name]) {
       delete this.playerData[name];
     }
+    this.emitUpdate({ playerLeft: name });
   }
 
   emitMessage(type: string, payload: any) {
