@@ -66,15 +66,14 @@ export class WarLobby extends EventEmitter {
   }
 
   updateSetting(setting: keyof LobbyAppSettings, value: any) {
-    if (
-      this.#appSettings[setting] !== undefined &&
-      typeof this.#appSettings[setting] === typeof value
-    ) {
-      // @ts-ignore
-      this.#appSettings[setting] = value;
-      this.emitInfo(`Updated lobby: ${setting} to ${value}`);
-    } else {
-      this.emitError(`Lobby update failed. Unrecognized ${setting}, ${value}`);
+    if (this.#appSettings[setting] !== undefined) {
+      if (typeof this.#appSettings[setting] === typeof value) {
+        // @ts-ignore
+        this.#appSettings[setting] = value;
+        this.emitInfo(`Updated lobby: ${setting} to ${value}`);
+      } else {
+        this.emitError(`Lobby update failed. Unrecognized ${setting}, ${value}`);
+      }
     }
   }
 

@@ -10,6 +10,8 @@ export interface ClientSettings {
   restartOnUpdate: boolean;
   checkForUpdates: boolean;
   performanceMode: boolean;
+  openWarcraftOnStart: boolean;
+  startOnLogin: boolean;
 }
 export interface AutoHostSettings {
   type: "off" | "lobbyHost" | "rapidHost" | "smartHost";

@@ -184,6 +184,8 @@ if (!gotLock) {
       restartOnUpdate: store.get("client.restartOnUpdate") ?? false,
       checkForUpdates: store.get("client.checkForUpdates") ?? true,
       performanceMode: store.get("client.performanceMode") ?? false,
+      openWarcraftOnStart: store.get("client.openWarcraftOnStart") ?? true,
+      startOnLogin: store.get("client.startOnLogin") ?? false,
     },
   };
   let lobby: WarLobby;
@@ -435,6 +437,11 @@ if (!gotLock) {
       if (key === "performanceMode") {
         togglePerformanceMode(value);
       }
+      if (key === "startOnLogin") {
+        app.setLoginItemSettings({
+          openAtLogin: value,
+        });
+      }
       sendSocket(setting + "Settings", settings[setting]);
       sendWindow("updateSettingSingle", {
         update: {
@@ -648,6 +655,8 @@ if (!gotLock) {
       setTimeout(() => {
         protocolHandler(process.argv[1]);
       }, 3000);
+    } else if (settings.client.openWarcraftOnStart) {
+      setTimeout(openWarcraft, 3000);
     }
   });
 
@@ -772,7 +781,7 @@ if (!gotLock) {
       } else if (update.stale) {
         leaveGame();
       } else if (update.playerLeft) {
-        console.log("Player left: " + update.playerLeft);
+        log.info("Player left: " + update.playerLeft);
       } else if (update.playerJoined) {
         if (update.playerJoined.name) {
           db.open;
@@ -793,7 +802,7 @@ if (!gotLock) {
                 (row.reason ? " for: " + row.reason : "")
             );
           } else {
-            console.log("Player joined: " + update.playerJoined.name);
+            log.info("Player joined: " + update.playerJoined.name);
             announcement();
           }
         } else {

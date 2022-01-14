@@ -67,6 +67,8 @@
       restartOnUpdate: false,
       checkForUpdates: true,
       performanceMode: false,
+      openWarcraftOnStart: true,
+      startOnLogin: false,
     },
   };
   let currentStatus: {
@@ -372,6 +374,34 @@
                         updateSettingSingle(
                           "client",
                           "performanceMode",
+                          // @ts-ignore
+                          e.target.checked
+                        )}
+                    />
+                    <SettingsCheckbox
+                      frontFacingName="Open warcraft on start"
+                      setting="client"
+                      key="openWarcraftOnStart"
+                      checked={settings.client.openWarcraftOnStart}
+                      on:change={(e) =>
+                        // @ts-ignore
+                        updateSettingSingle(
+                          "client",
+                          "openWarcraftOnStart",
+                          // @ts-ignore
+                          e.target.checked
+                        )}
+                    />
+                    <SettingsCheckbox
+                      frontFacingName="Start on Login"
+                      setting="client"
+                      key="startOnLogin"
+                      checked={settings.client.startOnLogin}
+                      on:change={(e) =>
+                        // @ts-ignore
+                        updateSettingSingle(
+                          "client",
+                          "startOnLogin",
                           // @ts-ignore
                           e.target.checked
                         )}
