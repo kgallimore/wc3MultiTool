@@ -1336,6 +1336,45 @@
       </span>
     </div>
     <div class="d-flex justify-content-center pt-1">
+      <details>
+        <summary>Known issues (click to expand)</summary>
+        <ul>
+          <li>
+            Intrusive check may fail due to an issue with WC3 not updating chat info
+          </li>
+          <li>If ELO is enabled lobby may fail to start</li>
+          <li>Can get stuck on loading screen if WC gets stuck loading</li>
+          <li>Updating discord options can require a program restart</li>
+          <li>Can close self slot if set to close slots and move to spec/observer</li>
+        </ul>
+      </details>
+    </div>
+    <div class="d-flex justify-content-center pt-1">
+      <details>
+        <summary>Updates this version (click to expand)</summary>
+        <strong>New:</strong>
+        <ul>
+          <li>Open warcraft on start option</li>
+          <li>Start with login option</li>
+          <li>In app changelog/known issues</li>
+        </ul>
+        <strong>Fixes:</strong>
+        <ul>
+          <li>Removed ?elo from commands list</li>
+          <li>?stats restricted to hosted lobbies</li>
+          <li>?swap listed in ui and ?help message</li>
+          <li>Attempts to ensure game creation succeeds</li>
+          <li>Fix not creating additional lobbies if using smarthost</li>
+          <li>Adjustments to ocr for smarthost</li>
+          <li>
+            Disable intrusive check if not set to create observer slots or not move to
+            spec/observer
+          </li>
+          <li>Fix not closing dropdown scoreboards</li>
+        </ul>
+      </details>
+    </div>
+    <div class="d-flex justify-content-center pt-1">
       <button
         type="button"
         class="btn btn-primary"
