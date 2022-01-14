@@ -50,6 +50,10 @@ export class DisClient extends EventEmitter {
           this.client.user.setAvatar("./images/wc3_auto_balancer_v2.png");
         }
         console.log(`Logged in as ${this.client.user.tag}!`);
+        this.client?.user?.setActivity({
+          name: "war.trenchguns.com",
+          type: "WATCHING",
+        });
         this.client.channels.cache.forEach((channel) => {
           if (channel.isText()) {
             if (
@@ -142,7 +146,6 @@ export class DisClient extends EventEmitter {
     this.client?.user?.setActivity({
       name: "Warcraft III - " + lobbyData.lobbyStatic.lobbyName,
       type: "PLAYING",
-      url: "https://war.trenchguns.com",
     });
     this.#lobbyState.status = "active";
     this.#lobbyState.name = lobbyData.lobbyStatic.lobbyName;
@@ -191,6 +194,10 @@ export class DisClient extends EventEmitter {
       this.#sentEmbed = null;
       this.#embed = null;
       this.#lobbyState.status = "closed";
+      this.client?.user?.setActivity({
+        name: "war.trenchguns.com",
+        type: "WATCHING",
+      });
     }
   }
 
@@ -212,6 +219,11 @@ export class DisClient extends EventEmitter {
       }
       this.#sentEmbed = null;
       this.#embed = null;
+      this.#lobbyState.status = "closed";
+      this.client?.user?.setActivity({
+        name: "war.trenchguns.com",
+        type: "WATCHING",
+      });
     }
   }
 

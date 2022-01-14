@@ -1416,6 +1416,10 @@ if (!gotLock) {
             lobby.lobbyStatic?.isHost &&
             ["rapidHost", "smartHost"].includes(settings.autoHost.type)
           ) {
+            if (!lobby.allPlayers.includes(sender)) {
+              sendChatMessage("Only players may vote start.");
+              return;
+            }
             if (lobby.voteStartVotes.length === 0) {
               if (lobby.allPlayerTeamsContainPlayers()) {
                 voteTimer = setTimeout(cancelVote, 60000);
@@ -1429,7 +1433,7 @@ if (!gotLock) {
               lobby.voteStartVotes.push(sender);
               if (
                 lobby.voteStartVotes.length >=
-                lobby.nonSpecPlayers.length * (settings.autoHost.voteStartPercent / 100)
+                lobby.allPlayers.length * (settings.autoHost.voteStartPercent / 100)
               ) {
                 startGame();
               } else {
@@ -2108,13 +2112,13 @@ if (!gotLock) {
           }
         } else if (
           settings.autoHost.leaveAlternate &&
-          !lobby.allPlayers.includes(gameState.selfBattleTag)
+          !lobby.nonSpecPlayers.includes(gameState.selfBattleTag)
         ) {
           foundTarget = false;
           keyboard.type(Key.F12);
           try {
             const foundImage = await screen.find(imageResource("closeScoreboard.png"), {
-              confidence: 0.65,
+              confidence: 0.8,
             });
             if (foundImage) {
               mouse.setPosition(await centerOf(foundImage));
@@ -2126,7 +2130,7 @@ if (!gotLock) {
           }
           try {
             const foundImage = await screen.find(imageResource("soloObserver.png"), {
-              confidence: 0.85,
+              confidence: 0.8,
             });
             if (foundImage) {
               foundTarget = true;

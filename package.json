@@ -143,7 +143,7 @@
   },
   "dependencies": {
     "@discordjs/rest": "^0.2.0-canary.0",
-    "@nut-tree/nl-matcher": "^1.0.2",
+    "@nut-tree/nl-matcher": "^1.0.3-next.20220114002500",
     "@nut-tree/nut-js": "^2.0.1-next.20220112151704",
     "better-sqlite3": "^7.4.6",
     "bufferutil": "^4.0.6",
