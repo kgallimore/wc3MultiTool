@@ -143,6 +143,7 @@ if (!gotLock) {
       smartHostTimeout: store.get("autoHost.smartHostTimeout") ?? 0,
       voteStart: store.get("autoHost.voteStart") ?? false,
       voteStartPercent: store.get("autoHost.voteStartPercent") ?? 60,
+      voteStartTeamFill: store.get("autoHost.voteStartTeamFill") ?? true,
       closeSlots: store.get("autoHost.closeSlots") ?? [],
       customAnnouncement: store.get("autoHost.customAnnouncement") ?? "",
       observers: store.get("autoHost.observers") ?? false,
@@ -159,9 +160,12 @@ if (!gotLock) {
       regionChangeTimeNA: store.get("autoHost.regionChangeTimeNA") ?? "11:00",
     },
     obs: {
-      type: store.get("obs.type") ?? "off",
+      enabled: store.get("obs.enabled") ?? false,
+      sceneSwitchType: store.get("obs.sceneSwitchType") ?? "off",
       inGameHotkey: store.get("obs.inGameHotkey") ?? false,
       outOfGameHotkey: store.get("obs.outOfGameHotkey") ?? false,
+      autoStream: store.get("obs.autoStream") ?? false,
+      textSource: store.get("obs.textSource") ?? false,
     },
     elo: {
       type: store.get("elo.type") ?? "off",
@@ -184,7 +188,7 @@ if (!gotLock) {
       restartOnUpdate: store.get("client.restartOnUpdate") ?? false,
       checkForUpdates: store.get("client.checkForUpdates") ?? true,
       performanceMode: store.get("client.performanceMode") ?? false,
-      openWarcraftOnStart: store.get("client.openWarcraftOnStart") ?? true,
+      openWarcraftOnStart: store.get("client.openWarcraftOnStart") ?? false,
       startOnLogin: store.get("client.startOnLogin") ?? false,
     },
   };
@@ -761,6 +765,12 @@ if (!gotLock) {
             discClient.updateLobby(lobby.exportTeamStructure());
           }
         }
+        if (settings.obs.textSource) {
+          fs.writeFileSync(
+            path.join(app.getPath("documents"), "wc3mt.txt"),
+            lobby.exportTeamStructureString()
+          );
+        }
         if (settings.elo.announce && update.playerData) {
           sendChatMessage(
             update.playerData.name +
@@ -857,50 +867,52 @@ if (!gotLock) {
   }
 
   async function triggerOBS() {
-    if (settings.obs.type === "hotkeys") {
-      if (inGame && settings.obs.inGameHotkey) {
-        log.info("Triggering OBS In-Game");
-        let modifiers: Array<Key> = [];
-        if (settings.obs.inGameHotkey) {
-          if (settings.obs.inGameHotkey.altKey) {
+    if (settings.obs.enabled) {
+      if (settings.obs.sceneSwitchType === "hotkeys") {
+        if (inGame && settings.obs.inGameHotkey) {
+          log.info("Triggering OBS In-Game");
+          let modifiers: Array<Key> = [];
+          if (settings.obs.inGameHotkey) {
+            if (settings.obs.inGameHotkey.altKey) {
+              modifiers.push(Key.LeftAlt);
+            }
+            if (settings.obs.inGameHotkey.ctrlKey) {
+              modifiers.push(Key.LeftControl);
+            }
+            if (settings.obs.inGameHotkey.shiftKey) {
+              modifiers.push(Key.LeftShift);
+            }
+            try {
+              await keyboard.type(
+                ...modifiers,
+                // @ts-ignore
+                Key[settings.obs.inGameHotkey.key.toUpperCase()]
+              );
+            } catch (e) {
+              log.warn("Failed to trigger OBS In-Game", e);
+            }
+          }
+        } else if (!inGame && settings.obs.outOfGameHotkey) {
+          log.info("Triggering OBS Out of Game");
+          let modifiers: Array<Key> = [];
+          if (settings.obs.outOfGameHotkey.altKey) {
             modifiers.push(Key.LeftAlt);
           }
-          if (settings.obs.inGameHotkey.ctrlKey) {
+          if (settings.obs.outOfGameHotkey.ctrlKey) {
             modifiers.push(Key.LeftControl);
           }
-          if (settings.obs.inGameHotkey.shiftKey) {
+          if (settings.obs.outOfGameHotkey.shiftKey) {
             modifiers.push(Key.LeftShift);
           }
           try {
             await keyboard.type(
               ...modifiers,
               // @ts-ignore
-              Key[settings.obs.inGameHotkey.key.toUpperCase()]
+              Key[settings.obs.outOfGameHotkey.key.toUpperCase()]
             );
           } catch (e) {
-            log.warn("Failed to trigger OBS In-Game", e);
+            log.warn("Failed to trigger OBS Out of Game", e);
           }
-        }
-      } else if (!inGame && settings.obs.outOfGameHotkey) {
-        log.info("Triggering OBS Out of Game");
-        let modifiers: Array<Key> = [];
-        if (settings.obs.outOfGameHotkey.altKey) {
-          modifiers.push(Key.LeftAlt);
-        }
-        if (settings.obs.outOfGameHotkey.ctrlKey) {
-          modifiers.push(Key.LeftControl);
-        }
-        if (settings.obs.outOfGameHotkey.shiftKey) {
-          modifiers.push(Key.LeftShift);
-        }
-        try {
-          await keyboard.type(
-            ...modifiers,
-            // @ts-ignore
-            Key[settings.obs.outOfGameHotkey.key.toUpperCase()]
-          );
-        } catch (e) {
-          log.warn("Failed to trigger OBS Out of Game", e);
         }
       }
     }
@@ -980,6 +992,9 @@ if (!gotLock) {
         openWarcraft(targetRegion);
         return true;
       } else {
+        if (settings.autoHost.increment) {
+          gameNumber += 1;
+        }
         return await createGame();
       }
     }
@@ -1006,48 +1021,61 @@ if (!gotLock) {
     callCount: number = 0,
     lobbyName: string = ""
   ): Promise<boolean> {
+    if (!(await isWarcraftOpen())) {
+      await openWarcraft();
+    }
     if (
       !lobby.lobbyStatic?.lobbyName &&
       !["CUSTOM_GAME_LOBBY", "LOADING_SCREEN", "GAME_LOBBY"].includes(gameState.menuState)
     ) {
-      if (callCount > 5) {
-        log.warn("Failed to create game after 5 attempts");
-        return false;
+      if ((callCount + 5) % 10 === 0) {
+        if (settings.autoHost.increment) {
+          if (callCount > 45) {
+            return false;
+          }
+          gameNumber += 1;
+          log.warn("Failed to create game. Incrementing game name");
+        } else {
+          log.warn("Failed to create game. Stopping attempts.");
+          return false;
+        }
       }
-      gameNumber += 1;
-      lobbyName =
-        settings.autoHost.gameName +
-        (settings.autoHost.increment ? ` #${gameNumber}` : "");
-      const payloadData = customGameData || {
-        filename: settings.autoHost.mapPath.replace(/\\/g, "/"),
-        gameSpeed: 2,
-        gameName: lobbyName,
-        mapSettings: {
-          flagLockTeams: settings.autoHost.advancedMapOptions
-            ? settings.autoHost.flagLockTeams
-            : true,
-          flagPlaceTeamsTogether: settings.autoHost.advancedMapOptions
-            ? settings.autoHost.flagPlaceTeamsTogether
-            : true,
-          flagFullSharedUnitControl: settings.autoHost.advancedMapOptions
-            ? settings.autoHost.flagFullSharedUnitControl
-            : false,
-          flagRandomRaces: settings.autoHost.advancedMapOptions
-            ? settings.autoHost.flagRandomRaces
-            : false,
-          flagRandomHero: settings.autoHost.advancedMapOptions
-            ? settings.autoHost.flagRandomHero
-            : false,
-          settingObservers: settings.autoHost.observers ? 2 : 0,
-          settingVisibility: settings.autoHost.advancedMapOptions
-            ? parseInt(settings.autoHost.settingVisibility)
-            : 0,
-        },
-        privateGame: settings.autoHost.private,
-      };
-      log.info("Sending autoHost payload", payloadData);
-      sendMessage("CreateLobby", payloadData);
-      await sleep(3000);
+      if (callCount % 10 === 0) {
+        lobbyName =
+          lobbyName ||
+          settings.autoHost.gameName +
+            (settings.autoHost.increment ? ` #${gameNumber}` : "");
+        const payloadData = customGameData || {
+          filename: settings.autoHost.mapPath.replace(/\\/g, "/"),
+          gameSpeed: 2,
+          gameName: lobbyName,
+          mapSettings: {
+            flagLockTeams: settings.autoHost.advancedMapOptions
+              ? settings.autoHost.flagLockTeams
+              : true,
+            flagPlaceTeamsTogether: settings.autoHost.advancedMapOptions
+              ? settings.autoHost.flagPlaceTeamsTogether
+              : true,
+            flagFullSharedUnitControl: settings.autoHost.advancedMapOptions
+              ? settings.autoHost.flagFullSharedUnitControl
+              : false,
+            flagRandomRaces: settings.autoHost.advancedMapOptions
+              ? settings.autoHost.flagRandomRaces
+              : false,
+            flagRandomHero: settings.autoHost.advancedMapOptions
+              ? settings.autoHost.flagRandomHero
+              : false,
+            settingObservers: settings.autoHost.observers ? 2 : 0,
+            settingVisibility: settings.autoHost.advancedMapOptions
+              ? parseInt(settings.autoHost.settingVisibility)
+              : 0,
+          },
+          privateGame: settings.autoHost.private,
+        };
+        log.info("Sending autoHost payload", payloadData);
+        sendMessage("CreateLobby", payloadData);
+      }
+      await sleep(1000);
       return await createGame(false, callCount + 1, lobbyName);
     } else if (lobby.lobbyStatic?.lobbyName === lobbyName) {
       log.info("Game successfully created");
@@ -1198,7 +1226,7 @@ if (!gotLock) {
   function handleClientMessage(message: { data: string }) {
     if (message.data) {
       clientWebSocket = new WebSocket(message.data);
-
+      log.info("Connecting to game client: ", message.data);
       clientWebSocket.on("open", function open() {
         if (openLobbyParams?.lobbyName) {
           openParamsJoin();
@@ -1421,7 +1449,11 @@ if (!gotLock) {
               return;
             }
             if (lobby.voteStartVotes.length === 0) {
-              if (lobby.allPlayerTeamsContainPlayers()) {
+              if (
+                (settings.autoHost.voteStartTeamFill &&
+                  lobby.allPlayerTeamsContainPlayers()) ||
+                !settings.autoHost.voteStartTeamFill
+              ) {
                 voteTimer = setTimeout(cancelVote, 60000);
                 sendChatMessage("You have 60 seconds to ?votestart.");
               } else {
@@ -1435,6 +1467,7 @@ if (!gotLock) {
                 lobby.voteStartVotes.length >=
                 lobby.allPlayers.length * (settings.autoHost.voteStartPercent / 100)
               ) {
+                log.info("Vote start succeeded");
                 startGame();
               } else {
                 sendChatMessage(
@@ -2110,44 +2143,45 @@ if (!gotLock) {
           if (settings.autoHost.sounds) {
             playSound("quit.wav");
           }
-        } else if (
-          settings.autoHost.leaveAlternate &&
-          !lobby.nonSpecPlayers.includes(gameState.selfBattleTag)
-        ) {
-          foundTarget = false;
-          keyboard.type(Key.F12);
-          try {
-            const foundImage = await screen.find(imageResource("closeScoreboard.png"), {
-              confidence: 0.8,
-            });
-            if (foundImage) {
-              mouse.setPosition(await centerOf(foundImage));
-              mouse.leftClick();
+        } else if (!lobby.nonSpecPlayers.includes(gameState.selfBattleTag)) {
+          if (settings.autoHost.leaveAlternate) {
+            foundTarget = false;
+            keyboard.type(Key.F12);
+            try {
+              const foundImage = await screen.find(imageResource("closeScoreboard.png"), {
+                confidence: 0.8,
+              });
+              if (foundImage) {
+                mouse.setPosition(await centerOf(foundImage));
+                mouse.leftClick();
+              }
+            } catch (e) {
+              console.log(e);
+              //log.warn(e);
             }
-          } catch (e) {
-            console.log(e);
-            //log.warn(e);
-          }
-          try {
-            const foundImage = await screen.find(imageResource("soloObserver.png"), {
-              confidence: 0.8,
-            });
-            if (foundImage) {
-              foundTarget = true;
-              log.info("Found soloObserver.png, leaving game.");
+            try {
+              const foundImage = await screen.find(imageResource("soloObserver.png"), {
+                confidence: 0.8,
+              });
+              if (foundImage) {
+                foundTarget = true;
+                log.info("Found soloObserver.png, leaving game.");
+              }
+            } catch (e) {
+              console.log(e);
+              //log.warn(e);
             }
-          } catch (e) {
-            console.log(e);
-            //log.warn(e);
-          }
-          keyboard.type(Key.Escape);
-          if (foundTarget) {
-            leaveGame();
-            if (settings.autoHost.sounds) {
-              playSound("quit.wav");
+            keyboard.type(Key.Escape);
+            if (foundTarget) {
+              leaveGame();
+              if (settings.autoHost.sounds) {
+                playSound("quit.wav");
+              }
             }
+            //log.verbose("Did not find quit, try again in 5 seconds");
+          } else if (settings.obs.autoStream) {
+            keyboard.type(Key.Space);
           }
-          //log.verbose("Did not find quit, try again in 5 seconds");
         }
       }
       setTimeout(findQuit, 5000);

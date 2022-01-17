@@ -283,8 +283,10 @@ export class WarLobby extends EventEmitter {
               this.emitUpdate({ type: "playerJoined", player });
             }
           }*/
-          this.slots[player.slot] = player;
-          playerUpdates.push(player);
+          if ((player.playerRegion && player.name) || !player.playerRegion) {
+            this.slots[player.slot] = player;
+            playerUpdates.push(player);
+          }
         }
       });
       if (playerUpdates.length > 0) {
@@ -327,7 +329,11 @@ export class WarLobby extends EventEmitter {
           if (this.isLobbyReady()) {
             this.autoBalance();
           }
+        } else {
+          this.emitInfo("Refreshing lobby, ignoring player update");
         }
+      } else {
+        this.emitInfo("No player updates");
       }
     }
   }
@@ -829,6 +835,24 @@ export class WarLobby extends EventEmitter {
       }
     }
     return true;
+  }
+
+  exportTeamStructureString(playerTeamsOnly: boolean = true) {
+    let data = this.exportTeamStructure(playerTeamsOnly);
+    let exportString = "";
+    Object.entries(data).forEach(([teamName, data]) => {
+      exportString += teamName + ":\n";
+      let combinedData = data.map(
+        (data) =>
+          data.name +
+          (data.rating > -1
+            ? ": " + [data.rating, data.rank, data.wins, data.losses].join("/")
+            : "")
+      );
+      exportString += combinedData.join("\n") ?? "";
+      exportString += "\n";
+    });
+    return exportString;
   }
 
   exportTeamStructure(playerTeamsOnly: boolean = true) {

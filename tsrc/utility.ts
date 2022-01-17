@@ -29,6 +29,7 @@ export interface AutoHostSettings {
   smartHostTimeout: number;
   voteStart: boolean;
   voteStartPercent: number;
+  voteStartTeamFill: boolean;
   closeSlots: Array<number>;
   customAnnouncement: string;
   observers: boolean;
@@ -45,9 +46,12 @@ export interface AutoHostSettings {
   regionChangeTimeNA: string;
 }
 export interface ObsSettings {
-  type: string;
+  enabled: boolean;
+  sceneSwitchType: "off" | "hotkeys" | "websockets";
   inGameHotkey: ObsHotkeys | false;
   outOfGameHotkey: ObsHotkeys | false;
+  autoStream: boolean;
+  textSource: boolean;
 }
 export type SettingsKeys =
   | keyof ObsSettings

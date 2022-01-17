@@ -26,6 +26,7 @@
       smartHostTimeout: 0,
       voteStart: false,
       voteStartPercent: 60,
+      voteStartTeamFill: true,
       closeSlots: [],
       customAnnouncement: "",
       observers: false,
@@ -42,9 +43,12 @@
       regionChangeTimeNA: "01:00",
     },
     obs: {
-      type: "off",
+      enabled: false,
+      sceneSwitchType: "off",
       inGameHotkey: false,
       outOfGameHotkey: false,
+      autoStream: false,
+      textSource: false,
     },
     elo: {
       type: "off",
@@ -67,7 +71,7 @@
       restartOnUpdate: false,
       checkForUpdates: true,
       performanceMode: false,
-      openWarcraftOnStart: true,
+      openWarcraftOnStart: false,
       startOnLogin: false,
     },
   };
@@ -504,20 +508,21 @@
                       style="flex-wrap: wrap;"
                       role="group"
                     >
-                      <input
-                        type="checkbox"
-                        class="btn-check"
-                        id="balanceTeamsCheck"
-                        data-key="balanceTeams"
-                        data-setting="elo"
-                        checked={settings.elo.balanceTeams}
-                        on:change={(e) =>
-                          // @ts-ignore
-                          updateSettingSingle("elo", "balanceTeams", e.target.checked)}
-                      />
-                      <label for="balanceTeamsCheck" class="btn btn-outline-primary"
-                        >Balance Teams</label
-                      >
+                      {#if settings.elo.balanceTeams}
+                        <SettingsCheckbox
+                          key="balanceTeams"
+                          setting="elo"
+                          frontFacingName="Balance teams"
+                          checked={settings.elo.balanceTeams}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "elo",
+                              "balanceTeams",
+                              // @ts-ignore
+                              e.target.checked
+                            )}
+                        />
+                      {/if}
                       <SettingsCheckbox
                         key="excludeHostFromSwap"
                         setting="elo"
@@ -1128,81 +1133,7 @@
                 </div>
               {/if}
             </form>
-            <form name="obs" class="p-2">
-              <div class="row">
-                <div class="col">
-                  <label for="obsSelect" class="form-label">OBS Integration</label>
-                  <select
-                    id="obsSelect"
-                    class="form-select"
-                    data-key="type"
-                    data-setting="obs"
-                    value={settings.obs.type}
-                    on:change={(e) =>
-                      updateSettingSingle(
-                        "obs",
-                        "type", // @ts-ignore
-                        e.target.value
-                      )}
-                  >
-                    <option value="off" selected>Disabled</option>
-                    <option value="hotkeys">Simulate Hotkeys</option>
-                    <!--<option value="websockets" disabled>OBS Websockets</option>-->
-                  </select>
-                </div>
-              </div>
-              {#if settings.obs.type === "hotkeys"}
-                <div id="obsSettings" class="border m-2 p-2">
-                  <div class="row">
-                    <div class="col d-flex justify-content-center">
-                      OBS Hotkeys Settings
-                    </div>
-                    <div class="row">
-                      <div class="col">
-                        <label for="inGameHotkey">In game hotkey</label>
-                        <input
-                          type="text"
-                          class="form-control"
-                          id="inGameHotkey"
-                          placeholder="In game hotkey"
-                          data-key="inGameHotkey"
-                          data-setting="obs"
-                          on:keydown={generateHotkeys}
-                          value={settings.obs.inGameHotkey
-                            ? (settings.obs.inGameHotkey.shiftKey ? "Shift + " : "") +
-                              (settings.obs.inGameHotkey.ctrlKey ? "Ctrl + " : "") +
-                              (settings.obs.inGameHotkey.altKey ? "Alt + " : "") +
-                              settings.obs.inGameHotkey.key
-                            : ""}
-                        />
-                      </div>
-                    </div>
-                    <div class="row">
-                      <div class="col">
-                        <label for="outOfGameHotkey">Out of game hotkey</label>
-                        <input
-                          type="text"
-                          class="form-control"
-                          id="outOfGameHotkey"
-                          placeholder="Out of game hotkey"
-                          data-key="outOfGameHotkey"
-                          data-setting="obs"
-                          on:keydown={generateHotkeys}
-                          value={settings.obs.outOfGameHotkey
-                            ? (settings.obs.outOfGameHotkey.shiftKey ? "Shift + " : "") +
-                              (settings.obs.outOfGameHotkey.ctrlKey ? "Ctrl + " : "") +
-                              (settings.obs.outOfGameHotkey.altKey ? "Alt + " : "") +
-                              settings.obs.outOfGameHotkey.key
-                            : ""}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              {:else if settings.obs.type === "websockets"}
-                <div id="obsWeboscketsSettings" class="border m-2" style="display:none" />
-              {/if}
-            </form>
+
             <form name="discord" class="p-2">
               <div class="row">
                 <div class="col">
@@ -1309,6 +1240,145 @@
                       </div>
                     </div>
                   </div>
+                </div>
+              {/if}
+            </form>
+            <form name="obs" class="p-2">
+              <div class="row">
+                <div class="col">
+                  <SettingsCheckbox
+                    setting="obs"
+                    key="enabled"
+                    frontFacingName="OBS Integration"
+                    checked={settings.obs.enabled}
+                    on:change={(e) =>
+                      updateSettingSingle(
+                        "obs",
+                        "enabled",
+                        // @ts-ignore
+                        e.target.checked
+                      )}
+                  />
+                </div>
+              </div>
+              {#if settings.obs.enabled}
+                <div class="border m-2 p-2">
+                  <div class="row">
+                    <div class="col">
+                      <div class="btn-group btn-group-sm w-100 py-1" role="group">
+                        {#if settings.autoHost.type !== "smartHost" || settings.autoHost.leaveAlternate === false}
+                          <SettingsCheckbox
+                            setting="obs"
+                            key="autoStream"
+                            frontFacingName="Auto Stream (Beta)"
+                            checked={settings.obs.autoStream}
+                            on:change={(e) =>
+                              updateSettingSingle(
+                                "obs",
+                                "autoStream",
+                                // @ts-ignore
+                                e.target.checked
+                              )}
+                          />
+                        {/if}
+                        <SettingsCheckbox
+                          setting="obs"
+                          key="textSource"
+                          frontFacingName="Text Source"
+                          checked={settings.obs.textSource}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "obs",
+                              "textSource",
+                              // @ts-ignore
+                              e.target.checked
+                            )}
+                        />
+                      </div>
+                    </div>
+                    <div class="row">
+                      <div class="col">
+                        <strong>Auto Stream:</strong> Presses SpaceBar in slightly
+                        randomized intervals to jump to POIs. Incompatible with intrusive
+                        check.<br /><strong>Text source:</strong> Outputs loby data to Documents/wc3mt.txt.
+                      </div>
+                    </div>
+                  </div>
+                  <div class="row">
+                    <div class="col">
+                      <label for="obsSelect" class="form-label">Scene Switch Type</label>
+                      <select
+                        id="obsSelect"
+                        class="form-select"
+                        value={settings.obs.sceneSwitchType}
+                        on:change={(e) =>
+                          updateSettingSingle(
+                            "obs",
+                            "sceneSwitchType", // @ts-ignore
+                            e.target.value
+                          )}
+                      >
+                        <option value="off" selected>Disabled</option>
+                        <option value="hotkeys">Simulate Hotkeys</option>
+                        <!--<option value="websockets" disabled>OBS Websockets</option>-->
+                      </select>
+                    </div>
+                  </div>
+                  {#if settings.obs.sceneSwitchType === "hotkeys"}
+                    <div class="row">
+                      <div class="col d-flex justify-content-center">
+                        OBS Hotkeys Settings
+                      </div>
+                      <div class="row">
+                        <div class="col">
+                          <label for="inGameHotkey">In game hotkey</label>
+                          <input
+                            type="text"
+                            class="form-control"
+                            id="inGameHotkey"
+                            placeholder="In game hotkey"
+                            data-key="inGameHotkey"
+                            data-setting="obs"
+                            on:keydown={generateHotkeys}
+                            value={settings.obs.inGameHotkey
+                              ? (settings.obs.inGameHotkey.shiftKey ? "Shift + " : "") +
+                                (settings.obs.inGameHotkey.ctrlKey ? "Ctrl + " : "") +
+                                (settings.obs.inGameHotkey.altKey ? "Alt + " : "") +
+                                settings.obs.inGameHotkey.key
+                              : ""}
+                          />
+                        </div>
+                      </div>
+                      <div class="row">
+                        <div class="col">
+                          <label for="outOfGameHotkey">Out of game hotkey</label>
+                          <input
+                            type="text"
+                            class="form-control"
+                            id="outOfGameHotkey"
+                            placeholder="Out of game hotkey"
+                            data-key="outOfGameHotkey"
+                            data-setting="obs"
+                            on:keydown={generateHotkeys}
+                            value={settings.obs.outOfGameHotkey
+                              ? (settings.obs.outOfGameHotkey.shiftKey
+                                  ? "Shift + "
+                                  : "") +
+                                (settings.obs.outOfGameHotkey.ctrlKey ? "Ctrl + " : "") +
+                                (settings.obs.outOfGameHotkey.altKey ? "Alt + " : "") +
+                                settings.obs.outOfGameHotkey.key
+                              : ""}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  {:else if settings.obs.sceneSwitchType === "websockets"}
+                    <div
+                      id="obsWeboscketsSettings"
+                      class="border m-2"
+                      style="display:none"
+                    />
+                  {/if}
                 </div>
               {/if}
             </form>
