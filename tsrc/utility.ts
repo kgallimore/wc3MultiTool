@@ -4,8 +4,13 @@ export interface AppSettings {
   discord: DiscordSettings;
   elo: EloSettings;
   client: ClientSettings;
+  streaming: StreamingSettings;
 }
-
+export interface StreamingSettings {
+  enabled: boolean;
+  twitchChannel: string;
+  token: string;
+}
 export interface ClientSettings {
   restartOnUpdate: boolean;
   checkForUpdates: boolean;
@@ -66,11 +71,12 @@ export interface ObsHotkeys {
   shiftKey: boolean;
 }
 export interface DiscordSettings {
-  type: "off" | "on";
+  enabled: boolean;
   token: string;
   announceChannel: string;
   chatChannel: string;
   bidirectionalChat: boolean;
+  sendInGameChat: boolean;
 }
 export interface EloSettings {
   type: "off" | "wc3stats" | "pyroTD";

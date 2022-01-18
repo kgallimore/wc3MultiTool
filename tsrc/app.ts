@@ -39,6 +39,7 @@ import sqlite3 from "better-sqlite3";
 import { DisClient } from "./disc";
 import { WarLobby } from "./lobby";
 import parser from "w3gjs";
+import * as clipboardy from "clipboardy";
 const FormData = require("form-data");
 if (!app.isPackaged) {
   require("electron-reload")(__dirname, {
@@ -125,6 +126,10 @@ if (!gotLock) {
   };
   var appVersion: string;
   var discClient: DisClient | null = null;
+  var sendingInGameChat: { active: boolean; queue: Array<string> } = {
+    active: false,
+    queue: [],
+  };
 
   var settings: AppSettings = <AppSettings>{
     autoHost: {
@@ -178,11 +183,12 @@ if (!gotLock) {
       handleReplays: store.get("elo.handleReplays") ?? true,
     },
     discord: {
-      type: store.get("discord.type") ?? "off",
+      enabled: store.get("discord.enabled") ?? false,
       token: store.get("discord.token") ?? "",
       announceChannel: store.get("discord.announceChannel") ?? "",
       chatChannel: store.get("discord.chatChannel") ?? "",
       bidirectionalChat: store.get("discord.bidirectionalChat") ?? false,
+      sendInGameChat: store.get("discord.sendInGameChat") ?? false,
     },
     client: {
       restartOnUpdate: store.get("client.restartOnUpdate") ?? false,
@@ -190,6 +196,11 @@ if (!gotLock) {
       performanceMode: store.get("client.performanceMode") ?? false,
       openWarcraftOnStart: store.get("client.openWarcraftOnStart") ?? false,
       startOnLogin: store.get("client.startOnLogin") ?? false,
+    },
+    streaming: {
+      enabled: store.get("streaming.enabled") ?? false,
+      token: store.get("streaming.token") ?? "",
+      twitchChannel: store.get("streaming.twitchChannel") ?? "",
     },
   };
   let lobby: WarLobby;
@@ -455,10 +466,10 @@ if (!gotLock) {
         },
       });
       store.set(setting, settings[setting]);
-      log.info(setting + " settings changed:", key, value);
+      log.info(setting + " settings changed:", key !== "token" ? key : "*HIDDEN*", value);
       //@ts-ignore
     } else if (settings[setting][key] !== value) {
-      log.warn("Invalid update:", setting, key, value);
+      log.warn("Invalid update:", setting, key !== "token" ? key : "*HIDDEN*", value);
     }
   }
 
@@ -717,9 +728,9 @@ if (!gotLock) {
 
   function discordSetup() {
     if (
-      settings.discord.type !== "off" &&
+      settings.discord.enabled &&
       settings.discord.token.length > 20 &&
-      settings.discord.announceChannel
+      (settings.discord.announceChannel || settings.discord.chatChannel)
     ) {
       discClient = new DisClient(
         settings.discord.token,
@@ -730,6 +741,9 @@ if (!gotLock) {
       );
       discClient.on("chatMessage", (author, message) => {
         sendChatMessage("(DC)" + author + ": " + message);
+        if (settings.discord.sendInGameChat) {
+          sendInGameChat("(DC)" + author + ": " + message);
+        }
       });
     } else {
       discClient = null;
@@ -1378,6 +1392,7 @@ if (!gotLock) {
   function clearLobby() {
     // TODO: fix lobby close if game was started
     if (refreshTimer) clearInterval(refreshTimer);
+    sentMessages = [];
     if (gameState.menuState !== "LOADING_SCREEN" && lobby.lobbyStatic?.lobbyName) {
       sendWindow("lobbyUpdate", { lobbyData: { leftLobby: true } });
       sendToHub("lobbyUpdate", { leftLobby: true });
@@ -2508,7 +2523,48 @@ if (!gotLock) {
       );
     }
   }
-}
-async function sleep(milliseconds: number) {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+  async function sleep(milliseconds: number) {
+    return new Promise((resolve) => setTimeout(resolve, milliseconds));
+  }
+
+  async function sendInGameChat(chat: string) {
+    sendingInGameChat.queue.push(chat);
+    if (sendingInGameChat.active) {
+      log.info("Queued chat: " + chat);
+      return;
+    }
+    await activeWindowWar();
+    try {
+      sendingInGameChat.active = true;
+      let nextMessage = sendingInGameChat.queue.shift();
+      while (nextMessage) {
+        if (inGame && warcraftInFocus) {
+          log.info("Sending chat: " + chat);
+          await keyboard.type(Key.LeftShift, Key.Enter);
+          await clipboardy.write(nextMessage);
+          await keyboard.type(Key.LeftControl, Key.V);
+          await keyboard.type(Key.Enter);
+          nextMessage = sendingInGameChat.queue.shift();
+        } else {
+          log.info(
+            "Forced to stop sending messages. In Game: " +
+              inGame +
+              " Warcraft in focus: " +
+              warcraftInFocus
+          );
+          sendingInGameChat.queue.unshift(nextMessage);
+          nextMessage = undefined;
+        }
+      }
+      if (sendingInGameChat.queue.length === 0) {
+        log.info("Chat queue now empty.");
+      }
+      sendingInGameChat.active = false;
+      return true;
+    } catch (e) {
+      log.warn(e);
+      sendingInGameChat.active = false;
+      return false;
+    }
+  }
 }

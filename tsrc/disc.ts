@@ -4,8 +4,8 @@ import type { MicroLobbyData, mmdResults, PlayerTeamsData } from "./utility";
 import { DeColorName } from "./utility";
 export class DisClient extends EventEmitter {
   client: Discord.Client;
-  announceChannel: Discord.TextChannel | null;
-  chatChannel: Discord.TextChannel | null;
+  announceChannel: Discord.TextChannel | null = null;
+  chatChannel: Discord.TextChannel | null = null;
   dev: boolean;
   #embed: Discord.MessageEmbed | null = null;
   #sentEmbed: Discord.Message | null = null;
@@ -18,7 +18,7 @@ export class DisClient extends EventEmitter {
     update: null,
   };
   bidirectionalChat: boolean;
-  _events: { [key: string]: any };
+  _events: { [key: string]: any } = {};
   constructor(
     token: string,
     announceChannel: string,
@@ -32,18 +32,11 @@ export class DisClient extends EventEmitter {
     if (!token) {
       throw new Error("Token is empty");
     }
-    if (!announceChannel) {
-      throw new Error("Channel is empty");
-    }
     this.client = new Discord.Client({
       intents: [Discord.Intents.FLAGS.GUILD_MESSAGES, Discord.Intents.FLAGS.GUILDS],
     });
-    this.announceChannel = null;
-    this.chatChannel = null;
-    this._events = {};
     this.client.on("ready", () => {
       if (this.client.user) {
-        //this.client.user.setActivity("Warcraft III", { type: "WATCHING" });
         this.client.user.setStatus("online");
         this.client.user.setUsername("WC3 MultiTool");
         if (!dev) {
@@ -54,22 +47,27 @@ export class DisClient extends EventEmitter {
           name: "war.trenchguns.com",
           type: "WATCHING",
         });
-        this.client.channels.cache.forEach((channel) => {
-          if (channel.isText()) {
-            if (
-              (channel as Discord.TextChannel).name === announceChannel ||
-              channel.id === announceChannel
-            ) {
-              this.announceChannel = channel as Discord.TextChannel;
-            }
-            if (
-              (chatChannel && (channel as Discord.TextChannel).name === chatChannel) ||
-              channel.id === chatChannel
-            ) {
-              this.chatChannel = channel as Discord.TextChannel;
-            }
-          }
-        });
+        if (chatChannel || announceChannel) {
+          this.client.channels.cache
+            .filter((channel) => channel.isText())
+            .forEach((channel) => {
+              if (
+                (announceChannel &&
+                  (channel as Discord.TextChannel).name === announceChannel) ||
+                channel.id === announceChannel
+              ) {
+                this.announceChannel = channel as Discord.TextChannel;
+              }
+              if (
+                (chatChannel &&
+                  chatChannel &&
+                  (channel as Discord.TextChannel).name === chatChannel) ||
+                channel.id === chatChannel
+              ) {
+                this.chatChannel = channel as Discord.TextChannel;
+              }
+            });
+        }
       } else {
         console.error("Client is not ready?");
       }
@@ -87,20 +85,28 @@ export class DisClient extends EventEmitter {
   }
 
   updateChannel(channelName: string, channelType: "announceChannel" | "chatChannel") {
-    this.client.channels.cache.forEach((channel) => {
-      if (channel.isText()) {
-        if (
-          (channel as Discord.TextChannel).name === channelName ||
-          channel.id === channelName
-        ) {
-          if (channelType === "announceChannel") {
-            this.announceChannel = channel as Discord.TextChannel;
-          } else if (channelType === "chatChannel") {
-            this.chatChannel = channel as Discord.TextChannel;
+    if (!channelName) {
+      if (channelType === "announceChannel") {
+        this.announceChannel = null;
+      } else if (channelType === "chatChannel") {
+        this.chatChannel = null;
+      }
+    } else {
+      this.client.channels.cache.forEach((channel) => {
+        if (channel.isText()) {
+          if (
+            (channel as Discord.TextChannel).name === channelName ||
+            channel.id === channelName
+          ) {
+            if (channelType === "announceChannel") {
+              this.announceChannel = channel as Discord.TextChannel;
+            } else if (channelType === "chatChannel") {
+              this.chatChannel = channel as Discord.TextChannel;
+            }
           }
         }
-      }
-    });
+      });
+    }
   }
 
   async sendNewLobby(lobbyData: MicroLobbyData, data: PlayerTeamsData) {

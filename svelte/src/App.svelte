@@ -61,11 +61,12 @@
       handleReplays: true,
     },
     discord: {
-      type: "off",
+      enabled: false,
       token: "",
       announceChannel: "",
       chatChannel: "",
-      bidirectionalChat: true,
+      bidirectionalChat: false,
+      sendInGameChat: false,
     },
     client: {
       restartOnUpdate: false,
@@ -73,6 +74,11 @@
       performanceMode: false,
       openWarcraftOnStart: false,
       startOnLogin: false,
+    },
+    streaming: {
+      enabled: false,
+      token: "",
+      twitchChannel: "",
     },
   };
   let currentStatus: {
@@ -508,21 +514,19 @@
                       style="flex-wrap: wrap;"
                       role="group"
                     >
-                      {#if settings.elo.balanceTeams}
-                        <SettingsCheckbox
-                          key="balanceTeams"
-                          setting="elo"
-                          frontFacingName="Balance teams"
-                          checked={settings.elo.balanceTeams}
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "elo",
-                              "balanceTeams",
-                              // @ts-ignore
-                              e.target.checked
-                            )}
-                        />
-                      {/if}
+                      <SettingsCheckbox
+                        key="balanceTeams"
+                        setting="elo"
+                        frontFacingName="Balance teams"
+                        checked={settings.elo.balanceTeams}
+                        on:change={(e) =>
+                          updateSettingSingle(
+                            "elo",
+                            "balanceTeams",
+                            // @ts-ignore
+                            e.target.checked
+                          )}
+                      />
                       <SettingsCheckbox
                         key="excludeHostFromSwap"
                         setting="elo"
@@ -752,6 +756,21 @@
                                 e.target.checked
                               )}
                           />
+                          {#if settings.autoHost.voteStart}
+                            <SettingsCheckbox
+                              frontFacingName="Require All Teams for Votestart"
+                              key="voteStartTeamFill"
+                              setting="autoHost"
+                              checked={settings.autoHost.voteStartTeamFill}
+                              on:change={(e) =>
+                                updateSettingSingle(
+                                  "autoHost",
+                                  "voteStartTeamFill",
+                                  // @ts-ignore
+                                  e.target.checked
+                                )}
+                            />
+                          {/if}
                           {#if settings.autoHost.type === "smartHost" && settings.autoHost.moveToSpec && settings.autoHost.observers}
                             <SettingsCheckbox
                               frontFacingName="Intrusive check"
@@ -1137,28 +1156,25 @@
             <form name="discord" class="p-2">
               <div class="row">
                 <div class="col">
-                  <label for="discordSelect" class="form-label">Discord Integration</label
-                  >
-                  <select
-                    id="discordSelect"
-                    class="form-select"
-                    data-key="type"
-                    data-setting="discord"
-                    value={settings.discord.type}
-                    on:change={(e) =>
-                      updateSettingSingle(
-                        "discord",
-                        "type", // @ts-ignore
-                        e.target.value
-                      )}
-                  >
-                    <option value="off" selected>Disabled</option>
-                    <option value="on">Enabled</option>
-                  </select>
+                  <div class="d-flex justify-content-center">
+                    <SettingsCheckbox
+                      setting="discord"
+                      key="enabled"
+                      frontFacingName="Discord Integration"
+                      checked={settings.discord.enabled}
+                      on:change={(e) =>
+                        updateSettingSingle(
+                          "discord",
+                          "enabled",
+                          // @ts-ignore
+                          e.target.checked
+                        )}
+                    />
+                  </div>
                 </div>
               </div>
-              {#if settings.discord.type !== "off"}
-                <div id="discordSettings" class="border m-2 p-2">
+              {#if settings.discord.enabled}
+                <div class="border m-2 p-2">
                   <div class="row">
                     <div class="col d-flex justify-content-center">Discord Settings</div>
                     <div class="row">
@@ -1225,18 +1241,36 @@
                   <div class="row">
                     <div class="col">
                       <div class="d-flex justify-content-center">
-                        <SettingsCheckbox
-                          setting="discord"
-                          key="bidirectionalChat"
-                          checked={settings.discord.bidirectionalChat}
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "discord",
-                              "bidirectionalChat",
-                              // @ts-ignore
-                              e.target.checked
-                            )}
-                        />
+                        <div class="btn-group btn-group-sm w-100 py-1" role="group">
+                          <SettingsCheckbox
+                            frontFacingName="Bidirectional Chat"
+                            setting="discord"
+                            key="bidirectionalChat"
+                            checked={settings.discord.bidirectionalChat}
+                            on:change={(e) =>
+                              updateSettingSingle(
+                                "discord",
+                                "bidirectionalChat",
+                                // @ts-ignore
+                                e.target.checked
+                              )}
+                          />
+                          {#if settings.discord.bidirectionalChat && (settings.autoHost.type !== "smartHost" || settings.autoHost.leaveAlternate === false)}
+                            <SettingsCheckbox
+                              frontFacingName="Send Chat in Game"
+                              setting="discord"
+                              key="sendInGameChat"
+                              checked={settings.discord.sendInGameChat}
+                              on:change={(e) =>
+                                updateSettingSingle(
+                                  "discord",
+                                  "sendInGameChat",
+                                  // @ts-ignore
+                                  e.target.checked
+                                )}
+                            />
+                          {/if}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1246,19 +1280,21 @@
             <form name="obs" class="p-2">
               <div class="row">
                 <div class="col">
-                  <SettingsCheckbox
-                    setting="obs"
-                    key="enabled"
-                    frontFacingName="OBS Integration"
-                    checked={settings.obs.enabled}
-                    on:change={(e) =>
-                      updateSettingSingle(
-                        "obs",
-                        "enabled",
-                        // @ts-ignore
-                        e.target.checked
-                      )}
-                  />
+                  <div class="d-flex justify-content-center">
+                    <SettingsCheckbox
+                      setting="obs"
+                      key="enabled"
+                      frontFacingName="OBS Integration"
+                      checked={settings.obs.enabled}
+                      on:change={(e) =>
+                        updateSettingSingle(
+                          "obs",
+                          "enabled",
+                          // @ts-ignore
+                          e.target.checked
+                        )}
+                    />
+                  </div>
                 </div>
               </div>
               {#if settings.obs.enabled}
@@ -1379,6 +1415,51 @@
                       style="display:none"
                     />
                   {/if}
+                </div>
+              {/if}
+            </form>
+            <form name="discord" class="p-2">
+              <div class="row">
+                <div class="col">
+                  <div class="d-flex justify-content-center">
+                    <SettingsCheckbox
+                      setting="streaming"
+                      key="enabled"
+                      frontFacingName="Streaming Integration (Pre-Alpha)"
+                      checked={settings.streaming.enabled}
+                      on:change={(e) =>
+                        updateSettingSingle(
+                          "streaming",
+                          "enabled",
+                          // @ts-ignore
+                          e.target.checked
+                        )}
+                    />
+                  </div>
+                </div>
+              </div>
+              {#if settings.streaming.enabled}
+                <div class="border m-2 p-2">
+                  <div class="row">
+                    <div class="col">
+                      <label for="discordToken">Token</label>
+                      <input
+                        type="password"
+                        class="form-control"
+                        id="discordToken"
+                        placeholder="Token"
+                        data-key="token"
+                        data-setting="discord"
+                        value={settings.discord.token}
+                        on:change={(e) =>
+                          updateSettingSingle(
+                            "discord",
+                            "token", // @ts-ignore
+                            e.target.value
+                          )}
+                      />
+                    </div>
+                  </div>
                 </div>
               {/if}
             </form>
