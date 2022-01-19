@@ -1596,6 +1596,7 @@
           <li>Send in game chat messages</li>
           <li>Choose to send SteamElements tips in game/lobby/discord</li>
           <li>Attempt to restart Warcraft on crash</li>
+          <li>Move to specific team name</li>
         </ul>
         <strong>Fixes:</strong>
         <ul>

@@ -11,6 +11,8 @@ import {
   up,
   Key,
   keyboard,
+  straightTo,
+  Region,
 } from "@nut-tree/nut-js";
 require("@nut-tree/nl-matcher");
 import {
@@ -23,6 +25,7 @@ import {
   dialog,
   shell,
   Notification,
+  clipboard,
 } from "electron";
 import { autoUpdater } from "electron-updater";
 import { nanoid } from "nanoid";
@@ -40,7 +43,6 @@ import { DisClient } from "./disc";
 import { SEClient, SEEvent } from "./stream";
 import { WarLobby } from "./lobby";
 import parser from "w3gjs";
-import * as clipboardy from "clipboardy";
 const FormData = require("form-data");
 if (!app.isPackaged) {
   require("electron-reload")(__dirname, {
@@ -75,6 +77,7 @@ if (!gotLock) {
   log.catchErrors();
 
   screen.config.confidence = 0.8;
+  keyboard.config.autoDelayMs = 25;
   screen.height().then((height) => {
     setResourceDir(height);
   });
@@ -105,7 +108,7 @@ if (!gotLock) {
   var hubWebSocket: WebSocket | null;
   var warcraftInFocus = false;
   var warcraftIsOpen = false;
-  var warcraftRegion = { left: 0, top: 0, width: 0, height: 0 };
+  var warcraftRegion: Region;
   var voteTimer: NodeJS.Timeout | null, refreshTimer: NodeJS.Timeout | null;
   var openLobbyParams: OpenLobbyParams | null;
   var gameState: {
@@ -1167,24 +1170,24 @@ if (!gotLock) {
     }
   }
 
-  async function handleGlueScreen(screen: string) {
+  async function handleGlueScreen(newScreen: string) {
     // Create a new game at menu or if previously in game(score screen loads twice)
     if (
-      !screen ||
-      screen === "null" ||
-      (screen === gameState.menuState && screen !== "SCORE_SCREEN")
+      !newScreen ||
+      newScreen === "null" ||
+      (newScreen === gameState.menuState && newScreen !== "SCORE_SCREEN")
     ) {
       return;
     }
-    log.info("Screen changed to: ", screen);
-    if (["CUSTOM_LOBBIES", "MAIN_MENU"].includes(screen)) {
+    log.info("Screen changed to: ", newScreen);
+    if (["CUSTOM_LOBBIES", "MAIN_MENU"].includes(newScreen)) {
       log.info("Checking to see if we should auto host or join a lobby link.");
       if (openLobbyParams?.lobbyName) {
         setTimeout(openParamsJoin, 250);
       } else {
         setTimeout(autoHostGame, 250);
       }
-    } else if (screen === "LOADING_SCREEN") {
+    } else if (newScreen === "LOADING_SCREEN") {
       discClient?.lobbyStarted();
       if (settings.autoHost.type === "rapidHost") {
         if (settings.autoHost.rapidHostTimer === 0) {
@@ -1196,10 +1199,9 @@ if (!gotLock) {
           openWarcraft();
         }
       }
-    } else if (gameState.menuState === "LOADING_SCREEN" && screen === "SCORE_SCREEN") {
+    } else if (gameState.menuState === "LOADING_SCREEN" && newScreen === "SCORE_SCREEN") {
       log.info("Game has finished loading in.");
       inGame = true;
-      sendInGameChat("");
       if (settings.autoHost.type === "smartHost") {
         log.info("Setting up smart host.");
         setTimeout(findQuit, 15000);
@@ -1212,7 +1214,14 @@ if (!gotLock) {
         log.info("Setting rapid host timer to " + settings.autoHost.rapidHostTimer);
         setTimeout(leaveGame, settings.autoHost.rapidHostTimer * 1000 * 60);
       }
-    } else if (screen === "LOGIN_DOORS") {
+      let screenHeight = await screen.height();
+      let safeZone = new Point(
+        (await screen.width()) / 2,
+        screenHeight - screenHeight / 4
+      );
+      await mouse.move(straightTo(safeZone));
+      sendInGameChat("");
+    } else if (newScreen === "LOGIN_DOORS") {
       if (settings.client.performanceMode) {
         [
           "GetLocalPlayerName",
@@ -1297,7 +1306,7 @@ if (!gotLock) {
         }
       }
     }
-    gameState.menuState = screen;
+    gameState.menuState = newScreen;
     sendWindow("menusChange", { value: gameState.menuState });
   }
 
@@ -2279,7 +2288,7 @@ if (!gotLock) {
             }
             //log.verbose("Did not find quit, try again in 5 seconds");
           } else if (settings.obs.autoStream) {
-            if (!sendingInGameChat) {
+            if (!sendingInGameChat.active) {
               keyboard.type(Key.Space);
             }
           }
@@ -2644,8 +2653,9 @@ if (!gotLock) {
         while (nextMessage) {
           if (inGame && warcraftInFocus) {
             log.info("Sending chat: " + nextMessage);
+            clipboard.writeText(nextMessage);
+            await mouse.leftClick();
             await keyboard.type(Key.LeftShift, Key.Enter);
-            await clipboardy.write(nextMessage);
             await keyboard.type(Key.LeftControl, Key.V);
             await keyboard.type(Key.Enter);
             nextMessage = sendingInGameChat.queue.shift();
