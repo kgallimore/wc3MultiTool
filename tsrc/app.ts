@@ -37,7 +37,7 @@ import WebSocket from "ws";
 import { play } from "sound-play";
 import sqlite3 from "better-sqlite3";
 import { DisClient } from "./disc";
-import { SEClient, SEEvent } from "./streamElements";
+import { SEClient, SEEvent } from "./stream";
 import { WarLobby } from "./lobby";
 import parser from "w3gjs";
 import * as clipboardy from "clipboardy";
