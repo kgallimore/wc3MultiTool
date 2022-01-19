@@ -79,7 +79,9 @@
       enabled: false,
       seToken: "",
       sendTipsInGame: false,
-      minInGameTip: 0,
+      sendTipsInLobby: false,
+      sendTipsInDiscord: false,
+      minInGameTip: 1,
     },
   };
   let currentStatus: {
@@ -1476,20 +1478,46 @@
                               e.target.checked
                             )}
                         />
+                        <SettingsCheckbox
+                          setting="streaming"
+                          key="sendTipsInLobby"
+                          frontFacingName="Send Tips in Lobby"
+                          checked={settings.streaming.sendTipsInLobby}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "streaming",
+                              "sendTipsInLobby",
+                              // @ts-ignore
+                              e.target.checked
+                            )}
+                        />
+                        <SettingsCheckbox
+                          setting="streaming"
+                          key="sendTipsInDiscord"
+                          frontFacingName="Send Tips in Discord"
+                          checked={settings.streaming.sendTipsInDiscord}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "streaming",
+                              "sendTipsInDiscord",
+                              // @ts-ignore
+                              e.target.checked
+                            )}
+                        />
                       </div>
                     </div>
                   </div>
                   <div class="row">
                     <div class="col">
-                      {#if settings.streaming.sendTipsInGame}
+                      {#if settings.streaming.sendTipsInGame || settings.streaming.sendTipsInLobby || settings.streaming.sendTipsInDiscord}
                         <label for="minInGameTip" class="form-label"
-                          >Min for In Game Tip</label
+                          >Min for Tip Announce</label
                         >
                         <input
                           type="number"
                           id="minInGameTip"
                           class="form-control"
-                          min="0"
+                          min="1"
                           value={settings.streaming.minInGameTip}
                           on:change={(e) =>
                             updateSettingSingle(
@@ -1532,6 +1560,7 @@
       <details>
         <summary>Known issues (click to expand)</summary>
         <ul>
+          <li>Generally unstable performance mode</li>
           <li>
             Intrusive check may fail due to an issue with WC3 not updating chat info
           </li>
@@ -1547,23 +1576,24 @@
         <summary>Updates this version (click to expand)</summary>
         <strong>New:</strong>
         <ul>
-          <li>Open warcraft on start option</li>
-          <li>Start with login option</li>
-          <li>In app changelog/known issues</li>
+          <li>Optional to require all player teams to be filled to start game</li>
+          <li>OBS text source</li>
+          <li>Beta Auto stream to press space bar to jump to POIs</li>
+          <li>Send in game chat messages</li>
+          <li>Choose to send SteamElements tips in game/lobby/discord</li>
+          <li>Attempt to restart Warcraft on crash</li>
         </ul>
         <strong>Fixes:</strong>
         <ul>
-          <li>Removed ?elo from commands list</li>
-          <li>?stats restricted to hosted lobbies</li>
-          <li>?swap listed in ui and ?help message</li>
-          <li>Attempts to ensure game creation succeeds</li>
-          <li>Fix not creating additional lobbies if using smarthost</li>
-          <li>Adjustments to ocr for smarthost</li>
           <li>
-            Disable intrusive check if not set to create observer slots or not move to
-            spec/observer
+            Adjust lobby updates to reduce number of updates and try to avoid empty player
+            names
           </li>
-          <li>Fix not closing dropdown scoreboards</li>
+          <li>Stop logging sensitive tokens</li>
+          <li>Able to not have announce or chat channel, and update that as well</li>
+          <li>Send lobby/in game messages over several messages if over length</li>
+          <li>More adjustments to creating lobbies.</li>
+          <li>More adjustments to ensure leaving/quitting lobbies/Warcraft.</li>
         </ul>
       </details>
     </div>

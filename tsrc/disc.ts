@@ -9,6 +9,7 @@ export class DisClient extends EventEmitter {
   dev: boolean;
   #embed: Discord.MessageEmbed | null = null;
   #sentEmbed: Discord.Message | null = null;
+  #sentEmbedData: PlayerTeamsData | null = null;
   #lobbyState: { status: "started" | "closed" | "active" | "ended"; name: string } = {
     status: "closed",
     name: "",
@@ -235,6 +236,9 @@ export class DisClient extends EventEmitter {
 
   async updateLobby(data: PlayerTeamsData | false) {
     if (this.#embed && this.#sentEmbed && this.#lobbyState.status === "active") {
+      if (data === this.#sentEmbedData) {
+        return;
+      }
       let now = Date.now();
       if (now - this.#lobbyUpdates.lastUpdate > 1000) {
         this.#lobbyUpdates.lastUpdate = now;

@@ -10,6 +10,8 @@ export interface StreamingSettings {
   enabled: boolean;
   seToken: string;
   sendTipsInGame: boolean;
+  sendTipsInLobby: boolean;
+  sendTipsInDiscord: boolean;
   minInGameTip: number;
 }
 export interface ClientSettings {

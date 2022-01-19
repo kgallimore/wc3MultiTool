@@ -203,7 +203,9 @@ if (!gotLock) {
       enabled: store.get("streaming.enabled") ?? false,
       seToken: store.get("streaming.seToken") ?? "",
       sendTipsInGame: store.get("streaming.sendTipsInGame") ?? false,
-      minInGameTip: store.get("streaming.minInGameTip") ?? 0,
+      minInGameTip: store.get("streaming.minInGameTip") ?? 1,
+      sendTipsInDiscord: store.get("streaming.sendTipsInDiscord") ?? false,
+      sendTipsInLobby: store.get("streaming.sendTipsInLobby") ?? false,
     },
   };
   let lobby: WarLobby;
@@ -442,7 +444,7 @@ if (!gotLock) {
         } else if (key === "bidirectionalChat" && discClient) {
           discClient.bidirectionalChat = value;
         }
-      } else if (setting === "streaming") {
+      } else if (setting === "streaming" && (key === "seToken" || key === "enabled")) {
         seSetup();
       }
       if (lobby) {
@@ -747,29 +749,22 @@ if (!gotLock) {
         seClient = new SEClient(settings.streaming.seToken);
         seClient.on("tip", (data: SEEvent["event"]) => {
           if (!Array.isArray(data)) {
-            log.info(
-              `${data.name} tipped $${data.amount}${
-                data.message ? ": " + data.message : ""
-              }`
-            );
+            let tipMessage = `${data.name} tipped $${data.amount}${
+              data.message ? ": " + data.message : ""
+            }`;
+            log.info(tipMessage);
             if (data.amount >= settings.streaming.minInGameTip) {
+              if (settings.streaming.sendTipsInDiscord && discClient?.chatChannel) {
+                discClient.sendMessage(tipMessage);
+              }
               if (inGame) {
                 if (settings.streaming.sendTipsInGame) {
-                  sendInGameChat(
-                    `${data.name} tipped $${data.amount}${
-                      data.message ? ": " + data.message : ""
-                    }`
-                  );
+                  sendInGameChat(tipMessage);
                 } else {
                   log.info("Tip sent while in game, which is not currently permitted.");
                 }
-              } else {
-                log.info("Sending tip to lobby.");
-                sendChatMessage(
-                  `${data.name} tipped $${data.amount}${
-                    data.message ? ": " + data.message : ""
-                  }`
-                );
+              } else if (settings.streaming.sendTipsInLobby) {
+                sendChatMessage(tipMessage);
               }
             } else {
               log.info("Tip doesn't meet minimum threshold.");
@@ -1425,6 +1420,12 @@ if (!gotLock) {
       clientWebSocket.on("close", function close() {
         clearLobby();
         log.warn("Game client connection closed!");
+        setTimeout(async () => {
+          if (await checkProcess("BlizzardError.exe")) {
+            log.warn("BlizzardError.exe is running, restarting.");
+            openWarcraft();
+          }
+        }, 1000);
       });
     }
   }
@@ -2069,21 +2070,35 @@ if (!gotLock) {
     sendMessage("LobbyStart", {});
   }
 
-  function leaveGame() {
+  async function leaveGame() {
     log.info("Leaving Game");
     sendMessage("LeaveGame", {});
+    if (
+      (inGame || ["GAME_LOBBY", "CUSTOM_GAME_LOBBY"].includes(gameState.menuState)) &&
+      lobby?.lobbyStatic?.lobbyName
+    ) {
+      let oldLobbyName = lobby.lobbyStatic.lobbyName;
+      await sleep(1000);
+      if (lobby?.lobbyStatic?.lobbyName === oldLobbyName) {
+        log.info("Lobby did not leave, trying again");
+        await exitGame();
+        openWarcraft();
+      }
+    }
   }
 
-  async function exitGame(): Promise<boolean> {
+  async function exitGame(callCount: number = 0): Promise<boolean> {
     if (await isWarcraftOpen()) {
-      if (gameState.menuState === "LOADING_SCREEN") {
+      if (callCount < 5) {
+        return await forceQuitWar();
+      } else if (gameState.menuState === "LOADING_SCREEN") {
         log.info("Warcraft is loading game, forcing quit");
         return await forceQuitWar();
       } else {
         log.info("Sending Exit Game");
         sendMessage("ExitGame", {});
         await sleep(200);
-        return exitGame();
+        return exitGame(callCount + 1);
       }
     } else {
       log.info("Warcraft is no longer open.");
