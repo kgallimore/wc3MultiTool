@@ -77,8 +77,9 @@
     },
     streaming: {
       enabled: false,
-      token: "",
-      twitchChannel: "",
+      seToken: "",
+      sendTipsInGame: false,
+      minInGameTip: 0,
     },
   };
   let currentStatus: {
@@ -1442,22 +1443,63 @@
                 <div class="border m-2 p-2">
                   <div class="row">
                     <div class="col">
-                      <label for="discordToken">Token</label>
+                      <label for="seToken">Steam Elements Token</label>
                       <input
                         type="password"
                         class="form-control"
-                        id="discordToken"
-                        placeholder="Token"
-                        data-key="token"
-                        data-setting="discord"
-                        value={settings.discord.token}
+                        id="seToken"
+                        placeholder="Stream Elements JWT Token"
+                        value={settings.streaming.seToken}
                         on:change={(e) =>
                           updateSettingSingle(
-                            "discord",
-                            "token", // @ts-ignore
+                            "streaming",
+                            "seToken",
+                            // @ts-ignore
                             e.target.value
                           )}
                       />
+                    </div>
+                  </div>
+                  <div class="row">
+                    <div class="col">
+                      <div class="btn-group btn-group-sm w-100 py-1" role="group">
+                        <SettingsCheckbox
+                          setting="streaming"
+                          key="sendDonationsInGame"
+                          frontFacingName="Send Tips in Game"
+                          checked={settings.streaming.sendTipsInGame}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "streaming",
+                              "sendTipsInGame",
+                              // @ts-ignore
+                              e.target.checked
+                            )}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div class="row">
+                    <div class="col">
+                      {#if settings.streaming.sendTipsInGame}
+                        <label for="minInGameTip" class="form-label"
+                          >Min for In Game Tip</label
+                        >
+                        <input
+                          type="number"
+                          id="minInGameTip"
+                          class="form-control"
+                          min="0"
+                          value={settings.streaming.minInGameTip}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "streaming",
+                              "minInGameTip",
+                              // @ts-ignore
+                              parseInt(e.target.value)
+                            )}
+                        />
+                      {/if}
                     </div>
                   </div>
                 </div>

@@ -37,6 +37,7 @@ import WebSocket from "ws";
 import { play } from "sound-play";
 import sqlite3 from "better-sqlite3";
 import { DisClient } from "./disc";
+import { SEClient, SEEvent } from "./streamElements";
 import { WarLobby } from "./lobby";
 import parser from "w3gjs";
 import * as clipboardy from "clipboardy";
@@ -126,6 +127,7 @@ if (!gotLock) {
   };
   var appVersion: string;
   var discClient: DisClient | null = null;
+  var seClient: SEClient | null = null;
   var sendingInGameChat: { active: boolean; queue: Array<string> } = {
     active: false,
     queue: [],
@@ -199,8 +201,9 @@ if (!gotLock) {
     },
     streaming: {
       enabled: store.get("streaming.enabled") ?? false,
-      token: store.get("streaming.token") ?? "",
-      twitchChannel: store.get("streaming.twitchChannel") ?? "",
+      seToken: store.get("streaming.token") ?? "",
+      sendTipsInGame: store.get("streaming.sendTipsInGame") ?? false,
+      minInGameTip: store.get("streaming.minInGameTip") ?? 0,
     },
   };
   let lobby: WarLobby;
@@ -432,13 +435,15 @@ if (!gotLock) {
       // @ts-ignore
       settings[setting][key] = value;
       if (setting === "discord") {
-        if (key === "type" || key === "token") {
+        if (key === "enabled" || key === "token") {
           discordSetup();
         } else if (key === "announceChannel" || key === "chatChannel") {
           discClient?.updateChannel(value, key);
         } else if (key === "bidirectionalChat" && discClient) {
           discClient.bidirectionalChat = value;
         }
+      } else if (setting === "streaming") {
+        seSetup();
       }
       if (lobby) {
         let updateKey: keyof LobbyAppSettings;
@@ -466,10 +471,19 @@ if (!gotLock) {
         },
       });
       store.set(setting, settings[setting]);
-      log.info(setting + " settings changed:", key !== "token" ? key : "*HIDDEN*", value);
+      log.info(
+        setting + " settings changed:",
+        key,
+        key.toLowerCase().includes("token") ? "*HIDDEN*" : value
+      );
       //@ts-ignore
     } else if (settings[setting][key] !== value) {
-      log.warn("Invalid update:", setting, key !== "token" ? key : "*HIDDEN*", value);
+      log.warn(
+        "Invalid update:",
+        setting,
+        key,
+        key.toLowerCase().includes("token") ? "*HIDDEN*" : value
+      );
     }
   }
 
@@ -630,6 +644,7 @@ if (!gotLock) {
       clientState.tableVersion = 1;
     }
     discordSetup();
+    seSetup();
     appVersion = app.getVersion();
     wss = new WebSocket.Server({ port: 8888 });
     wss.on("connection", function connection(ws) {
@@ -723,6 +738,37 @@ if (!gotLock) {
     if (hubWebSocket?.OPEN) {
       sendToHub("heartbeat");
       setTimeout(hubHeartbeat, 30000);
+    }
+  }
+
+  function seSetup() {
+    if (settings.streaming.enabled) {
+      if (settings.streaming.seToken.length > 20) {
+        seClient = new SEClient(settings.streaming.seToken);
+        seClient.on("tip", (data: SEEvent["event"]) => {
+          if (settings.streaming.sendTipsInGame && inGame) {
+            if (!Array.isArray(data)) {
+              if (data.amount > settings.streaming.minInGameTip) {
+                sendInGameChat(
+                  `${data.name} donated ${data.amount}${
+                    data.message ? ": " + data.message : ""
+                  }`
+                );
+              }
+            }
+          }
+        });
+        seClient.on("error", (data: string) => {
+          log.warn(data);
+        });
+        seClient.on("info", (data: string) => {
+          log.info(data);
+        });
+      } else {
+        seClient = null;
+      }
+    } else {
+      seClient = null;
     }
   }
 

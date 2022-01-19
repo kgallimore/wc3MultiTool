@@ -159,6 +159,7 @@
     "https": "^1.0.0",
     "js-combinatorics": "^1.5.4",
     "nanoid": "^3.1.32",
+    "socket.io-client": "^2.4.0",
     "sound-play": "^1.1.0",
     "w3gjs": "^2.4.3",
     "ws": "^8.4.0"

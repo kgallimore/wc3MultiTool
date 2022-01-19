@@ -8,8 +8,9 @@ export interface AppSettings {
 }
 export interface StreamingSettings {
   enabled: boolean;
-  twitchChannel: string;
-  token: string;
+  seToken: string;
+  sendTipsInGame: boolean;
+  minInGameTip: number;
 }
 export interface ClientSettings {
   restartOnUpdate: boolean;
@@ -63,7 +64,8 @@ export type SettingsKeys =
   | keyof AutoHostSettings
   | keyof EloSettings
   | keyof DiscordSettings
-  | keyof ClientSettings;
+  | keyof ClientSettings
+  | keyof StreamingSettings;
 export interface ObsHotkeys {
   key: string;
   altKey: boolean;
