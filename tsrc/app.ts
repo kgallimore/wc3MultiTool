@@ -746,8 +746,13 @@ if (!gotLock) {
       if (settings.streaming.seToken.length > 20) {
         seClient = new SEClient(settings.streaming.seToken);
         seClient.on("tip", (data: SEEvent["event"]) => {
-          if (settings.streaming.sendTipsInGame && inGame) {
-            if (!Array.isArray(data)) {
+          if (!Array.isArray(data)) {
+            if (settings.streaming.sendTipsInGame && inGame) {
+              log.info(
+                `${data.name} donated ${data.amount}${
+                  data.message ? ": " + data.message : ""
+                }`
+              );
               if (data.amount > settings.streaming.minInGameTip) {
                 sendInGameChat(
                   `${data.name} donated ${data.amount}${
@@ -755,7 +760,15 @@ if (!gotLock) {
                   }`
                 );
               }
+            } else {
+              sendChatMessage(
+                `${data.name} donated ${data.amount}${
+                  data.message ? ": " + data.message : ""
+                }`
+              );
             }
+          } else {
+            log.warn("Unknown tip data");
           }
         });
         seClient.on("error", (data: string) => {
@@ -2311,10 +2324,16 @@ if (!gotLock) {
   }
 
   function sendChatMessage(content: string) {
-    if (typeof content === "string" && content.length > 0 && content.length <= 255) {
-      sentMessages.push(content);
-      sendMessage("SendGameChatMessage", {
-        content,
+    if (typeof content === "string" && content.length > 0) {
+      let newChatSplit = content.match(/.{1,125}/g);
+      if (!newChatSplit) {
+        return;
+      }
+      sentMessages.concat(newChatSplit);
+      newChatSplit.forEach((message) => {
+        sendMessage("SendGameChatMessage", {
+          message,
+        });
       });
     }
   }
@@ -2574,7 +2593,11 @@ if (!gotLock) {
   }
 
   async function sendInGameChat(chat: string) {
-    sendingInGameChat.queue.push(chat);
+    let newChatSplit = chat.match(/.{1,125}/g);
+    if (!newChatSplit) {
+      return;
+    }
+    sendingInGameChat.queue.concat(newChatSplit);
     if (sendingInGameChat.active) {
       log.info("Queued chat: " + chat);
       return;
