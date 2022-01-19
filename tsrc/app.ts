@@ -1195,6 +1195,7 @@ if (!gotLock) {
     } else if (gameState.menuState === "LOADING_SCREEN" && screen === "SCORE_SCREEN") {
       log.info("Game has finished loading in.");
       inGame = true;
+      sendInGameChat("");
       if (settings.autoHost.type === "smartHost") {
         log.info("Setting up smart host.");
         setTimeout(findQuit, 15000);
@@ -2209,7 +2210,7 @@ if (!gotLock) {
               break;
             }
           } catch (e) {
-            log.warn(e);
+            console.log(e);
           }
         }
         if (foundTarget) {
@@ -2254,7 +2255,9 @@ if (!gotLock) {
             }
             //log.verbose("Did not find quit, try again in 5 seconds");
           } else if (settings.obs.autoStream) {
-            keyboard.type(Key.Space);
+            if (!sendingInGameChat) {
+              keyboard.type(Key.Space);
+            }
           }
         }
       }
@@ -2324,17 +2327,22 @@ if (!gotLock) {
   }
 
   function sendChatMessage(content: string) {
-    if (typeof content === "string" && content.length > 0) {
-      let newChatSplit = content.match(/.{1,125}/g);
-      if (!newChatSplit) {
-        return;
-      }
-      sentMessages.concat(newChatSplit);
-      newChatSplit.forEach((message) => {
-        sendMessage("SendGameChatMessage", {
-          message,
+    if (
+      gameState.menuState === "GAME_LOBBY" ||
+      gameState.menuState === "CUSTOM_GAME_LOBBY"
+    ) {
+      if (typeof content === "string" && content.length > 0) {
+        let newChatSplit = content.match(/.{1,125}/g);
+        if (!newChatSplit) {
+          return;
+        }
+        sentMessages.concat(newChatSplit);
+        newChatSplit.forEach((message) => {
+          sendMessage("SendGameChatMessage", {
+            message,
+          });
         });
-      });
+      }
     }
   }
 
@@ -2594,35 +2602,36 @@ if (!gotLock) {
 
   async function sendInGameChat(chat: string) {
     let newChatSplit = chat.match(/.{1,125}/g);
-    if (!newChatSplit) {
-      return;
-    }
-    sendingInGameChat.queue.concat(newChatSplit);
-    if (sendingInGameChat.active) {
+    if (newChatSplit) {
+      sendingInGameChat.queue.concat(newChatSplit);
       log.info("Queued chat: " + chat);
+    }
+    if (sendingInGameChat.active) {
       return;
     }
     await activeWindowWar();
     try {
-      sendingInGameChat.active = true;
-      let nextMessage = sendingInGameChat.queue.shift();
-      while (nextMessage) {
-        if (inGame && warcraftInFocus) {
-          log.info("Sending chat: " + chat);
-          await keyboard.type(Key.LeftShift, Key.Enter);
-          await clipboardy.write(nextMessage);
-          await keyboard.type(Key.LeftControl, Key.V);
-          await keyboard.type(Key.Enter);
-          nextMessage = sendingInGameChat.queue.shift();
-        } else {
-          log.info(
-            "Forced to stop sending messages. In Game: " +
-              inGame +
-              " Warcraft in focus: " +
-              warcraftInFocus
-          );
-          sendingInGameChat.queue.unshift(nextMessage);
-          nextMessage = undefined;
+      if (inGame && warcraftInFocus) {
+        sendingInGameChat.active = true;
+        let nextMessage = sendingInGameChat.queue.shift();
+        while (nextMessage) {
+          if (inGame && warcraftInFocus) {
+            log.info("Sending chat: " + nextMessage);
+            await keyboard.type(Key.LeftShift, Key.Enter);
+            await clipboardy.write(nextMessage);
+            await keyboard.type(Key.LeftControl, Key.V);
+            await keyboard.type(Key.Enter);
+            nextMessage = sendingInGameChat.queue.shift();
+          } else {
+            log.info(
+              "Forced to stop sending messages. In Game: " +
+                inGame +
+                " Warcraft in focus: " +
+                warcraftInFocus
+            );
+            sendingInGameChat.queue.unshift(nextMessage);
+            nextMessage = undefined;
+          }
         }
       }
       if (sendingInGameChat.queue.length === 0) {
