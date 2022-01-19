@@ -47,7 +47,7 @@ export class SEClient extends EventEmitter {
     this.socket.on("authenticated", this.onAuthenticated.bind(this));
     this.socket.on("unauthorized", console.error);
     this.socket.on("event:test", (data: SEEvent) => {
-      console.log(data);
+      //console.log(JSON.stringify(data));
       this.handleEvent(data);
       // Structure as on https://github.com/StreamElements/widgets/blob/master/CustomCode.md#on-event
     });
@@ -79,8 +79,13 @@ export class SEClient extends EventEmitter {
     // Reconnect
   }
 
-  onAuthenticated(channelId: string) {
-    this.emitInfo(`Successfully connected to StreamElements channel ${channelId}`);
+  onAuthenticated(data: {
+    clientId: string;
+    channelId: string;
+    project: string;
+    message: string;
+  }) {
+    this.emitInfo(`Successfully connected to StreamElements channel ${data.channelId}`);
   }
 
   emitError(message: string) {
@@ -91,3 +96,25 @@ export class SEClient extends EventEmitter {
     this.emit("info", message);
   }
 }
+
+/*
+    _id: string;
+    channel: string;
+    type: "cheer" | "follow" | "host" | "raid" | "subscriber" | "tip";
+    provider: "twitch" | "youtube" | "facebook";
+    flagged: boolean;
+    data: {
+      tipId?: string;
+      username: string;
+      providerId?: string;
+      displayName: string;
+      amount: number;
+      streak?: number;
+      tier: "1000" | "2000" | "3000" | "prime";
+      currency?: string;
+      message: string;
+      quantity?: number;
+      items: Array<any>;
+      avatar: string;
+    };
+    */

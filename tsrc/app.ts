@@ -747,25 +747,32 @@ if (!gotLock) {
         seClient = new SEClient(settings.streaming.seToken);
         seClient.on("tip", (data: SEEvent["event"]) => {
           if (!Array.isArray(data)) {
-            if (settings.streaming.sendTipsInGame && inGame) {
-              log.info(
-                `${data.name} donated ${data.amount}${
-                  data.message ? ": " + data.message : ""
-                }`
-              );
-              if (data.amount > settings.streaming.minInGameTip) {
-                sendInGameChat(
-                  `${data.name} donated ${data.amount}${
+            log.info(
+              `${data.name} tipped $${data.amount}${
+                data.message ? ": " + data.message : ""
+              }`
+            );
+            if (data.amount >= settings.streaming.minInGameTip) {
+              if (inGame) {
+                if (settings.streaming.sendTipsInGame) {
+                  sendInGameChat(
+                    `${data.name} tipped $${data.amount}${
+                      data.message ? ": " + data.message : ""
+                    }`
+                  );
+                } else {
+                  log.info("Tip sent while in game, which is not currently permitted.");
+                }
+              } else {
+                log.info("Sending tip to lobby.");
+                sendChatMessage(
+                  `${data.name} tipped $${data.amount}${
                     data.message ? ": " + data.message : ""
                   }`
                 );
               }
             } else {
-              sendChatMessage(
-                `${data.name} donated ${data.amount}${
-                  data.message ? ": " + data.message : ""
-                }`
-              );
+              log.info("Tip doesn't meet minimum threshold.");
             }
           } else {
             log.warn("Unknown tip data");
@@ -2332,14 +2339,17 @@ if (!gotLock) {
       gameState.menuState === "CUSTOM_GAME_LOBBY"
     ) {
       if (typeof content === "string" && content.length > 0) {
-        let newChatSplit = content.match(/.{1,125}/g);
+        let newChatSplit = content.match(/.{1,255}/g);
+        console.log("data", newChatSplit);
         if (!newChatSplit) {
+          log.warn("Could not split chat message into 255 character chunks");
           return;
         }
-        sentMessages.concat(newChatSplit);
-        newChatSplit.forEach((message) => {
+        sentMessages = sentMessages.concat(newChatSplit);
+        newChatSplit.forEach((content) => {
+          log.info("Sending chat message: " + content);
           sendMessage("SendGameChatMessage", {
-            message,
+            content,
           });
         });
       }
@@ -2603,7 +2613,7 @@ if (!gotLock) {
   async function sendInGameChat(chat: string) {
     let newChatSplit = chat.match(/.{1,125}/g);
     if (newChatSplit) {
-      sendingInGameChat.queue.concat(newChatSplit);
+      sendingInGameChat.queue = sendingInGameChat.queue.concat(newChatSplit);
       log.info("Queued chat: " + chat);
     }
     if (sendingInGameChat.active) {
