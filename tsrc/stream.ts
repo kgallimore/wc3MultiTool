@@ -70,18 +70,17 @@ export class SEClient extends EventEmitter {
   }
 
   onConnect() {
-    console.log("Successfully connected to the websocket");
+    this.emitInfo("Successfully connected to StreamElements websocket");
     this.socket.emit("authenticate", { method: "jwt", token: this.jwt });
   }
 
   onDisconnect() {
-    console.log("Disconnected from websocket");
+    this.emitError("Disconnected from websocket");
     // Reconnect
   }
 
-  onAuthenticated(data: any) {
-    const { channelId } = data;
-    console.log(`Successfully connected to channel ${channelId}`);
+  onAuthenticated(channelId: string) {
+    this.emitInfo(`Successfully connected to StreamElements channel ${channelId}`);
   }
 
   emitError(message: string) {

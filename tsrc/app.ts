@@ -201,7 +201,7 @@ if (!gotLock) {
     },
     streaming: {
       enabled: store.get("streaming.enabled") ?? false,
-      seToken: store.get("streaming.token") ?? "",
+      seToken: store.get("streaming.seToken") ?? "",
       sendTipsInGame: store.get("streaming.sendTipsInGame") ?? false,
       minInGameTip: store.get("streaming.minInGameTip") ?? 0,
     },
@@ -1099,6 +1099,7 @@ if (!gotLock) {
     }
     if (
       !lobby.lobbyStatic?.lobbyName &&
+      !inGame &&
       !["CUSTOM_GAME_LOBBY", "LOADING_SCREEN", "GAME_LOBBY"].includes(gameState.menuState)
     ) {
       if ((callCount + 5) % 10 === 0) {
@@ -1157,9 +1158,8 @@ if (!gotLock) {
       log.info("Game created with incorrect increment.");
       return true;
     } else {
-      log.warn("Failed to create game");
-      await sleep(500);
-      return await createGame(false, callCount + 1, lobbyName);
+      log.warn("Failed to create game?");
+      return false;
     }
   }
 
