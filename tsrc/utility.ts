@@ -33,6 +33,7 @@ export interface AutoHostSettings {
   announceCustom: boolean;
   announceRestingInterval: number;
   moveToSpec: boolean;
+  moveToTeam: string;
   rapidHostTimer: number;
   smartHostTimeout: number;
   voteStart: boolean;
@@ -372,6 +373,7 @@ export interface LobbyAppSettings {
   wc3StatsVariant: string;
   excludeHostFromSwap: boolean;
   moveToSpec: boolean;
+  moveToTeam: string;
   eloType: "wc3stats" | "pyroTD" | "off";
   closeSlots: Array<number>;
   mapPath: string;

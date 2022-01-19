@@ -22,6 +22,7 @@
       announceCustom: false,
       announceRestingInterval: 30,
       moveToSpec: false,
+      moveToTeam: "",
       rapidHostTimer: 0,
       smartHostTimeout: 0,
       voteStart: false,
@@ -678,12 +679,10 @@
                               e.target.checked
                             )}
                         />
-                        <input
-                          type="checkbox"
-                          class="btn-check"
-                          id="moveToSpecCheck"
-                          data-key="moveToSpec"
-                          data-setting="autoHost"
+                        <SettingsCheckbox
+                          frontFacingName="Move to Spec/Host/Team"
+                          key="moveToSpec"
+                          setting="autoHost"
                           checked={settings.autoHost.moveToSpec}
                           on:change={(e) =>
                             updateSettingSingle(
@@ -693,15 +692,10 @@
                               e.target.checked
                             )}
                         />
-                        <label for="moveToSpecCheck" class="btn btn-outline-primary"
-                          >Move to Spec/Host</label
-                        >
-                        <input
-                          type="checkbox"
-                          class="btn-check"
-                          id="enbaleObservers"
-                          data-key="observers"
-                          data-setting="autoHost"
+                        <SettingsCheckbox
+                          frontFacingName="Create Observer Slots"
+                          key="observers"
+                          setting="autoHost"
                           checked={settings.autoHost.observers}
                           on:change={(e) =>
                             updateSettingSingle(
@@ -711,15 +705,10 @@
                               e.target.checked
                             )}
                         />
-                        <label for="enbaleObservers" class="btn btn-outline-primary"
-                          >Create Observer Slots</label
-                        >
-                        <input
-                          type="checkbox"
-                          class="btn-check"
-                          id="announceCustom"
-                          data-key="announceCustom"
-                          data-setting="autoHost"
+                        <SettingsCheckbox
+                          frontFacingName="Custom Announcement"
+                          key="announceCustom"
+                          setting="autoHost"
                           checked={settings.autoHost.announceCustom}
                           on:change={(e) =>
                             updateSettingSingle(
@@ -729,9 +718,6 @@
                               e.target.checked
                             )}
                         />
-                        <label for="announceCustom" class="btn btn-outline-primary"
-                          >Custom Announcement</label
-                        >
                         {#if ["rapidHost", "smartHost"].includes(settings.autoHost.type)}
                           <SettingsCheckbox
                             frontFacingName="Announce Is Bot"
@@ -924,8 +910,6 @@
                         placeholder="Game Name"
                         maxlength="27"
                         minlength="3"
-                        data-key="gameName"
-                        data-setting="autoHost"
                         value={settings.autoHost.gameName}
                         on:keydown={(e) => {
                           if (e.key === "Enter") {
@@ -941,6 +925,37 @@
                           updateSettingSingle(
                             "autoHost",
                             "gameName",
+                            // @ts-ignore
+                            e.target.value
+                          )}
+                      />
+                    </div>
+                  </div>
+                  <div class="row p-2">
+                    <div class="col">
+                      <label for="autoHostGameName" class="form-label"
+                        >Target Team Name (Blank for Auto)</label
+                      >
+                      <input
+                        type="text"
+                        class="form-control"
+                        id="moveToTeam"
+                        placeholder="Team Name to Move to"
+                        value={settings.autoHost.moveToTeam}
+                        on:keydown={(e) => {
+                          if (e.key === "Enter") {
+                            updateSettingSingle(
+                              "autoHost",
+                              "moveToTeam",
+                              // @ts-ignore
+                              e.target.value
+                            );
+                          }
+                        }}
+                        on:change={(e) =>
+                          updateSettingSingle(
+                            "autoHost",
+                            "moveToTeam",
                             // @ts-ignore
                             e.target.value
                           )}
@@ -1567,7 +1582,6 @@
           <li>If ELO is enabled lobby may fail to start</li>
           <li>Can get stuck on loading screen if WC gets stuck loading</li>
           <li>Updating discord options can require a program restart</li>
-          <li>Can close self slot if set to close slots and move to spec/observer</li>
         </ul>
       </details>
     </div>
@@ -1594,6 +1608,7 @@
           <li>Send lobby/in game messages over several messages if over length</li>
           <li>More adjustments to creating lobbies.</li>
           <li>More adjustments to ensure leaving/quitting lobbies/Warcraft.</li>
+          <li>Ability to close starting slot</li>
         </ul>
       </details>
     </div>

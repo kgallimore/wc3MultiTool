@@ -146,6 +146,7 @@ if (!gotLock) {
       announceCustom: store.get("autoHost.announceCustom") ?? false,
       announceRestingInterval: store.get("autoHost.announceRestingInterval") ?? 30,
       moveToSpec: store.get("autoHost.moveToSpec") ?? false,
+      moveToTeam: store.get("autoHost.moveToTeam") ?? "",
       rapidHostTimer: store.get("autoHost.rapidHostTimer") ?? 0,
       smartHostTimeout: store.get("autoHost.smartHostTimeout") ?? 0,
       voteStart: store.get("autoHost.voteStart") ?? false,
@@ -818,6 +819,7 @@ if (!gotLock) {
       settings.elo.balanceTeams,
       settings.elo.excludeHostFromSwap,
       settings.autoHost.moveToSpec,
+      settings.autoHost.moveToTeam,
       settings.autoHost.closeSlots,
       settings.autoHost.mapPath
     );

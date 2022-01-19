@@ -50,6 +50,7 @@ export class WarLobby extends EventEmitter {
     balanceTeams: boolean,
     excludeHostFromSwap: boolean,
     moveToSpec: boolean,
+    moveToTeam: string,
     closeSlots: Array<number>,
     mapPath: string
   ) {
@@ -57,6 +58,7 @@ export class WarLobby extends EventEmitter {
     this.#appSettings = {
       eloType,
       moveToSpec,
+      moveToTeam,
       balanceTeams,
       wc3StatsVariant,
       excludeHostFromSwap,
@@ -219,9 +221,27 @@ export class WarLobby extends EventEmitter {
         this.emitUpdate({ newLobby: this.export() });
         let specTeams = Object.entries(this.teamList.specTeams.data);
         let selfSlot = this.getSelfSlot();
-        if (this.#appSettings.moveToSpec) {
-          if (specTeams.length > 0 && selfSlot) {
-            let target =
+        if (this.#appSettings.moveToSpec && selfSlot) {
+          let target: [string, number] | undefined;
+          if (this.#appSettings.moveToTeam) {
+            for (const teamList of Object.values(this.teamList)) {
+              target = Object.entries(teamList.data).find(
+                ([teamName, teamNumber]) =>
+                  teamName.match(new RegExp(this.#appSettings.moveToTeam, "i")) &&
+                  Object.values(this.slots).find(
+                    (player) => player.team === teamNumber && player.slotStatus === 0
+                  )
+              );
+              if (target) break;
+            }
+            if (!target) {
+              this.emitError("Could not find target team to move to");
+              return;
+            }
+          }
+
+          if (!target && specTeams.length > 0) {
+            target =
               specTeams.find(
                 ([teamName, teamNumber]) =>
                   teamName.match(/host/i) &&
@@ -234,22 +254,25 @@ export class WarLobby extends EventEmitter {
                   (player) => player.team === teamNumber && player.slotStatus === 0
                 )
               );
-            if (target) {
-              this.emitInfo("Found spec slot to move to: " + target[0]);
-              this.emitMessage("SetTeam", {
-                slot: selfSlot.slot,
-                team: target[1],
-              });
-            } else {
-              this.emitInfo("No available spec team found");
-            }
           } else {
-            this.emitInfo("Either I'm not in the lobby, or there are no spec teams");
+            this.emitInfo("There are no available spec teams");
+          }
+          if (target) {
+            this.emitInfo("Found spec slot to move to: " + target[0]);
+            this.emitMessage("SetTeam", {
+              slot: selfSlot.slot,
+              team: target[1],
+            });
+          } else {
+            this.emitInfo("No available spec team found");
           }
         }
-        for (const slot of this.#appSettings.closeSlots) {
-          this.closeSlot(slot);
-        }
+        setTimeout(() => {
+          // Timeout to ensure starting slot is able to be closed
+          for (const slot of this.#appSettings.closeSlots) {
+            this.closeSlot(slot);
+          }
+        }, 250);
       }
     } else {
       let playerUpdates: Array<PlayerPayload> = [];
