@@ -48,6 +48,10 @@
       sceneSwitchType: "off",
       inGameHotkey: false,
       outOfGameHotkey: false,
+      inGameWSScene: "",
+      outOfGameWSScene: "",
+      address: "",
+      token: "",
       autoStream: false,
       textSource: false,
     },
@@ -75,6 +79,7 @@
       performanceMode: false,
       openWarcraftOnStart: false,
       startOnLogin: false,
+      commAddress: "",
     },
     streaming: {
       enabled: false,
@@ -1374,7 +1379,7 @@
                       >
                         <option value="off" selected>Disabled</option>
                         <option value="hotkeys">Simulate Hotkeys</option>
-                        <!--<option value="websockets" disabled>OBS Websockets</option>-->
+                        <option value="websockets">OBS Websockets(Recommended)</option>
                       </select>
                     </div>
                   </div>
@@ -1427,11 +1432,84 @@
                       </div>
                     </div>
                   {:else if settings.obs.sceneSwitchType === "websockets"}
-                    <div
-                      id="obsWeboscketsSettings"
-                      class="border m-2"
-                      style="display:none"
-                    />
+                    <div class="border m-2">
+                      <div class="row">
+                        <div class="col">
+                          <label for="obsAddress">OBS Address(Blank for unchanged)</label>
+                          <input
+                            type="text"
+                            class="form-control"
+                            id="obsAddress"
+                            placeholder="ip:port"
+                            value={settings.obs.address}
+                            on:change={(e) =>
+                              updateSettingSingle(
+                                "obs",
+                                "address",
+                                // @ts-ignore
+                                e.target.value
+                              )}
+                          />
+                        </div>
+                      </div>
+                      <div class="row">
+                        <div class="col">
+                          <label for="obsPassword">OBS Password(Optional)</label>
+                          <input
+                            type="password"
+                            class="form-control"
+                            id="obsPassword"
+                            placeholder="Password"
+                            value={settings.obs.token}
+                            on:change={(e) =>
+                              updateSettingSingle(
+                                "obs",
+                                "token",
+                                // @ts-ignore
+                                e.target.value
+                              )}
+                          />
+                        </div>
+                      </div>
+                      <div class="row">
+                        <div class="col">
+                          <label for="inGameWSScene">In Game Scene Name</label>
+                          <input
+                            type="text"
+                            class="form-control"
+                            id="inGameWSScene"
+                            placeholder="In Game Scene Name"
+                            value={settings.obs.inGameWSScene}
+                            on:change={(e) =>
+                              updateSettingSingle(
+                                "obs",
+                                "inGameWSScene",
+                                // @ts-ignore
+                                e.target.value
+                              )}
+                          />
+                        </div>
+                      </div>
+                      <div class="row">
+                        <div class="col">
+                          <label for="outOfGameWSScene">Out of Game Scene Name</label>
+                          <input
+                            type="text"
+                            class="form-control"
+                            id="outOfGameWSScene"
+                            placeholder="Out of Game Scene Name"
+                            value={settings.obs.outOfGameWSScene}
+                            on:change={(e) =>
+                              updateSettingSingle(
+                                "obs",
+                                "outOfGameWSScene",
+                                // @ts-ignore
+                                e.target.value
+                              )}
+                          />
+                        </div>
+                      </div>
+                    </div>
                   {/if}
                 </div>
               {/if}

@@ -20,6 +20,7 @@ export interface ClientSettings {
   performanceMode: boolean;
   openWarcraftOnStart: boolean;
   startOnLogin: boolean;
+  commAddress: string;
 }
 export interface AutoHostSettings {
   type: "off" | "lobbyHost" | "rapidHost" | "smartHost";
@@ -59,6 +60,10 @@ export interface ObsSettings {
   sceneSwitchType: "off" | "hotkeys" | "websockets";
   inGameHotkey: ObsHotkeys | false;
   outOfGameHotkey: ObsHotkeys | false;
+  inGameWSScene: string;
+  outOfGameWSScene: string;
+  address: string;
+  token: string;
   autoStream: boolean;
   textSource: boolean;
 }
@@ -461,3 +466,33 @@ export function getTargetRegion(
     }
   }
 }
+
+export const ColorLookup = {
+  hex: [
+    "00FF0303",
+    "000042FF",
+    "001CE6B9",
+    "00540081",
+    "00FFFC01",
+    "00fEBA0E",
+    "0020C000",
+    "00E55BB0",
+    "00959697",
+    "007EBFF1",
+    "00106246",
+    "004E2A04",
+    "ff9c0000",
+    "ff0000c3",
+    "ff00ebff",
+    "ffbd00ff",
+    "ffecce87",
+    "fff7a58b",
+    "ffbfff81",
+    "ffdbb8eb",
+    "ff4f5055",
+    "ffecf0ff",
+    "ff00781e",
+    "ffa56f34",
+  ],
+  discord: [],
+};

@@ -42,6 +42,7 @@ import sqlite3 from "better-sqlite3";
 import { DisClient } from "./disc";
 import { SEClient, SEEvent } from "./stream";
 import { WarLobby } from "./lobby";
+import { OBSSocket } from "./obs";
 import parser from "w3gjs";
 const FormData = require("form-data");
 if (!app.isPackaged) {
@@ -105,6 +106,7 @@ if (!gotLock) {
   var wss: WebSocket.Server | null = null;
   var webUISocket: WebSocket | null = null;
   var clientWebSocket: WebSocket;
+  var commSocket: WebSocket | null = null;
   var hubWebSocket: WebSocket | null;
   var warcraftInFocus = false;
   var warcraftIsOpen = false;
@@ -130,6 +132,7 @@ if (!gotLock) {
   };
   var appVersion: string;
   var discClient: DisClient | null = null;
+  var obsSocket: OBSSocket | null = null;
   var seClient: SEClient | null = null;
   var sendingInGameChat: { active: boolean; queue: Array<string> } = {
     active: false,
@@ -175,6 +178,10 @@ if (!gotLock) {
       sceneSwitchType: store.get("obs.sceneSwitchType") ?? "off",
       inGameHotkey: store.get("obs.inGameHotkey") ?? false,
       outOfGameHotkey: store.get("obs.outOfGameHotkey") ?? false,
+      inGameWSScene: store.get("obs.inGameWSScene") ?? "",
+      outOfGameWSScene: store.get("obs.outOfGameWSScene") ?? "",
+      address: store.get("obs.obsAddress") ?? "",
+      token: store.get("obs.obsPassword") ?? "",
       autoStream: store.get("obs.autoStream") ?? false,
       textSource: store.get("obs.textSource") ?? false,
     },
@@ -450,6 +457,11 @@ if (!gotLock) {
         }
       } else if (setting === "streaming" && (key === "seToken" || key === "enabled")) {
         seSetup();
+      } else if (
+        setting === "obs" &&
+        (key === "enabled" || key === "address" || key === "token")
+      ) {
+        obsSetup();
       }
       if (lobby) {
         let updateKey: keyof LobbyAppSettings;
@@ -651,6 +663,8 @@ if (!gotLock) {
     }
     discordSetup();
     seSetup();
+    commSetup();
+    obsSetup();
     appVersion = app.getVersion();
     wss = new WebSocket.Server({ port: 8888 });
     wss.on("connection", function connection(ws) {
@@ -992,6 +1006,17 @@ if (!gotLock) {
             );
           } catch (e) {
             log.warn("Failed to trigger OBS Out of Game", e);
+          }
+        }
+      } else if (settings.obs.sceneSwitchType === "websockets") {
+        console.log("Sending OBS Scene Switch");
+        if (obsSocket) {
+          if (inGame && settings.obs.inGameWSScene) {
+            log.info("Triggering OBS In-Game");
+            obsSocket.switchScene(settings.obs.inGameWSScene);
+          } else if (!inGame && settings.obs.outOfGameWSScene) {
+            log.info("Triggering OBS Out of Game");
+            obsSocket.switchScene(settings.obs.outOfGameWSScene);
           }
         }
       }
@@ -2680,6 +2705,21 @@ if (!gotLock) {
       log.warn(e);
       sendingInGameChat.active = false;
       return false;
+    }
+  }
+
+  function obsSetup() {
+    if (settings.obs.enabled && settings.obs.sceneSwitchType === "websockets") {
+      obsSocket = new OBSSocket({
+        address: settings.obs.address,
+        password: settings.obs.token,
+      });
+    }
+  }
+
+  function commSetup() {
+    if (settings.client.commAddress) {
+      commSocket = new WebSocket(settings.client.commAddress);
     }
   }
 }
