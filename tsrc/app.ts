@@ -2717,9 +2717,23 @@ if (!gotLock) {
     }
   }
 
+  function commSend(message: string, payload?: string) {
+    if (settings.client.commAddress) {
+      if (commSocket) {
+        commSocket.send({ message, payload });
+      } else {
+        log.warn("Comm socket not connected.");
+      }
+    }
+  }
+
   function commSetup() {
     if (settings.client.commAddress) {
       commSocket = new WebSocket(settings.client.commAddress);
+      commSocket.on("open", () => {
+        log.info("Connected to comm");
+        commSend("settings", JSON.stringify({ settings }));
+      });
     }
   }
 }
