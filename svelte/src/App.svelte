@@ -80,6 +80,7 @@
       openWarcraftOnStart: false,
       startOnLogin: false,
       commAddress: "",
+      language: "en",
     },
     streaming: {
       enabled: false,
@@ -426,6 +427,26 @@
                         )}
                     />
                   </div>
+                </div>
+              </div>
+              <div class="row">
+                <div class="col">
+                  <label for="targetLanguage"
+                    >Auto translate chat (for discord and other options) to:
+                  </label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="targetLanguage"
+                    placeholder="2 letter ISO code (Blank for none)"
+                    value={settings.client.language}
+                    on:change={(e) =>
+                      updateSettingSingle(
+                        "client",
+                        "language", // @ts-ignore
+                        e.target.value
+                      )}
+                  />
                 </div>
               </div>
               <div class="row m-2">

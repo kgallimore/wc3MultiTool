@@ -21,6 +21,7 @@ export interface ClientSettings {
   openWarcraftOnStart: boolean;
   startOnLogin: boolean;
   commAddress: string;
+  language: "en" | "es" | "fr" | "de" | "it" | "ja" | "ko" | "pt" | "ru" | "zh";
 }
 export interface AutoHostSettings {
   type: "off" | "lobbyHost" | "rapidHost" | "smartHost";

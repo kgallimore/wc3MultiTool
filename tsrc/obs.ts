@@ -7,11 +7,20 @@ export class OBSSocket extends EventEmitter {
   constructor(options?: { address?: string; password?: string }) {
     super();
     this.socket = new OBSWebSocket();
-    this.socket.connect(options);
-    this.socket.on("ConnectionOpened", (data) => console.log(data));
-    this.socket.on("ConnectionClosed", (data) => console.warn(data));
-    this.socket.on("AuthenticationSuccess", (data) => console.log(data));
-    this.socket.on("AuthenticationFailure", (data) => console.warn(data));
+    this.socket
+      .connect(options)
+      .then(() => {
+        console.log("OBS connection started");
+      })
+      .catch((e) => console.error(e));
+    this.socket.on("ConnectionOpened", (data) => console.log("OBS connection opened"));
+    this.socket.on("ConnectionClosed", (data) => console.warn("OBS connection closed"));
+    this.socket.on("AuthenticationSuccess", (data) =>
+      console.log("OBS authentication succeeded")
+    );
+    this.socket.on("AuthenticationFailure", (data) =>
+      console.warn("OBS authentication failure")
+    );
     this.socket.on("error", (err) => {
       console.error("socket error:", err);
     });
@@ -21,8 +30,12 @@ export class OBSSocket extends EventEmitter {
   }
 
   switchScene(scene: string) {
-    this.socket.send("SetCurrentScene", {
-      "scene-name": scene,
-    });
+    try {
+      this.socket?.send("SetCurrentScene", {
+        "scene-name": scene,
+      });
+    } catch (e) {
+      console.error(e);
+    }
   }
 }

@@ -39,12 +39,16 @@ import fs from "fs";
 import WebSocket from "ws";
 import { play } from "sound-play";
 import sqlite3 from "better-sqlite3";
+// @ts-ignore
+//import translate from "translate";
 import { DisClient } from "./disc";
 import { SEClient, SEEvent } from "./stream";
 import { WarLobby } from "./lobby";
 import { OBSSocket } from "./obs";
 import parser from "w3gjs";
 const FormData = require("form-data");
+const franc = require("franc-min");
+const translate = require("translate-google");
 if (!app.isPackaged) {
   require("electron-reload")(__dirname, {
     electron: path.join(__dirname, "../node_modules", ".bin", "electron.cmd"),
@@ -88,6 +92,9 @@ if (!gotLock) {
     screen.config.highlightDurationMs = 1500;
     screen.config.highlightOpacity = 0.75;
   }
+
+  //translate.engine = "libre";
+  //translate.key = "YOUR-KEY-HERE";
 
   log.info("App starting...");
 
@@ -209,6 +216,7 @@ if (!gotLock) {
       performanceMode: store.get("client.performanceMode") ?? false,
       openWarcraftOnStart: store.get("client.openWarcraftOnStart") ?? false,
       startOnLogin: store.get("client.startOnLogin") ?? false,
+      language: store.get("client.language") ?? "en",
     },
     streaming: {
       enabled: store.get("streaming.enabled") ?? false,
@@ -1459,6 +1467,7 @@ if (!gotLock) {
         setTimeout(async () => {
           if (await checkProcess("BlizzardError.exe")) {
             log.warn("BlizzardError.exe is running, restarting.");
+            await forceQuitProcess("BlizzardError.exe");
             openWarcraft();
           }
         }, 1000);
@@ -1542,7 +1551,7 @@ if (!gotLock) {
     }
   }
 
-  function handleChatMessage(payload: GameClientMessage) {
+  async function handleChatMessage(payload: GameClientMessage) {
     // TODO: logging
     if (payload.message && payload.message.source === "gameChat") {
       if (payload.message.sender.includes("#")) {
@@ -1556,6 +1565,14 @@ if (!gotLock) {
       ) {
         sentMessages.splice(sentMessages.indexOf(payload.message.content), 1);
       } else {
+        if (
+          !payload.message.content.match(
+            /^(executed '!)|(Unknown command ')|(Command ')/i
+          )
+        ) {
+          return;
+        }
+        if (!lobby.newChat(payload.message.sender, payload.message.content)) return;
         if (payload.message.content.match(/^\?votestart$/i)) {
           if (
             settings.autoHost.voteStart &&
@@ -1584,7 +1601,7 @@ if (!gotLock) {
               lobby.voteStartVotes.push(sender);
               if (
                 lobby.voteStartVotes.length >=
-                lobby.allPlayers.length * (settings.autoHost.voteStartPercent / 100)
+                lobby.nonSpecPlayers.length * (settings.autoHost.voteStartPercent / 100)
               ) {
                 log.info("Vote start succeeded");
                 startGame();
@@ -1937,27 +1954,38 @@ if (!gotLock) {
             }
             sendChatMessage("?help: Shows commands with <required arg> <?optional arg>");
           }
-        } else if (
-          !payload.message.content.match(
-            /^(executed '!)|(Unknown command ')|(Command ')/i
+        }
+        var translatedMessage = "";
+        if (settings.client.language &&
+          !payload.message.content.startsWith("?") &&
+          ![settings.client.language, "und"].includes(
+            franc(payload.message.content, { minLength: 5 })
           )
         ) {
-          let notSpam = lobby.newChat(payload.message.sender, payload.message.content);
-
-          if (discClient && notSpam) {
-            discClient.sendMessage(
-              payload.message.sender + ": " + payload.message.content
-            );
-          }
-
-          if ((!settings.autoHost.private || !app.isPackaged) && notSpam) {
-            sendToHub("lobbyUpdate", {
-              chatMessage: {
-                name: payload.message.sender,
-                message: payload.message.content,
-              },
+          try {
+            translatedMessage = await translate(payload.message.content, {
+              to: settings.client.language,
             });
+          } catch (e) {
+            log.error(e);
           }
+        }
+        if (!settings.autoHost.private || !app.isPackaged) {
+          sendToHub("lobbyUpdate", {
+            chatMessage: {
+              name: payload.message.sender,
+              message:
+                payload.message.content +
+                (translatedMessage ? ": " + translatedMessage : ""),
+            },
+          });
+        }
+        if (discClient) {
+          discClient.sendMessage(
+            payload.message.sender + ": " + translatedMessage
+              ? `${translatedMessage} \`\`${payload.message.content}\`\``
+              : payload.message.content
+          );
         }
       }
     }
@@ -2055,6 +2083,7 @@ if (!gotLock) {
   }
 
   function checkRole(player: string, minPerms: "moderator" | "admin") {
+    if (!player) return false;
     if (player === gameState.selfBattleTag || player === "client") {
       return true;
     }
