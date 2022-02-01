@@ -216,6 +216,7 @@ if (!gotLock) {
       performanceMode: store.get("client.performanceMode") ?? false,
       openWarcraftOnStart: store.get("client.openWarcraftOnStart") ?? false,
       startOnLogin: store.get("client.startOnLogin") ?? false,
+      commAddress: store.get("client.commAddress") ?? "",
       language: store.get("client.language") ?? "en",
     },
     streaming: {
@@ -344,102 +345,7 @@ if (!gotLock) {
   }
 
   ipcMain.on("toMain", (event, args: WindowSend) => {
-    switch (args.messageType) {
-      case "changePerm":
-        if (args.perm?.player) {
-          if (args.perm.role === "moderator" || args.perm.role === "admin") {
-            addAdmin(args.perm.player, "client", "client", args.perm.role);
-          } else if (!args.perm.role) {
-            removeAdmin(args.perm.player, "client");
-          }
-        } else {
-          log.info("No player in perm");
-        }
-        break;
-      case "unbanPlayer":
-        if (args.ban?.player) {
-          unBanPlayer(args.ban.player, "client");
-        }
-        break;
-      case "banPlayer":
-        if (args.ban?.player) {
-          banPlayer(args.ban.player, "client", "client", args.ban.reason);
-        }
-        break;
-      case "init":
-        sendWindow("updateSettings", { settings: settings });
-        break;
-      case "openLogs":
-        shell.openPath(log.transports.file.getFile().path);
-        break;
-      case "openWar":
-        openWarcraft();
-        break;
-      case "getMapPath":
-        dialog
-          .showOpenDialog(win, {
-            title: "Choose Map",
-            defaultPath: `${app.getPath("home")}\\Documents\\Warcraft III\\Maps`,
-            properties: ["openFile"],
-            filters: [{ name: "Warcraft 3 Map", extensions: ["w3m", "w3x"] }],
-          })
-          .then((result) => {
-            if (!result.canceled) {
-              let newMapPath = result.filePaths[0].replace(/\\/g, "/");
-              let mapName = newMapPath.split("/").pop();
-              if (!newMapPath.includes("/Maps/")) {
-                log.info("Map path is potentially dangerous.");
-                let copyDir = `${app
-                  .getPath("home")
-                  .replace(/\\/g, "/")}/Documents/Warcraft III/Maps/MultiTool/`;
-                if (!fs.existsSync(copyDir)) {
-                  fs.mkdirSync(copyDir);
-                }
-                newMapPath = copyDir + mapName;
-                try {
-                  if (!fs.existsSync(newMapPath)) {
-                    log.info("Copying map to safe path.");
-                    fs.copyFileSync(result.filePaths[0], newMapPath);
-                  } else {
-                    log.info("Map already exists, not copying.");
-                  }
-                } catch (e) {
-                  log.warn(e);
-                  return;
-                }
-              }
-              settings.autoHost.mapPath = newMapPath;
-              log.info(`Change map to ${settings.autoHost.mapPath}`);
-              store.set("autoHost.mapPath", settings.autoHost.mapPath);
-              if (mapName) {
-                mapName = mapName.substring(0, mapName.length - 4);
-                settings.autoHost.mapName = mapName;
-                store.set("autoHost.mapName", mapName);
-                sendWindow("updateSettingSingle", {
-                  update: {
-                    setting: "autoHost",
-                    key: "mapPath",
-                    value: settings.autoHost.mapPath,
-                  },
-                });
-                eloMapNameCheck(settings.elo.type, settings.autoHost.mapName);
-              }
-            }
-          })
-          .catch((err) => {
-            log.warn(err.message, err.stack);
-          });
-        break;
-      case "updateSettingSingle":
-        let update = args.data?.update;
-        if (update) {
-          updateSetting(update.setting, update.key, update.value);
-        }
-        break;
-      default:
-        log.info("Unknown ipcMain message:", args);
-        break;
-    }
+    commandClient(args);
   });
 
   function updateSetting(setting: keyof AppSettings, key: SettingsKeys, value: any) {
@@ -470,6 +376,8 @@ if (!gotLock) {
         (key === "enabled" || key === "address" || key === "token")
       ) {
         obsSetup();
+      } else if (key === "commAddress") {
+        commSetup();
       }
       if (lobby) {
         let updateKey: keyof LobbyAppSettings;
@@ -966,6 +874,7 @@ if (!gotLock) {
     if (hubWebSocket && hubWebSocket.readyState === WebSocket.OPEN) {
       hubWebSocket.send(JSON.stringify(buildMessage));
     }
+    commSend("settings", JSON.stringify({ settings }));
   }
 
   async function triggerOBS() {
@@ -1956,7 +1865,8 @@ if (!gotLock) {
           }
         }
         var translatedMessage = "";
-        if (settings.client.language &&
+        if (
+          settings.client.language &&
           !payload.message.content.startsWith("?") &&
           ![settings.client.language, "und"].includes(
             franc(payload.message.content, { minLength: 5 })
@@ -2254,6 +2164,7 @@ if (!gotLock) {
     messageType: WindowReceive["messageType"],
     message: WindowReceive["data"]
   ) {
+    commSend(messageType, JSON.stringify(message));
     if (win?.webContents) {
       win.webContents.send("fromMain", <WindowReceive>{
         messageType: messageType,
@@ -2749,7 +2660,13 @@ if (!gotLock) {
   function commSend(message: string, payload?: string) {
     if (settings.client.commAddress) {
       if (commSocket) {
-        commSocket.send({ message, payload });
+        if (commSocket.CONNECTING) {
+          setTimeout(() => {
+            commSend(message, payload);
+          }, 250);
+        } else if (commSocket.OPEN) {
+          commSocket.send({ message, payload });
+        }
       } else {
         log.warn("Comm socket not connected.");
       }
@@ -2763,6 +2680,118 @@ if (!gotLock) {
         log.info("Connected to comm");
         commSend("settings", JSON.stringify({ settings }));
       });
+      commSocket.on("close", () => {
+        log.info("Disconnected from comm");
+        commSocket = null;
+      });
+      commSocket.on("error", (error) => {
+        log.warn("Error in comm: " + error);
+        commSocket = null;
+      });
+      commSocket.on("message", (message) => {
+        commandClient(JSON.parse(message.toString()));
+      });
+    } else {
+      commSocket = null;
+    }
+  }
+
+  function commandClient(args: WindowSend) {
+    switch (args.messageType) {
+      case "changePerm":
+        if (args.perm?.player) {
+          if (args.perm.role === "moderator" || args.perm.role === "admin") {
+            addAdmin(args.perm.player, "client", "client", args.perm.role);
+          } else if (!args.perm.role) {
+            removeAdmin(args.perm.player, "client");
+          }
+        } else {
+          log.info("No player in perm");
+        }
+        break;
+      case "unbanPlayer":
+        if (args.ban?.player) {
+          unBanPlayer(args.ban.player, "client");
+        }
+        break;
+      case "banPlayer":
+        if (args.ban?.player) {
+          banPlayer(args.ban.player, "client", "client", args.ban.reason);
+        }
+        break;
+      case "init":
+        sendWindow("updateSettings", { settings: settings });
+        break;
+      case "openLogs":
+        shell.openPath(log.transports.file.getFile().path);
+        break;
+      case "openWar":
+        openWarcraft();
+        break;
+      case "getMapPath":
+        dialog
+          .showOpenDialog(win, {
+            title: "Choose Map",
+            defaultPath: `${app.getPath("home")}\\Documents\\Warcraft III\\Maps`,
+            properties: ["openFile"],
+            filters: [{ name: "Warcraft 3 Map", extensions: ["w3m", "w3x"] }],
+          })
+          .then((result) => {
+            if (!result.canceled) {
+              let newMapPath = result.filePaths[0].replace(/\\/g, "/");
+              let mapName = newMapPath.split("/").pop();
+              if (!newMapPath.includes("/Maps/")) {
+                log.info("Map path is potentially dangerous.");
+                let copyDir = `${app
+                  .getPath("home")
+                  .replace(/\\/g, "/")}/Documents/Warcraft III/Maps/MultiTool/`;
+                if (!fs.existsSync(copyDir)) {
+                  fs.mkdirSync(copyDir);
+                }
+                newMapPath = copyDir + mapName;
+                try {
+                  if (!fs.existsSync(newMapPath)) {
+                    log.info("Copying map to safe path.");
+                    fs.copyFileSync(result.filePaths[0], newMapPath);
+                  } else {
+                    log.info("Map already exists, not copying.");
+                  }
+                } catch (e) {
+                  log.warn(e);
+                  return;
+                }
+              }
+              settings.autoHost.mapPath = newMapPath;
+              log.info(`Change map to ${settings.autoHost.mapPath}`);
+              store.set("autoHost.mapPath", settings.autoHost.mapPath);
+              if (mapName) {
+                mapName = mapName.substring(0, mapName.length - 4);
+                settings.autoHost.mapName = mapName;
+                store.set("autoHost.mapName", mapName);
+                sendWindow("updateSettingSingle", {
+                  update: {
+                    setting: "autoHost",
+                    key: "mapPath",
+                    value: settings.autoHost.mapPath,
+                  },
+                });
+                eloMapNameCheck(settings.elo.type, settings.autoHost.mapName);
+              }
+            }
+          })
+          .catch((err) => {
+            log.warn(err.message, err.stack);
+          });
+        break;
+      case "updateSettingSingle":
+        let update = args.data?.update;
+        if (update) {
+          updateSetting(update.setting, update.key, update.value);
+        }
+        break;
+      default:
+        log.info("Unknown client command:", args);
+        break;
     }
   }
 }

@@ -431,6 +431,24 @@
               </div>
               <div class="row">
                 <div class="col">
+                  <label for="commAddress">Comm Address</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="commAddress"
+                    placeholder="WebSocket Address"
+                    value={settings.client.commAddress}
+                    on:change={(e) =>
+                      updateSettingSingle(
+                        "client",
+                        "commAddress", // @ts-ignore
+                        e.target.value
+                      )}
+                  />
+                </div>
+              </div>
+              <div class="row">
+                <div class="col">
                   <label for="targetLanguage"
                     >Auto translate chat (for discord and other options) to:
                   </label>
