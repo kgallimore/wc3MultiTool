@@ -1869,14 +1869,13 @@ if (!gotLock) {
               sendChatMessage(
                 "?handi <name|slotNumber> <50|60|70|80|100>: Sets slot/player handicap"
               );
+              sendChatMessage("?hold <name>: Holds a slot");
               sendChatMessage("?kick <name|slotNumber> <?reason>: Kicks a slot/player");
+              sendChatMessage("?<un>mute <player>: Mutes/unmutes a player");
               sendChatMessage(
                 "?open<?all> <name|slotNumber> <?reason>: Opens all / a slot/player"
               );
               sendChatMessage("?unban <name>: Un-bans a player");
-              sendChatMessage(
-                "?swap <name|slotNumber> <name|slotNumber>: Swaps two slots"
-              );
               sendChatMessage("?start: Starts game");
               sendChatMessage("?swap <name|slotNumber> <name|slotNumber>: Swaps players");
             }
