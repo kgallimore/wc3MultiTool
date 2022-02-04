@@ -4,6 +4,7 @@
   export let key: string;
   export let checked: boolean = false;
   export let frontFacingName: string = key;
+  export let tooltip: string = "";
 </script>
 
 <input
@@ -12,6 +13,9 @@
   id={setting + key}
   data-key={key}
   data-setting={setting}
+  data-bs-toggle="tooltip"
+  data-bs-placement="top"
+  title={tooltip}
   bind:checked
   on:change
 />

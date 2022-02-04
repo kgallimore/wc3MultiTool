@@ -114,6 +114,16 @@ export class WarLobby extends EventEmitter {
         return { name: "Footmen%20Vs%20Grunts", elo: true };
       } else if (mapName.match(/Broken.*Alliances/i)) {
         return { name: "Broken%20Alliances", elo: true };
+      } else if (mapName.match(/Reforged.*Footmen.*Frenzy/i)) {
+        return { name: "Reforged%20Footmen%20Frenzy", elo: true };
+      } else if (mapName.match(/Direct.*Strike.*Reforged/i)) {
+        return { name: "Direct%20Strike", elo: true };
+      } else if (mapName.match(/WW3.*Diplomacy/i)) {
+        return { name: "WW3%20Diplomacy", elo: true };
+      } else if (mapName.match(/Legion.*TD/i)) {
+        return { name: "Legion%20TD", elo: true };
+      } else if (mapName.match(/Tree.*Tag/i)) {
+        return { name: "Tree%20Tag", elo: true };
       } else {
         let name = encodeURI(
           encodeURI(mapName.trim().replace(/\s*v?\.?(\d+\.)?(\*|\d+)\w*\s*$/gi, ""))

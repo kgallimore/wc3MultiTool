@@ -5,6 +5,7 @@
     WindowReceive,
     WindowSend,
   } from "../../tsrc/utility";
+  import { onMount } from "svelte";
   import { getTargetRegion } from "../../tsrc/utility";
   import { MicroLobby } from "../../tsrc/microLobby";
   import CloseSlot from "./components/CloseSlot.svelte";
@@ -137,16 +138,17 @@
       ? "I will start when slots are full."
       : ""
   } ${settings.autoHost.voteStart ? " You can vote start with ?votestart" : ""}`;
-
-  if (document.readyState !== "loading") {
-    console.log("document is ready");
-    init();
-  } else {
-    document.addEventListener("DOMContentLoaded", function () {
-      console.log("document was not ready");
+  onMount(() => {
+    if (document.readyState !== "loading") {
+      console.log("document is ready");
       init();
-    });
-  }
+    } else {
+      document.addEventListener("DOMContentLoaded", function () {
+        console.log("document was not ready");
+        init();
+      });
+    }
+  });
 
   async function wc3EloModes(lookupName: string): Promise<
     Array<{
@@ -171,6 +173,12 @@
         //@ts-ignore
         window.api.shell((event.target as HTMLAnchorElement).href);
       }
+    });
+    [...document.querySelectorAll('[data-bs-toggle="tooltip"]')].forEach(function (
+      tooltipTriggerEl
+    ) {
+      //@ts-ignore
+      let test = new bootstrap.Tooltip(tooltipTriggerEl);
     });
   }
   // @ts-ignore
@@ -362,6 +370,7 @@
                       frontFacingName="Restart on update"
                       setting="client"
                       key="restartOnUpdate"
+                      tooltip="Restart the client when a new version is downloaded and installed."
                       checked={settings.client.restartOnUpdate}
                       on:change={(e) =>
                         updateSettingSingle(
@@ -375,6 +384,7 @@
                       frontFacingName="Check for updates"
                       setting="client"
                       key="checkForUpdates"
+                      tooltip="Check for updates on startup and every 30 minutes."
                       checked={settings.client.checkForUpdates}
                       on:change={(e) =>
                         updateSettingSingle(
@@ -388,6 +398,7 @@
                       frontFacingName="Performance Mode(Beta)"
                       setting="client"
                       key="performanceMode"
+                      tooltip="Enable this to strip out Warcraft 3's UI. Does not affect anything in game, mainly meant for low power systems running Rapid Host"
                       checked={settings.client.performanceMode}
                       on:change={(e) =>
                         // @ts-ignore
@@ -402,6 +413,7 @@
                       frontFacingName="Open warcraft on start"
                       setting="client"
                       key="openWarcraftOnStart"
+                      tooltip="Enable"
                       checked={settings.client.openWarcraftOnStart}
                       on:change={(e) =>
                         // @ts-ignore
@@ -1707,26 +1719,21 @@
         <summary>Updates this version (click to expand)</summary>
         <strong>New:</strong>
         <ul>
-          <li>Optional to require all player teams to be filled to start game</li>
-          <li>OBS text source</li>
-          <li>Beta Auto stream to press space bar to jump to POIs</li>
-          <li>Send in game chat messages</li>
-          <li>Choose to send SteamElements tips in game/lobby/discord</li>
-          <li>Attempt to restart Warcraft on crash</li>
-          <li>Move to specific team name</li>
+          <li>OBS Weboscket control</li>
+          <li>Auto Translate Option</li>
+          <li>Control client via webosckets</li>
+          <li>
+            Added maps for ELO lookup: Legion TD, WW3 Diplomacy, Direct Strike, Reforged
+            Footmen Frenzy, Tree Tag
+          </li>
+          <li>Alias for mute, umute, and hold commands</li>
         </ul>
         <strong>Fixes:</strong>
         <ul>
-          <li>
-            Adjust lobby updates to reduce number of updates and try to avoid empty player
-            names
-          </li>
-          <li>Stop logging sensitive tokens</li>
-          <li>Able to not have announce or chat channel, and update that as well</li>
-          <li>Send lobby/in game messages over several messages if over length</li>
-          <li>More adjustments to creating lobbies.</li>
-          <li>More adjustments to ensure leaving/quitting lobbies/Warcraft.</li>
-          <li>Ability to close starting slot</li>
+          <li>Fix vote start partially counting spec players</li>
+          <li>Close blizz error window</li>
+          <li>Ignore spam commands</li>
+          <li>Send commands to hub and discord</li>
         </ul>
       </details>
     </div>

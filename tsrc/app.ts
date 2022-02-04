@@ -1475,9 +1475,8 @@ if (!gotLock) {
         sentMessages.splice(sentMessages.indexOf(payload.message.content), 1);
       } else {
         if (
-          !payload.message.content.match(
-            /^(executed '!)|(Unknown command ')|(Command ')/i
-          )
+          sender === gameState.selfBattleTag &&
+          payload.message.content.match(/^(executed '!)|(Unknown command ')|(Command ')/i)
         ) {
           return;
         }
@@ -1603,6 +1602,35 @@ if (!gotLock) {
         } else if (payload.message.content.match(/^\?closeall$/i)) {
           if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
             sendChatMessage("!closeall");
+          }
+        } else if (payload.message.content.match(/^\?hold$/i)) {
+          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+            let targetPlayer = payload.message.content.split(" ")[1];
+            if (targetPlayer) {
+              sendChatMessage("!hold " + targetPlayer);
+            } else {
+              sendChatMessage("Player target required.");
+            }
+          }
+        } else if (payload.message.content.match(/^\?mute$/i)) {
+          if (checkRole(sender, "moderator")) {
+            let targetPlayer = payload.message.content.split(" ")[1];
+            if (targetPlayer) {
+              sendChatMessage("!mute " + targetPlayer);
+              log.info(sender + " muted " + targetPlayer);
+            } else {
+              sendChatMessage("Player target required.");
+            }
+          }
+        } else if (payload.message.content.match(/^\?unmute$/i)) {
+          if (checkRole(sender, "moderator")) {
+            let targetPlayer = payload.message.content.split(" ")[1];
+            if (targetPlayer) {
+              sendChatMessage("!unmute " + targetPlayer);
+              log.info(sender + " unmuted " + targetPlayer);
+            } else {
+              sendChatMessage("Player target required.");
+            }
           }
         } else if (payload.message.content.match(/^\?openall$/i)) {
           if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
@@ -1886,14 +1914,15 @@ if (!gotLock) {
               name: payload.message.sender,
               message:
                 payload.message.content +
-                (translatedMessage ? ": " + translatedMessage : ""),
+                ": " +
+                (translatedMessage ? translatedMessage : payload.message.content),
             },
           });
         }
         if (discClient) {
           discClient.sendMessage(
             payload.message.sender + ": " + translatedMessage
-              ? `${translatedMessage} \`\`${payload.message.content}\`\``
+              ? `${translatedMessage} ||${payload.message.content}||`
               : payload.message.content
           );
         }
