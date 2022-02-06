@@ -1,6 +1,6 @@
 {
     "compilerOptions": {
-        "target": "esnext",         
+        "target": "ES2019",         // Specify ECMAScript target version: 'ES5' (default), 'ES2015', 'ES2016', 'ES2017', 'ES2018', 'ES2019' or 'ESNEXT'.
         "module": "commonjs",
         "moduleResolution": "node",
         "strict": true,          

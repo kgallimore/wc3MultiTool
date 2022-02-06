@@ -11,11 +11,40 @@ let state = {
   inGame: false,
 };
 let addedHtml: HTMLElement | null;
-const version = "1.1.0";
+const version = "1.2.0";
 let clientConnected = false;
 
-let qs = new URLSearchParams(window.location.search);
-let guid = qs.get("guid");
+let qs: URLSearchParams;
+let guid: string | null;
+let currentLog: string = "";
+
+function addLog(text: string, error: boolean = false) {
+  if (text === currentLog) {
+    return;
+  }
+  currentLog = text;
+
+  if (!addedHtml) {
+    addedHtml = document.createElement("DIV");
+    // @ts-ignore
+    addedHtml.style.zoom = "1.5";
+    var root = document.getElementById("root")?.appendChild(addedHtml);
+  }
+
+  addedHtml.innerHTML = `<div class="Primary-Back-Button" style="position:absolute; left:30%"><div class="Primary-Button-Frame-Alternate-B" id="toggleAutoHostButton"><div class="Primary-Button Primary-Button-${
+    error ? "Red" : "Green"
+  }" id="toggleAutoHostColor"><div class="Primary-Button-Content"><div>${text}
+</div></div></div></div></div>`;
+}
+
+setup();
+
+function setup() {
+  qs = new URLSearchParams(window.location.search);
+  guid = qs.get("guid");
+  wsSetup();
+  clientWSSetup();
+}
 
 function clientWSSetup() {
   if (guid) {
@@ -67,28 +96,30 @@ function clientSend(message: string) {
 function wsSetup() {
   webSocket = new WebSocket("ws://127.0.0.1:8888");
   webSocket.onopen = function (event) {
+    if (webSocket.readyState !== 1) {
+      return;
+    }
     sendSocket("info", "Game Client Connected. Hello! I am version: " + version);
+    addLog("WC3MT Connected");
     if (state) {
       sendSocket("state", state);
     }
     if (guid !== "") {
       sendSocket("clientWebSocket", "ws://" + location.host + "/webui-socket/" + guid);
-    }
-    if (document.readyState !== "loading") {
-      //modifyPages();
     } else {
-      document.addEventListener("DOMContentLoaded", function () {
-        //modifyPages();
-      });
+      sendSocket("info", "There was an issue in getting game socket address!");
     }
   };
   webSocket.onclose = function (event) {
-    if (addedHtml) {
-      addedHtml.remove();
-      addedHtml = null;
-    }
+    addLog("WC3MT Closed", true);
     window.setTimeout(wsSetup, 5000);
   };
+  webSocket.onerror = function (event) {
+    if (currentLog !== "WC3MT Closed") {
+      addLog("WC3MT Error", true);
+    }
+  };
+
   webSocket.onmessage = function (event) {
     const data = JSON.parse(event.data);
 
@@ -120,13 +151,16 @@ function wsSetup() {
 }
 
 function sendSocket(messageType = "info", data: string | object = "") {
-  if (webSocket && webSocket.readyState === 1) {
-    webSocket.send(JSON.stringify({ messageType, data }));
+  if (webSocket) {
+    if (webSocket.OPEN) {
+      webSocket.send(JSON.stringify({ messageType, data }));
+    } else if (webSocket.CONNECTING) {
+      setTimeout(() => {
+        sendSocket(messageType, data);
+      }, 100);
+    }
   }
 }
-
-wsSetup();
-clientWSSetup();
 
 function modifyPages() {
   if (
@@ -148,10 +182,11 @@ function modifyPages() {
       autoHost.type === "off" ? "On" : "Off"
     }</div></div></div></div></div>`;
     document.getElementById("root")?.appendChild(addedHtml);
-    document
-      .getElementById("toggleAutoHostButton")
-      ?.addEventListener("click", function (event) {
+    var autoHostButton = document.getElementById("toggleAutoHostButton");
+    if (autoHostButton) {
+      autoHostButton.addEventListener("click", function (event) {
         sendSocket("toggleAutoHost");
       });
+    }
   }
 }

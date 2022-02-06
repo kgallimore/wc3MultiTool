@@ -174,12 +174,6 @@
         window.api.shell((event.target as HTMLAnchorElement).href);
       }
     });
-    [...document.querySelectorAll('[data-bs-toggle="tooltip"]')].forEach(function (
-      tooltipTriggerEl
-    ) {
-      //@ts-ignore
-      let test = new bootstrap.Tooltip(tooltipTriggerEl);
-    });
   }
   // @ts-ignore
   window.api.receive("fromMain", (data: WindowReceive) => {
@@ -413,7 +407,7 @@
                       frontFacingName="Open warcraft on start"
                       setting="client"
                       key="openWarcraftOnStart"
-                      tooltip="Enable"
+                      tooltip="Open up Warcraft when WC3MT is opened"
                       checked={settings.client.openWarcraftOnStart}
                       on:change={(e) =>
                         // @ts-ignore
@@ -428,6 +422,7 @@
                       frontFacingName="Start on Login"
                       setting="client"
                       key="startOnLogin"
+                      tooltip="Open up WC3MT when you log in"
                       checked={settings.client.startOnLogin}
                       on:change={(e) =>
                         // @ts-ignore
@@ -479,24 +474,11 @@
                   />
                 </div>
               </div>
-              <div class="row m-2">
-                <div class="col p-2">
-                  Performance Mode completely disables the Warcraft 3 UI. This is meant
-                  for extremely low powered computers running Rapid Host with a time value
-                  of -1 or 0.
-                </div>
-              </div>
             </form>
             <form name="elo" class="p-2">
               <div class="row">
                 <div class="col">
-                  <label for="eloLookup" class="form-label">
-                    <details>
-                      <summary>ELO Lookup (click to expand)</summary>
-                      <strong>Handle Replay: </strong>Will automatically handle upload to
-                      wc3stats.com at the end of each game.
-                    </details></label
-                  >
+                  <label for="eloLookup" class="form-label"> ELO Lookup</label>
                   <select
                     id="eloLookup"
                     class="form-select"
@@ -579,6 +561,7 @@
                         setting="elo"
                         frontFacingName="Balance teams"
                         checked={settings.elo.balanceTeams}
+                        tooltip="Balance teams based off ELO. Only tested with 2 teams."
                         on:change={(e) =>
                           updateSettingSingle(
                             "elo",
@@ -592,6 +575,7 @@
                         setting="elo"
                         frontFacingName="Don't swap host"
                         checked={settings.elo.excludeHostFromSwap}
+                        tooltip="Will not swap the local user during auto balancing."
                         on:change={(e) =>
                           updateSettingSingle(
                             "elo",
@@ -606,6 +590,7 @@
                           setting="elo"
                           frontFacingName="Handle Replays"
                           checked={settings.elo.handleReplays}
+                          tooltip="Automatically handle upload to wc3stats.com at the end of each game."
                           on:change={(e) =>
                             updateSettingSingle(
                               "elo",
@@ -615,13 +600,12 @@
                             )}
                         />
                       {/if}
-                      <input
-                        type="checkbox"
-                        class="btn-check"
-                        id="announceELOCheck"
-                        data-key="announce"
-                        data-setting="elo"
+                      <SettingsCheckbox
+                        key="announce"
+                        setting="elo"
+                        frontFacingName="Announce Stats"
                         checked={settings.elo.announce}
+                        tooltip="Announce stats to the lobby."
                         on:change={(e) =>
                           updateSettingSingle(
                             "elo",
@@ -630,9 +614,6 @@
                             e.target.checked
                           )}
                       />
-                      <label for="announceELOCheck" class="btn btn-outline-primary"
-                        >Announce ELO</label
-                      >
                     </div>
                   </div>
                 </div>
@@ -671,9 +652,12 @@
                       )}
                   >
                     <option value="off">Disabled</option>
-                    <option value="lobbyHost">Lobby Host</option>
-                    <option value="rapidHost">Rapid Host</option>
-                    <option value="smartHost">Smart Host</option>
+                    <option value="lobbyHost">Lobby Host: Host but don't autostart</option
+                    >
+                    <option value="rapidHost">Rapid Host: Leave after time</option>
+                    <option value="smartHost"
+                      >Smart Host: Use OCR to detect game end</option
+                    >
                   </select>
                 </div>
               </div>
@@ -691,13 +675,12 @@
                         style="flex-wrap: wrap;"
                         role="group"
                       >
-                        <input
-                          type="checkbox"
-                          class="btn-check"
-                          id="autoHostPrivateCheck"
-                          data-key="private"
-                          data-setting="autoHost"
+                        <SettingsCheckbox
+                          key="increment"
+                          setting="autoHost"
+                          frontFacingName="Private Lobbies"
                           checked={settings.autoHost.private}
+                          tooltip="Will host private lobbies."
                           on:change={(e) =>
                             updateSettingSingle(
                               "autoHost",
@@ -706,14 +689,12 @@
                               e.target.checked
                             )}
                         />
-                        <label for="autoHostPrivateCheck" class="btn btn-outline-primary"
-                          >Private Lobbies</label
-                        >
                         <SettingsCheckbox
                           key="increment"
                           setting="autoHost"
                           frontFacingName="Incremental Lobbies"
                           checked={settings.autoHost.increment}
+                          tooltip="Will append the current game number to end of the lobby name."
                           on:change={(e) =>
                             updateSettingSingle(
                               "autoHost",
@@ -727,6 +708,7 @@
                           key="sounds"
                           setting="autoHost"
                           checked={settings.autoHost.sounds}
+                          tooltip="Will play sounds when a game is full, when a game loads in, and when a game ends."
                           on:change={(e) =>
                             updateSettingSingle(
                               "autoHost",
@@ -740,6 +722,7 @@
                           key="moveToSpec"
                           setting="autoHost"
                           checked={settings.autoHost.moveToSpec}
+                          tooltip="Will move the local user to a spectator slot upon joining the lobby."
                           on:change={(e) =>
                             updateSettingSingle(
                               "autoHost",
@@ -753,6 +736,7 @@
                           key="observers"
                           setting="autoHost"
                           checked={settings.autoHost.observers}
+                          tooltip="Will create observer (referee) slots."
                           on:change={(e) =>
                             updateSettingSingle(
                               "autoHost",
@@ -766,6 +750,7 @@
                           key="announceCustom"
                           setting="autoHost"
                           checked={settings.autoHost.announceCustom}
+                          tooltip="Will announce custom text to the lobby."
                           on:change={(e) =>
                             updateSettingSingle(
                               "autoHost",
@@ -780,6 +765,7 @@
                             key="announceIsBot"
                             setting="autoHost"
                             checked={settings.autoHost.announceIsBot}
+                            tooltip="Will announce if the local user is a bot. You can check the message below."
                             on:change={(e) =>
                               updateSettingSingle(
                                 "autoHost",
@@ -793,6 +779,7 @@
                             key="voteStart"
                             setting="autoHost"
                             checked={settings.autoHost.voteStart}
+                            tooltip="Will allow users to vote to start the game."
                             on:change={(e) =>
                               updateSettingSingle(
                                 "autoHost",
@@ -807,6 +794,7 @@
                               key="voteStartTeamFill"
                               setting="autoHost"
                               checked={settings.autoHost.voteStartTeamFill}
+                              tooltip="Will require all teams to have at least 1 player before players can vote start."
                               on:change={(e) =>
                                 updateSettingSingle(
                                   "autoHost",
@@ -822,6 +810,7 @@
                               key="leaveAlternate"
                               setting="autoHost"
                               checked={settings.autoHost.leaveAlternate}
+                              tooltip="Queries the chat menu periodically in game in order to attempt to see if there are any other players left in lobby. Note: this still will not gaurantee that it games will be left successfully due to a minor WC3 bug."
                               on:change={(e) =>
                                 updateSettingSingle(
                                   "autoHost",
@@ -837,6 +826,7 @@
                           key="advancedMapOptions"
                           frontFacingName="Advanced Map Options"
                           checked={settings.autoHost.advancedMapOptions}
+                          tooltip="Will show advanced map options."
                           on:change={(e) =>
                             updateSettingSingle(
                               "autoHost",
@@ -850,6 +840,7 @@
                           setting="autoHost"
                           frontFacingName="Auto Change Regions"
                           checked={settings.autoHost.regionChange}
+                          tooltip="Will automatically change regions at the specified time."
                           on:change={(e) =>
                             updateSettingSingle(
                               "autoHost",
@@ -1321,6 +1312,7 @@
                             setting="discord"
                             key="bidirectionalChat"
                             checked={settings.discord.bidirectionalChat}
+                            tooltip="Users may send messages to the to the lobby from the Discord channel."
                             on:change={(e) =>
                               updateSettingSingle(
                                 "discord",
@@ -1335,6 +1327,7 @@
                               setting="discord"
                               key="sendInGameChat"
                               checked={settings.discord.sendInGameChat}
+                              tooltip="Users may send messages during game from the Discord channel. Not recommended."
                               on:change={(e) =>
                                 updateSettingSingle(
                                   "discord",
@@ -1382,6 +1375,7 @@
                             key="autoStream"
                             frontFacingName="Auto Stream (Beta)"
                             checked={settings.obs.autoStream}
+                            tooltip="Periodically hit spacebar to jump to POIs"
                             on:change={(e) =>
                               updateSettingSingle(
                                 "obs",
@@ -1396,6 +1390,7 @@
                           key="textSource"
                           frontFacingName="Text Source"
                           checked={settings.obs.textSource}
+                          tooltip="Create a text source in the Documents folder that contains all lobby players and their stats."
                           on:change={(e) =>
                             updateSettingSingle(
                               "obs",
@@ -1614,6 +1609,7 @@
                           key="sendDonationsInGame"
                           frontFacingName="Send Tips in Game"
                           checked={settings.streaming.sendTipsInGame}
+                          tooltip="Send tips in game. Not recommended."
                           on:change={(e) =>
                             updateSettingSingle(
                               "streaming",
@@ -1627,6 +1623,7 @@
                           key="sendTipsInLobby"
                           frontFacingName="Send Tips in Lobby"
                           checked={settings.streaming.sendTipsInLobby}
+                          tooltip="Send tips in lobby."
                           on:change={(e) =>
                             updateSettingSingle(
                               "streaming",
@@ -1640,6 +1637,7 @@
                           key="sendTipsInDiscord"
                           frontFacingName="Send Tips in Discord"
                           checked={settings.streaming.sendTipsInDiscord}
+                          tooltip="Send tips in Discord."
                           on:change={(e) =>
                             updateSettingSingle(
                               "streaming",
@@ -1719,21 +1717,13 @@
         <summary>Updates this version (click to expand)</summary>
         <strong>New:</strong>
         <ul>
-          <li>OBS Weboscket control</li>
-          <li>Auto Translate Option</li>
-          <li>Control client via webosckets</li>
-          <li>
-            Added maps for ELO lookup: Legion TD, WW3 Diplomacy, Direct Strike, Reforged
-            Footmen Frenzy, Tree Tag
-          </li>
-          <li>Alias for mute, umute, and hold commands</li>
+          <li>UI tooltips</li>
+          <li>Minor UI elemnt to show if WC3MT is successfully installed and working.</li>
         </ul>
         <strong>Fixes:</strong>
         <ul>
-          <li>Fix vote start partially counting spec players</li>
-          <li>Close blizz error window</li>
-          <li>Ignore spam commands</li>
-          <li>Send commands to hub and discord</li>
+          <li>Fix UI javascript failing.</li>
+          <li>Fix lobby chat</li>
         </ul>
       </details>
     </div>
