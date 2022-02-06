@@ -1892,13 +1892,15 @@ if (!gotLock) {
           }
         }
         var translatedMessage = "";
+        var detectedLanguage = franc(payload.message.content, { minLength: 5 });
         if (
           settings.client.language &&
           !payload.message.content.startsWith("?") &&
-          ![settings.client.language, "und"].includes(
-            franc(payload.message.content, { minLength: 5 })
-          )
+          ![settings.client.language, "und"].includes(detectedLanguage)
         ) {
+          log.verbose(
+            "Translating '" + payload.message.content + "' from " + detectedLanguage
+          );
           try {
             translatedMessage = await translate(payload.message.content, {
               to: settings.client.language,
@@ -1910,7 +1912,7 @@ if (!gotLock) {
         if (!settings.autoHost.private || !app.isPackaged) {
           sendToHub("lobbyUpdate", {
             chatMessage: {
-              name: payload.message.sender,
+              name: sender,
               message:
                 payload.message.content +
                 ": " +
@@ -1920,9 +1922,11 @@ if (!gotLock) {
         }
         if (discClient) {
           discClient.sendMessage(
-            payload.message.sender + ": " + translatedMessage
-              ? `${translatedMessage} ||${payload.message.content}||`
-              : payload.message.content
+            sender +
+              ": " +
+              (translatedMessage
+                ? `${translatedMessage} ||${payload.message.content}||`
+                : payload.message.content)
           );
         }
       }
