@@ -46,8 +46,8 @@ import { SEClient, SEEvent } from "./stream";
 import { WarLobby } from "./lobby";
 import { OBSSocket } from "./obs";
 import parser from "w3gjs";
+import LanguageDetect from "languagedetect";
 const FormData = require("form-data");
-const franc = require("franc-min");
 const translate = require("translate-google");
 if (!app.isPackaged) {
   require("electron-reload")(__dirname, {
@@ -95,6 +95,8 @@ if (!gotLock) {
 
   //translate.engine = "libre";
   //translate.key = "YOUR-KEY-HERE";
+  let detectLang = new LanguageDetect();
+  detectLang.setLanguageType("iso2");
 
   log.info("App starting...");
 
@@ -177,8 +179,8 @@ if (!gotLock) {
       settingVisibility: store.get("autoHost.settingVisibility") ?? "0",
       leaveAlternate: store.get("autoHost.leaveAlternate") ?? false,
       regionChange: store.get("autoHost.regionChange") ?? false,
-      regionChangeTimeEU: store.get("autoHost.regionChangeTimeEU") ?? "01:00",
-      regionChangeTimeNA: store.get("autoHost.regionChangeTimeNA") ?? "11:00",
+      regionChangeTimeEU: store.get("autoHost.regionChangeTimeEU") ?? "11:00",
+      regionChangeTimeNA: store.get("autoHost.regionChangeTimeNA") ?? "01:00",
     },
     obs: {
       enabled: store.get("obs.enabled") ?? false,
@@ -1892,23 +1894,26 @@ if (!gotLock) {
           }
         }
         var translatedMessage = "";
-        var detectedLanguage = franc(payload.message.content, { minLength: 5 });
-        if (
-          settings.client.language &&
-          !payload.message.content.startsWith("?") &&
-          ![settings.client.language, "und"].includes(detectedLanguage)
-        ) {
-          log.verbose(
-            "Translating '" + payload.message.content + "' from " + detectedLanguage
-          );
-          try {
-            translatedMessage = await translate(payload.message.content, {
-              to: settings.client.language,
-            });
-          } catch (e) {
-            log.error(e);
+        if (payload.message.content.length > 4) {
+          var detectedLanguage = detectLang.detect(payload.message.content, 1)[0][0];
+          if (
+            settings.client.language &&
+            !payload.message.content.startsWith("?") &&
+            ![settings.client.language, "und"].includes(detectedLanguage)
+          ) {
+            log.verbose(
+              "Translating '" + payload.message.content + "' from " + detectedLanguage
+            );
+            try {
+              translatedMessage = await translate(payload.message.content, {
+                to: settings.client.language,
+              });
+            } catch (e) {
+              log.error(e);
+            }
           }
         }
+
         if (!settings.autoHost.private || !app.isPackaged) {
           sendToHub("lobbyUpdate", {
             chatMessage: {
@@ -2689,15 +2694,15 @@ if (!gotLock) {
     }
   }
 
-  function commSend(message: string, payload?: string) {
+  function commSend(messageType: string, payload?: string | Object) {
     if (settings.client.commAddress) {
       if (commSocket) {
-        if (commSocket.CONNECTING) {
+        if (commSocket.readyState === commSocket.OPEN) {
+          commSocket.send(JSON.stringify({ messageType, payload }));
+        } else if (commSocket.readyState === commSocket.CONNECTING) {
           setTimeout(() => {
-            commSend(message, payload);
+            commSend(messageType, payload);
           }, 250);
-        } else if (commSocket.OPEN) {
-          commSocket.send({ message, payload });
         }
       } else {
         log.warn("Comm socket not connected.");
@@ -2707,10 +2712,16 @@ if (!gotLock) {
 
   function commSetup() {
     if (settings.client.commAddress) {
+      log.info("Connecting to comm socket: " + settings.client.commAddress);
+      if (commSocket) {
+        log.info("Comm socket already connected. Disconnecting old socket.");
+        commSocket.close();
+        commSocket = null;
+      }
       commSocket = new WebSocket(settings.client.commAddress);
       commSocket.on("open", () => {
         log.info("Connected to comm");
-        commSend("settings", JSON.stringify({ settings }));
+        commSend("settings", settings);
       });
       commSocket.on("close", () => {
         log.info("Disconnected from comm");

@@ -1,6 +1,6 @@
 {
   "name": "wc3multitool",
-  "version": "0.9.5",
+  "version": "0.9.6",
   "description": "A multi-tool for Warcraft 3",
   "repository": {
     "type": "git",
@@ -155,9 +155,9 @@
     "electron-updater": "^4.6.1",
     "esm": "^3.2.25",
     "form-data": "^2.3.3",
-    "franc-min": "^5.0.0",
     "https": "^1.0.0",
     "js-combinatorics": "^1.5.4",
+    "languagedetect": "^2.0.0",
     "nanoid": "^3.1.32",
     "obs-websocket-js": "^4.0.3",
     "socket.io-client": "^2.4.0",

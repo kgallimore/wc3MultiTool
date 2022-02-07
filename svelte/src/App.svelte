@@ -465,6 +465,7 @@
                     id="targetLanguage"
                     placeholder="2 letter ISO code (Blank for none)"
                     value={settings.client.language}
+                    maxlength="2"
                     on:change={(e) =>
                       updateSettingSingle(
                         "client",
