@@ -781,17 +781,30 @@ export class WarLobby extends EventEmitter {
 
   isLobbyReady() {
     let teams = this.exportTeamStructure(true);
-    for (const team of Object.values(teams)) {
-      if (this.#appSettings.minPlayers > 0) {
-        if (
-          team.filter((slot) => slot.realPlayer).length < this.#appSettings.minPlayers
-        ) {
-          console.log("Not yet hit player target");
+    if (this.#appSettings.minPlayers > 0) {
+      let playerNumber = Object.keys(this.playerData).length;
+      if (playerNumber < this.#appSettings.minPlayers) {
+        console.log(
+          "Not yet hit player target: " +
+            playerNumber.toString() +
+            "/" +
+            this.#appSettings.minPlayers.toString()
+        );
+        return false;
+      } else {
+        console.log(
+          "Hit player target: " +
+            playerNumber.toString() +
+            "/" +
+            this.#appSettings.minPlayers.toString()
+        );
+      }
+    } else {
+      for (const team of Object.values(teams)) {
+        if (team.filter((slot) => slot.slotStatus === 0).length > 0) {
+          console.log("Missing Player");
           return false;
         }
-      } else if (team.filter((slot) => slot.slotStatus === 0).length > 0) {
-        console.log("Missing Player");
-        return false;
       }
     }
     if (this.#appSettings.eloType !== "off") {
@@ -968,7 +981,7 @@ export class WarLobby extends EventEmitter {
               : "OPEN";
           return {
             name: name,
-            realPlayer: player.playerRegion !== "",
+            realPlayer: player.playerRegion !== "" || player.isSelf,
             slotStatus: player.slotStatus,
             ...(this.playerData[player.name] ?? {
               wins: -1,

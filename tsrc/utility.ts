@@ -119,7 +119,9 @@ export interface WindowReceive {
     | "progress"
     | "gotMapPath"
     | "updateSettings"
-    | "updater";
+    | "updater"
+    | "whiteList"
+    | "banList";
   data: {
     update?: { setting: keyof AppSettings; key: SettingsKeys; value: any };
     settings?: AppSettings;
@@ -128,7 +130,27 @@ export interface WindowReceive {
     error?: string;
     value?: string;
     lobbyData?: LobbyUpdates;
+    banList?: Array<
+      BanWhiteList & {
+        ban_date: string;
+        unban_date: string;
+      }
+    >;
+    whiteList?: Array<
+      BanWhiteList & {
+        white_date: string;
+        unwhite_date: string;
+      }
+    >;
   };
+}
+
+export interface BanWhiteList {
+  id: number;
+  username: string;
+  admin: string;
+  region: string;
+  reason: string;
 }
 export interface WindowSend {
   messageType:
@@ -139,7 +161,11 @@ export interface WindowSend {
     | "init"
     | "banPlayer"
     | "unbanPlayer"
-    | "changePerm";
+    | "whitePlayer"
+    | "unwhitePlayer"
+    | "changePerm"
+    | "fetchBanList"
+    | "fetchWhiteList";
   data?: {
     update?: { setting: keyof AppSettings; key: SettingsKeys; value: any };
   };
@@ -147,6 +173,11 @@ export interface WindowSend {
     player: string;
     reason?: string;
   };
+  white?: {
+    player: string;
+    reason?: string;
+  };
+  page?: number;
   perm?: {
     player: string;
     role: "admin" | "moderator" | "";

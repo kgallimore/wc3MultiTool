@@ -573,6 +573,9 @@ if (!gotLock) {
       "CREATE TABLE IF NOT EXISTS banList(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, ban_date DATETIME default current_timestamp NOT NULL, admin TEXT NOT NULL, region TEXT NOT NULL, reason TEXT, unban_date DATETIME)"
     );
     db.exec(
+      "CREATE TABLE IF NOT EXISTS whiteList(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, white_date DATETIME default current_timestamp NOT NULL, admin TEXT NOT NULL, region TEXT NOT NULL, reason TEXT, unwhite_date DATETIME)"
+    );
+    db.exec(
       "CREATE TABLE IF NOT EXISTS lobbyEvents(id INTEGER PRIMARY KEY AUTOINCREMENT, event TEXT NOT NULL, time DATETIME default current_timestamp NOT NULL, data TEXT, username TEXT)"
     );
     db.exec(
@@ -1749,20 +1752,20 @@ if (!gotLock) {
           }
         } else if (payload.message.content.match(/^\?ban/i)) {
           if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
-            var banTarget = payload.message.content.split(" ")[1];
-            if (banTarget) {
-              var banReason = payload.message.content.split(" ").slice(2).join(" ") || "";
-              if (isInt(banTarget, 25) && parseInt(banTarget) > 0) {
-                lobby.banSlot(parseInt(banTarget) - 1);
-                banPlayer(lobby.slots[banTarget].name, sender, lobby.region, banReason);
+            var targetPlayer = payload.message.content.split(" ")[1];
+            if (targetPlayer) {
+              var reason = payload.message.content.split(" ").slice(2).join(" ") || "";
+              if (isInt(targetPlayer, 25) && parseInt(targetPlayer) > 0) {
+                lobby.banSlot(parseInt(targetPlayer) - 1);
+                banPlayer(lobby.slots[targetPlayer].name, sender, lobby.region, reason);
               } else {
-                if (banTarget.match(/^\D\S{2,11}#\d{4,8}$/)) {
+                if (targetPlayer.match(/^\D\S{2,11}#\d{4,8}$/)) {
                   sendChatMessage("Banning out of lobby player.");
-                  banPlayer(banTarget, sender, lobby.region, banReason);
+                  banPlayer(targetPlayer, sender, lobby.region, reason);
                 } else {
-                  let targets = lobby.searchPlayer(banTarget);
+                  let targets = lobby.searchPlayer(targetPlayer);
                   if (targets.length === 1) {
-                    banPlayer(targets[0], sender, lobby.region, banReason);
+                    banPlayer(targets[0], sender, lobby.region, reason);
                   } else if (targets.length > 1) {
                     sendChatMessage("Multiple matches found. Please be more specific.");
                   } else {
@@ -1771,7 +1774,7 @@ if (!gotLock) {
                 }
               }
             } else {
-              sendChatMessage("Ban target required");
+              sendChatMessage("Target required");
             }
           }
         } else if (payload.message.content.match(/^\?unban/i)) {
@@ -1788,6 +1791,49 @@ if (!gotLock) {
             } else {
               sendChatMessage("Ban target required");
               log.info("Ban target required");
+            }
+          }
+        } else if (payload.message.content.match(/^\?whitelist/i)) {
+          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+            var targetPlayer = payload.message.content.split(" ")[1];
+            if (targetPlayer) {
+              var reason = payload.message.content.split(" ").slice(2).join(" ") || "";
+              if (isInt(targetPlayer, 25) && parseInt(targetPlayer) > 0) {
+                whitePlayer(lobby.slots[targetPlayer].name, sender, lobby.region, reason);
+              } else {
+                if (targetPlayer.match(/^\D\S{2,11}#\d{4,8}$/)) {
+                  sendChatMessage("Whitelisting out of lobby player.");
+                  whitePlayer(targetPlayer, sender, lobby.region, reason);
+                } else {
+                  let targets = lobby.searchPlayer(targetPlayer);
+                  if (targets.length === 1) {
+                    whitePlayer(targets[0], sender, lobby.region, reason);
+                  } else if (targets.length > 1) {
+                    sendChatMessage("Multiple matches found. Please be more specific.");
+                  } else {
+                    sendChatMessage("No matches found.");
+                  }
+                }
+              }
+            } else {
+              sendChatMessage("Target required");
+            }
+          }
+        } else if (payload.message.content.match(/^\?unwhitelist/i)) {
+          // TODO: In lobby search and removal
+          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+            var target = payload.message.content.split(" ")[1];
+            if (target) {
+              if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
+                sendChatMessage("Unwhitelisting out of lobby player.");
+                unWhitePlayer(target, sender);
+              } else {
+                sendChatMessage("Full battleTag required");
+                log.info("Full battleTag required");
+              }
+            } else {
+              sendChatMessage("Unwhitelist target required");
+              log.info("Unwhitelist target required");
             }
           }
         } else if (payload.message.content.match(/^\?perm/i)) {
@@ -1980,6 +2026,41 @@ if (!gotLock) {
         log.warn("Failed to ban, invalid battleTag: " + player);
       }
     }
+  }
+
+  function whitePlayer(
+    player: string,
+    admin: string,
+    region: Regions | "client",
+    reason = ""
+  ) {
+    if (checkRole(admin, "moderator")) {
+      if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
+        db.prepare(
+          "INSERT INTO whiteList (username, admin, region, reason) VALUES (?, ?, ?, ?)"
+        ).run(player, admin, region, reason);
+        log.info(
+          "Whitelisted " + player + " by " + admin + (reason ? " for " + reason : "")
+        );
+        sendWindow("action", {
+          value:
+            "Whitelisted " + player + " by " + admin + (reason ? " for " + reason : ""),
+        });
+        if (lobby?.allPlayers.includes(player)) {
+          sendChatMessage(player + " whitelisted" + (reason ? " for " + reason : ""));
+        }
+      } else {
+        log.warn("Failed to whitelist, invalid battleTag: " + player);
+      }
+    }
+  }
+
+  function unWhitePlayer(player: string, admin: string) {
+    db.prepare(
+      "UPDATE whiteList SET unwhite_date = DateTime('now') WHERE username = ? AND unwhite_date IS NULL"
+    ).run(player);
+    log.info("Unwhitelisted " + player + " by " + admin);
+    sendWindow("action", { value: "Unwhitelisted " + player + " by " + admin });
   }
 
   function unBanPlayer(player: string, admin: string) {
@@ -2781,6 +2862,16 @@ if (!gotLock) {
           banPlayer(args.ban.player, "client", "client", args.ban.reason);
         }
         break;
+      case "whitePlayer":
+        if (args.white?.player) {
+          whitePlayer(args.white.player, "client", "client", args.white.reason);
+        }
+        break;
+      case "unwhitePlayer":
+        if (args.white?.player) {
+          unWhitePlayer(args.white.player, "client");
+        }
+        break;
       case "init":
         sendWindow("updateSettings", { settings: settings });
         break;
@@ -2789,6 +2880,18 @@ if (!gotLock) {
         break;
       case "openWar":
         openWarcraft();
+        break;
+      case "fetchBanList":
+        const banList = db
+          .prepare("SELECT * FROM banList LIMIT 100 OFFSET ?")
+          .all(args.page ?? 0);
+        sendWindow("banList", { banList });
+        break;
+      case "fetchWhiteList":
+        const whiteList = db
+          .prepare("SELECT * FROM whiteList LIMIT 100 OFFSET ?")
+          .all(args.page ?? 0);
+        sendWindow("whiteList", { whiteList });
         break;
       case "getMapPath":
         dialog

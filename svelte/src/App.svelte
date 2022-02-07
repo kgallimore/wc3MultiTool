@@ -1,6 +1,7 @@
 <script lang="ts">
   import type {
     AppSettings,
+    BanWhiteList,
     SettingsKeys,
     WindowReceive,
     WindowSend,
@@ -117,6 +118,18 @@
   let battleTag = "";
   let banReason = "";
   let lastAction = "";
+  let banList: Array<
+    BanWhiteList & {
+      ban_date: string;
+      unban_date: string;
+    }
+  > = [];
+  let whiteList: Array<
+    BanWhiteList & {
+      white_date: string;
+      unwhite_date: string;
+    }
+  > = [];
   $: region = getTargetRegion(
     settings.autoHost.regionChangeTimeEU,
     settings.autoHost.regionChangeTimeNA
@@ -256,6 +269,12 @@
         break;
       case "gotMapPath":
         settings.autoHost.mapPath = newData.value;
+        break;
+      case "banList":
+        banList = newData.banList;
+        break;
+      case "whiteList":
+        whiteList = newData.whiteList;
         break;
       default:
         console.log("Unknown:", data);
@@ -1813,6 +1832,73 @@
       </div>
     </div>
   </div>
+  <div class="modal fade" id="banListModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">BanList</h5>
+          <button
+            type="button"
+            class="btn-close"
+            data-bs-dismiss="modal"
+            aria-label="Close"
+          />
+        </div>
+        <div class="modal-body">
+          <table class="table table-striped">
+            <tr>
+              <th>Username</th>
+              <th>Date Added</th>
+              <th>Admin</th>
+              <th>Reason</th>
+            </tr>
+            {#each banList as player}
+              <tr>
+                <td>{player.username}</td>
+                <td>{player.ban_date}</td>
+                <td>{player.admin}</td>
+                <td>{player.reason}</td>
+              </tr>
+            {/each}
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal fade" id="whiteListModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">WhiteList</h5>
+          <button
+            type="button"
+            class="btn-close"
+            data-bs-dismiss="modal"
+            aria-label="Close"
+          />
+        </div>
+        <div class="modal-body">
+          <table class="table table-striped">
+            <tr>
+              <th>Username</th>
+              <th>Date Added</th>
+              <th>Admin</th>
+              <th>Reason</th>
+            </tr>
+            {#each whiteList as player}
+              <tr>
+                <td>{player.username}</td>
+                <td>{player.white_date}</td>
+                <td>{player.admin}</td>
+                <td>{player.reason}</td>
+              </tr>
+            {/each}
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="container-lg">
     <div class="d-flex justify-content-center p-2">
       {#if currentStatus.connected}
@@ -1934,7 +2020,7 @@
       </div>
       <div class="row justify-content-center p-2">
         <div class="col d-flex justify-content-center">
-          <div class="btn-group">
+          <div class="btn-group btn-group-sm">
             <submit
               class="btn btn-danger"
               type="submit"
@@ -1958,7 +2044,31 @@
               UnBan
             </submit>
           </div>
-          <div class="btn-group">
+          <div class="btn-group btn-group-sm">
+            <submit
+              class="btn btn-success"
+              type="submit"
+              on:click={() =>
+                toMain({
+                  messageType: "whitePlayer",
+                  white: { player: battleTag, reason: banReason },
+                })}
+            >
+              WhiteList
+            </submit>
+            <submit
+              class="btn btn-danger"
+              type="submit"
+              on:click={() =>
+                toMain({
+                  messageType: "unwhitePlayer",
+                  white: { player: battleTag },
+                })}
+            >
+              UnWhiteList
+            </submit>
+          </div>
+          <div class="btn-group btn-group-sm">
             <submit
               class="btn btn-primary"
               type="submit"
@@ -1992,6 +2102,38 @@
             >
               Remove Perms
             </submit>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col d-flex justify-content-center">
+          <div class="btn-group">
+            <button
+              type="button"
+              class="btn btn-primary"
+              data-bs-toggle="modal"
+              data-bs-target="#banListModal"
+              on:click={() => {
+                toMain({
+                  messageType: "fetchBanList",
+                });
+              }}
+            >
+              Show BanList
+            </button>
+            <button
+              type="button"
+              class="btn btn-primary"
+              data-bs-toggle="modal"
+              data-bs-target="#whiteListModal"
+              on:click={() => {
+                toMain({
+                  messageType: "fetchWhiteList",
+                });
+              }}
+            >
+              Show WhiteList
+            </button>
           </div>
         </div>
       </div>
