@@ -22,6 +22,7 @@ export interface ClientSettings {
   startOnLogin: boolean;
   commAddress: string;
   language: "en" | "es" | "fr" | "de" | "it" | "ja" | "ko" | "pt" | "ru" | "zh";
+  translateToLobby: boolean;
 }
 export interface AutoHostSettings {
   type: "off" | "lobbyHost" | "rapidHost" | "smartHost";
@@ -55,6 +56,8 @@ export interface AutoHostSettings {
   regionChange: boolean;
   regionChangeTimeEU: string;
   regionChangeTimeNA: string;
+  whitelist: boolean;
+  minPlayers: number;
 }
 export interface ObsSettings {
   enabled: boolean;
@@ -96,8 +99,13 @@ export interface EloSettings {
   excludeHostFromSwap: boolean;
   lookupName: string;
   available: boolean;
-  wc3statsVariant: string;
+  wc3StatsVariant: string;
   handleReplays: boolean;
+  requireStats: boolean;
+  minRank: number;
+  minRating: number;
+  minGames: number;
+  minWins: number;
 }
 
 export interface WindowReceive {
@@ -383,6 +391,12 @@ export interface LobbyAppSettings {
   eloType: "wc3stats" | "pyroTD" | "off";
   closeSlots: Array<number>;
   mapPath: string;
+  requireStats: boolean;
+  minRank: number;
+  minGames: number;
+  minWins: number;
+  minRating: number;
+  minPlayers: number;
 }
 
 export interface OpenLobbyParams {

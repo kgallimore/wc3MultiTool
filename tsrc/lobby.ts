@@ -52,7 +52,13 @@ export class WarLobby extends EventEmitter {
     moveToSpec: boolean,
     moveToTeam: string,
     closeSlots: Array<number>,
-    mapPath: string
+    mapPath: string,
+    requireStats: boolean = false,
+    minRank: number = 0,
+    minWins: number = 0,
+    minGames: number = 0,
+    minRating: number = 0,
+    minPlayers: number
   ) {
     super();
     this.#appSettings = {
@@ -64,18 +70,30 @@ export class WarLobby extends EventEmitter {
       excludeHostFromSwap,
       closeSlots,
       mapPath,
+      requireStats,
+      minRank,
+      minWins,
+      minGames,
+      minRating,
+      minPlayers,
     };
   }
 
   updateSetting(setting: keyof LobbyAppSettings, value: any) {
-    if (this.#appSettings[setting] !== undefined) {
+    let keys = Object.keys(this.#appSettings);
+    if (keys.includes(setting)) {
       if (typeof this.#appSettings[setting] === typeof value) {
         // @ts-ignore
         this.#appSettings[setting] = value;
         this.emitInfo(`Updated lobby: ${setting} to ${value}`);
       } else {
-        this.emitError(`Lobby update failed. Unrecognized ${setting}, ${value}`);
+        this.emitError(
+          `Lobby update failed. Unrecognized type of ${value} for ${setting}, `
+        );
       }
+    } else {
+      this.emitError(`Lobby update failed. Unrecognized setting: ${setting}`);
+      console.log(keys);
     }
   }
 
@@ -124,6 +142,8 @@ export class WarLobby extends EventEmitter {
         return { name: "Legion%20TD", elo: true };
       } else if (mapName.match(/Tree.*Tag/i)) {
         return { name: "Tree%20Tag", elo: true };
+      } else if (mapName.match(/Battleships.*Crossfire/i)) {
+        return { name: "Battleships%20Crossfire", elo: true };
       } else {
         let name = encodeURI(
           encodeURI(mapName.trim().replace(/\s*v?\.?(\d+\.)?(\*|\d+)\w*\s*$/gi, ""))
@@ -366,7 +386,7 @@ export class WarLobby extends EventEmitter {
           this.emitInfo("Refreshing lobby, ignoring player update");
         }
       } else {
-        this.emitInfo("No player updates");
+        console.log("No player updates");
       }
     }
   }
@@ -431,6 +451,32 @@ export class WarLobby extends EventEmitter {
                 },
               });
               this.emitInfo(name + " stats received and saved.");
+              if (this.#appSettings.requireStats) {
+                if (data.played < this.#appSettings.minGames) {
+                  this.emitInfo(
+                    `${name} has not played enough games to qualify for the ladder.`
+                  );
+                  this.banPlayer(name);
+                  return;
+                } else if (data.rating < this.#appSettings.minRating) {
+                  this.emitInfo(`${name} has an ELO rating below the minimum.`);
+                  this.banPlayer(name);
+                  return;
+                } else if (
+                  this.#appSettings.minRank !== 0 &&
+                  data.rank < this.#appSettings.minRank
+                ) {
+                  this.emitInfo(`${name} has a rank below the minimum.`);
+                  this.banPlayer(name);
+                  return;
+                } else if (data.wins < this.#appSettings.minWins) {
+                  this.emitInfo(
+                    `${name} has not won enough games to qualify for the ladder.`
+                  );
+                  this.banPlayer(name);
+                  return;
+                }
+              }
               if (this.isLobbyReady()) {
                 this.emitInfo("Lobby is ready.");
                 this.autoBalance();
@@ -734,9 +780,16 @@ export class WarLobby extends EventEmitter {
   }
 
   isLobbyReady() {
-    let teams = this.exportTeamStructure();
+    let teams = this.exportTeamStructure(true);
     for (const team of Object.values(teams)) {
-      if (team.filter((slot) => slot.slotStatus === 0).length > 0) {
+      if (this.#appSettings.minPlayers > 0) {
+        if (
+          team.filter((slot) => slot.realPlayer).length < this.#appSettings.minPlayers
+        ) {
+          console.log("Not yet hit player target");
+          return false;
+        }
+      } else if (team.filter((slot) => slot.slotStatus === 0).length > 0) {
         console.log("Missing Player");
         return false;
       }
@@ -762,7 +815,9 @@ export class WarLobby extends EventEmitter {
   }
 
   banPlayer(player: string) {
-    let targetSlot = Object.values(this.slots).find((slot) => slot.name === player);
+    let targetSlot = Object.values(this.slots).find(
+      (slot) => slot.name === player && slot.isSelf === false
+    );
     if (targetSlot) {
       this.banSlot(targetSlot.slot);
     } else {
@@ -771,7 +826,9 @@ export class WarLobby extends EventEmitter {
   }
 
   closePlayer(player: string) {
-    let targetSlot = Object.values(this.slots).find((slot) => slot.name === player);
+    let targetSlot = Object.values(this.slots).find(
+      (slot) => slot.name === player && slot.isSelf === false
+    );
     if (targetSlot) {
       this.closeSlot(targetSlot.slot);
     } else {
@@ -780,7 +837,9 @@ export class WarLobby extends EventEmitter {
   }
 
   kickPlayer(player: string) {
-    let targetSlot = Object.values(this.slots).find((slot) => slot.name === player);
+    let targetSlot = Object.values(this.slots).find(
+      (slot) => slot.name === player && slot.isSelf === false
+    );
     if (targetSlot) {
       this.kickSlot(targetSlot.slot);
     } else {
@@ -789,7 +848,9 @@ export class WarLobby extends EventEmitter {
   }
 
   openPlayer(player: string) {
-    let targetSlot = Object.values(this.slots).find((slot) => slot.name === player);
+    let targetSlot = Object.values(this.slots).find(
+      (slot) => slot.name === player && slot.isSelf === false
+    );
     if (targetSlot) {
       this.closeSlot(targetSlot.slot);
     } else {

@@ -19,6 +19,7 @@ let guid: string | null;
 let currentLog: string = "";
 
 function addLog(text: string, error: boolean = false) {
+  /*
   if (text === currentLog) {
     return;
   }
@@ -34,7 +35,7 @@ function addLog(text: string, error: boolean = false) {
   addedHtml.innerHTML = `<div class="Primary-Back-Button" style="position:absolute; left:30%"><div class="Primary-Button-Frame-Alternate-B" id="toggleAutoHostButton"><div class="Primary-Button Primary-Button-${
     error ? "Red" : "Green"
   }" id="toggleAutoHostColor"><div class="Primary-Button-Content"><div>${text}
-</div></div></div></div></div>`;
+</div></div></div></div></div>`;*/
 }
 
 setup();

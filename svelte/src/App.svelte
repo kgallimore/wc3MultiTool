@@ -43,6 +43,8 @@
       regionChange: false,
       regionChangeTimeEU: "11:00",
       regionChangeTimeNA: "01:00",
+      whitelist: false,
+      minPlayers: 0,
     },
     obs: {
       enabled: false,
@@ -63,8 +65,13 @@
       excludeHostFromSwap: true,
       lookupName: "",
       available: false,
-      wc3statsVariant: "",
+      wc3StatsVariant: "",
       handleReplays: true,
+      requireStats: false,
+      minGames: 0,
+      minWins: 0,
+      minRank: 0,
+      minRating: 0,
     },
     discord: {
       enabled: false,
@@ -82,6 +89,7 @@
       startOnLogin: false,
       commAddress: "",
       language: "en",
+      translateToLobby: false,
     },
     streaming: {
       enabled: false,
@@ -456,9 +464,7 @@
               </div>
               <div class="row">
                 <div class="col">
-                  <label for="targetLanguage"
-                    >Auto translate chat (for discord and other options) to:
-                  </label>
+                  <label for="targetLanguage">Translate Target Language </label>
                   <input
                     type="text"
                     class="form-control"
@@ -474,6 +480,25 @@
                       )}
                   />
                 </div>
+                {#if settings.client.language}
+                  <div class="col text-center m-auto">
+                    <SettingsCheckbox
+                      frontFacingName="Send to lobby"
+                      setting="client"
+                      key="translateToLobby"
+                      tooltip="Send translated messages back to the lobby."
+                      checked={settings.client.translateToLobby}
+                      on:change={(e) =>
+                        // @ts-ignore
+                        updateSettingSingle(
+                          "client",
+                          "translateToLobby",
+                          // @ts-ignore
+                          e.target.checked
+                        )}
+                    />
+                  </div>
+                {/if}
               </div>
             </form>
             <form name="elo" class="p-2">
@@ -496,127 +521,211 @@
                 </div>
               </div>
               {#if settings.elo.type !== "off"}
-                <div id="eloSettings" class="row border p-2">
-                  <div class="col">
-                    <div class="d-flex justify-content-center">ELO Settings</div>
-                    {#if settings.autoHost.type !== "off"}
-                      <div class="d-flex justify-content-center">
-                        {#if settings.elo.available}
-                          <div class="badge bg-success">
-                            <a
-                              href="https://api.wc3stats.com/maps/{settings.elo
-                                .lookupName}">ELO Available!</a
+                <div id="eloSettings" class="border p-2">
+                  <div class="row">
+                    <div class="col">
+                      <div class="d-flex justify-content-center">ELO Settings</div>
+                      {#if settings.autoHost.type !== "off"}
+                        <div class="d-flex justify-content-center">
+                          {#if settings.elo.available}
+                            <div class="badge bg-success">
+                              <a
+                                href="https://api.wc3stats.com/maps/{settings.elo
+                                  .lookupName}">ELO Available!</a
+                              >
+                            </div>
+                          {:else}
+                            <div class="badge bg-danger">
+                              ELO not found! Reach out to me on discord
+                            </div>
+                          {/if}
+                        </div>
+                        {#if settings.elo.type === "wc3stats" && settings.elo.available}
+                          <div class="d-flex justify-content-center">
+                            <label for="wc3statsOptions">Wc3stats Variant</label>
+                            <select
+                              class="form-select"
+                              id="wc3statsOptions"
+                              value={settings.elo.wc3StatsVariant}
+                              on:change={(e) =>
+                                updateSettingSingle(
+                                  "elo",
+                                  "wc3StatsVariant",
+                                  // @ts-ignore
+                                  e.target.value
+                                )}
                             >
-                          </div>
-                        {:else}
-                          <div class="badge bg-danger">
-                            ELO not found! Reach out to me on discord
+                              {#await wc3statsOptions}
+                                <option>Fetching options...</option>
+                              {:then value}
+                                <option
+                                  value=""
+                                  selected={"" === settings.elo.wc3StatsVariant}
+                                  >Select a value</option
+                                >
+                                {#each value as option}
+                                  <option
+                                    selected={JSON.stringify(option.key) ===
+                                      settings.elo.wc3StatsVariant}
+                                    value={JSON.stringify(option.key)}
+                                    >{option.key.ladder}, {option.key.mode}, {option.key
+                                      .round}, {option.key.season}</option
+                                  >
+                                {/each}
+                              {/await}
+                            </select>
                           </div>
                         {/if}
-                      </div>
-                      {#if settings.elo.type === "wc3stats" && settings.elo.available}
-                        <div class="d-flex justify-content-center">
-                          <label for="wc3statsOptions">Wc3stats Variant</label>
-                          <select
-                            class="form-select"
-                            id="wc3statsOptions"
-                            value={settings.elo.wc3statsVariant}
-                            on:change={(e) =>
-                              updateSettingSingle(
-                                "elo",
-                                "wc3statsVariant",
-                                // @ts-ignore
-                                e.target.value
-                              )}
-                          >
-                            {#await wc3statsOptions}
-                              <option>Fetching options...</option>
-                            {:then value}
-                              <option
-                                value=""
-                                selected={"" === settings.elo.wc3statsVariant}
-                                >Select a value</option
-                              >
-                              {#each value as option}
-                                <option
-                                  selected={JSON.stringify(option.key) ===
-                                    settings.elo.wc3statsVariant}
-                                  value={JSON.stringify(option.key)}
-                                  >{option.key.ladder}, {option.key.mode}, {option.key
-                                    .round}, {option.key.season}</option
-                                >
-                              {/each}
-                            {/await}
-                          </select>
-                        </div>
                       {/if}
-                    {/if}
 
-                    <div
-                      class="btn-group btn-group-sm"
-                      style="flex-wrap: wrap;"
-                      role="group"
-                    >
-                      <SettingsCheckbox
-                        key="balanceTeams"
-                        setting="elo"
-                        frontFacingName="Balance teams"
-                        checked={settings.elo.balanceTeams}
-                        tooltip="Balance teams based off ELO. Only tested with 2 teams."
-                        on:change={(e) =>
-                          updateSettingSingle(
-                            "elo",
-                            "balanceTeams",
-                            // @ts-ignore
-                            e.target.checked
-                          )}
-                      />
-                      <SettingsCheckbox
-                        key="excludeHostFromSwap"
-                        setting="elo"
-                        frontFacingName="Don't swap host"
-                        checked={settings.elo.excludeHostFromSwap}
-                        tooltip="Will not swap the local user during auto balancing."
-                        on:change={(e) =>
-                          updateSettingSingle(
-                            "elo",
-                            "excludeHostFromSwap",
-                            // @ts-ignore
-                            e.target.checked
-                          )}
-                      />
-                      {#if settings.elo.type === "wc3stats"}
+                      <div
+                        class="btn-group btn-group-sm"
+                        style="flex-wrap: wrap;"
+                        role="group"
+                      >
                         <SettingsCheckbox
-                          key="handleReplays"
+                          key="balanceTeams"
                           setting="elo"
-                          frontFacingName="Handle Replays"
-                          checked={settings.elo.handleReplays}
-                          tooltip="Automatically handle upload to wc3stats.com at the end of each game."
+                          frontFacingName="Balance teams"
+                          checked={settings.elo.balanceTeams}
+                          tooltip="Balance teams based off ELO. Only tested with 2 teams."
                           on:change={(e) =>
                             updateSettingSingle(
                               "elo",
-                              "handleReplays",
+                              "balanceTeams",
                               // @ts-ignore
                               e.target.checked
                             )}
                         />
-                      {/if}
-                      <SettingsCheckbox
-                        key="announce"
-                        setting="elo"
-                        frontFacingName="Announce Stats"
-                        checked={settings.elo.announce}
-                        tooltip="Announce stats to the lobby."
-                        on:change={(e) =>
-                          updateSettingSingle(
-                            "elo",
-                            "announce",
-                            // @ts-ignore
-                            e.target.checked
-                          )}
-                      />
+                        <SettingsCheckbox
+                          key="excludeHostFromSwap"
+                          setting="elo"
+                          frontFacingName="Don't swap host"
+                          checked={settings.elo.excludeHostFromSwap}
+                          tooltip="Will not swap the local user during auto balancing."
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "elo",
+                              "excludeHostFromSwap",
+                              // @ts-ignore
+                              e.target.checked
+                            )}
+                        />
+                        {#if settings.elo.type === "wc3stats"}
+                          <SettingsCheckbox
+                            key="handleReplays"
+                            setting="elo"
+                            frontFacingName="Handle Replays"
+                            checked={settings.elo.handleReplays}
+                            tooltip="Automatically handle upload to wc3stats.com at the end of each game."
+                            on:change={(e) =>
+                              updateSettingSingle(
+                                "elo",
+                                "handleReplays",
+                                // @ts-ignore
+                                e.target.checked
+                              )}
+                          />
+                        {/if}
+                        <SettingsCheckbox
+                          key="announce"
+                          setting="elo"
+                          frontFacingName="Announce Stats"
+                          checked={settings.elo.announce}
+                          tooltip="Announce stats to the lobby."
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "elo",
+                              "announce",
+                              // @ts-ignore
+                              e.target.checked
+                            )}
+                        />
+                        <SettingsCheckbox
+                          key="requireStats"
+                          setting="elo"
+                          frontFacingName="Require Stats"
+                          checked={settings.elo.requireStats}
+                          tooltip="Will require minimum stats of games/wins/rank/rating in order to join the lobby."
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "elo",
+                              "requireStats",
+                              // @ts-ignore
+                              e.target.checked
+                            )}
+                        />
+                      </div>
                     </div>
                   </div>
+                  {#if settings.elo.requireStats}
+                    <div class="row">
+                      <div class="col">
+                        <label for="minRank">Min Rank</label>
+                        <input
+                          type="number"
+                          class="form-control"
+                          id="minRank"
+                          placeholder="0 for none"
+                          value={settings.elo.minRank}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "elo",
+                              "minRank", // @ts-ignore
+                              parseInt(e.target.value)
+                            )}
+                        />
+                      </div>
+                      <div class="col">
+                        <label for="minGames">Min Games</label>
+                        <input
+                          type="number"
+                          class="form-control"
+                          id="minGames"
+                          placeholder="Minimum Games Played"
+                          value={settings.elo.minGames}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "elo",
+                              "minGames", // @ts-ignore
+                              parseInt(e.target.value)
+                            )}
+                        />
+                      </div>
+                      <div class="col">
+                        <label for="minWins">Min Wins</label>
+                        <input
+                          type="number"
+                          class="form-control"
+                          id="minWins"
+                          placeholder="Minimum Wins"
+                          value={settings.elo.minWins}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "elo",
+                              "minWins", // @ts-ignore
+                              parseInt(e.target.value)
+                            )}
+                        />
+                      </div>
+                      <div class="col">
+                        <label for="minRating">Min Rating</label>
+                        <input
+                          type="number"
+                          class="form-control"
+                          id="minRating"
+                          placeholder="Minimum Rating"
+                          value={settings.elo.minRating}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "elo",
+                              "minRating", // @ts-ignore
+                              parseInt(e.target.value)
+                            )}
+                        />
+                      </div>
+                    </div>
+                  {/if}
                 </div>
               {/if}
             </form>
@@ -979,37 +1088,59 @@
                       />
                     </div>
                   </div>
-                  <div class="row p-2">
-                    <div class="col">
-                      <label for="autoHostGameName" class="form-label"
-                        >Target Team Name (Blank for Auto)</label
-                      >
-                      <input
-                        type="text"
-                        class="form-control"
-                        id="moveToTeam"
-                        placeholder="Team Name to Move to"
-                        value={settings.autoHost.moveToTeam}
-                        on:keydown={(e) => {
-                          if (e.key === "Enter") {
+                  {#if ["rapidHost", "smartHost"].includes(settings.autoHost.type)}
+                    <div class="row p-2">
+                      <div class="col">
+                        <label for="minPlayers">Minimum Players to Start</label>
+                        <input
+                          type="number"
+                          class="form-control"
+                          id="minPlayers"
+                          placeholder="0 to disable"
+                          value={settings.autoHost.minPlayers}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "autoHost",
+                              "minPlayers", // @ts-ignore
+                              parseInt(e.target.value)
+                            )}
+                        />
+                      </div>
+                    </div>
+                  {/if}
+                  {#if settings.autoHost.moveToSpec}
+                    <div class="row p-2">
+                      <div class="col">
+                        <label for="autoHostGameName" class="form-label"
+                          >Target Team Name (Blank for Auto)</label
+                        >
+                        <input
+                          type="text"
+                          class="form-control"
+                          id="moveToTeam"
+                          placeholder="Team Name to Move to"
+                          value={settings.autoHost.moveToTeam}
+                          on:keydown={(e) => {
+                            if (e.key === "Enter") {
+                              updateSettingSingle(
+                                "autoHost",
+                                "moveToTeam",
+                                // @ts-ignore
+                                e.target.value
+                              );
+                            }
+                          }}
+                          on:change={(e) =>
                             updateSettingSingle(
                               "autoHost",
                               "moveToTeam",
                               // @ts-ignore
                               e.target.value
-                            );
-                          }
-                        }}
-                        on:change={(e) =>
-                          updateSettingSingle(
-                            "autoHost",
-                            "moveToTeam",
-                            // @ts-ignore
-                            e.target.value
-                          )}
-                      />
+                            )}
+                        />
+                      </div>
                     </div>
-                  </div>
+                  {/if}
                   <div class="row p-2">
                     <div class="col">
                       Close Slots:

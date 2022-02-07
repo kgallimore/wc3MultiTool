@@ -181,6 +181,8 @@ if (!gotLock) {
       regionChange: store.get("autoHost.regionChange") ?? false,
       regionChangeTimeEU: store.get("autoHost.regionChangeTimeEU") ?? "11:00",
       regionChangeTimeNA: store.get("autoHost.regionChangeTimeNA") ?? "01:00",
+      whitelist: store.get("autoHost.whitelist") ?? false,
+      minPlayers: store.get("autoHost.minPlayers") ?? 0,
     },
     obs: {
       enabled: store.get("obs.enabled") ?? false,
@@ -201,8 +203,14 @@ if (!gotLock) {
       excludeHostFromSwap: store.get("elo.excludeHostFromSwap") ?? true,
       lookupName: store.get("elo.lookupName") ?? "",
       available: store.get("elo.available") ?? false,
-      wc3statsVariant: store.get("elo.wc3statsVariant") ?? "",
+      wc3StatsVariant:
+        store.get("elo.wc3StatsVariant") ?? store.get("elo.wc3statsVariant") ?? "",
       handleReplays: store.get("elo.handleReplays") ?? true,
+      requireStats: store.get("elo.requireStats") ?? false,
+      minGames: store.get("elo.minGames") ?? 0,
+      minWins: store.get("elo.minWins") ?? 0,
+      minRank: store.get("elo.minRank") ?? 0,
+      minRating: store.get("elo.minRating") ?? 0,
     },
     discord: {
       enabled: store.get("discord.enabled") ?? false,
@@ -220,6 +228,7 @@ if (!gotLock) {
       startOnLogin: store.get("client.startOnLogin") ?? false,
       commAddress: store.get("client.commAddress") ?? "",
       language: store.get("client.language") ?? "en",
+      translateToLobby: store.get("client.translateToLobby") ?? false,
     },
     streaming: {
       enabled: store.get("streaming.enabled") ?? false,
@@ -428,7 +437,7 @@ if (!gotLock) {
     let clean = await lobby.cleanMapName(mapName);
     updateSetting("elo", "lookupName", clean.name);
     updateSetting("elo", "available", clean.elo);
-    updateSetting("elo", "wc3statsVariant", "");
+    updateSetting("elo", "wc3StatsVariant", "");
     if (!clean.elo) {
       if (!settings.elo.available) {
         sendWindow("error", {
@@ -750,13 +759,19 @@ if (!gotLock) {
   function lobbySetup() {
     lobby = new WarLobby(
       settings.elo.type,
-      settings.elo.wc3statsVariant,
+      settings.elo.wc3StatsVariant,
       settings.elo.balanceTeams,
       settings.elo.excludeHostFromSwap,
       settings.autoHost.moveToSpec,
       settings.autoHost.moveToTeam,
       settings.autoHost.closeSlots,
-      settings.autoHost.mapPath
+      settings.autoHost.mapPath,
+      settings.elo.requireStats,
+      settings.elo.minRank,
+      settings.elo.minWins,
+      settings.elo.minGames,
+      settings.elo.minRating,
+      settings.autoHost.minPlayers
     );
     lobby.on("update", (update: LobbyUpdates) => {
       if (
@@ -991,7 +1006,7 @@ if (!gotLock) {
         win.webContents.send("fromMain", data);
         break;
       case "echo":
-        log.verbose(data);
+        //log.verbose(data);
         break;
       case "info":
         log.info(JSON.stringify(data.data));
@@ -1377,7 +1392,7 @@ if (!gotLock) {
         log.warn("Game client connection closed!");
         setTimeout(async () => {
           if (await checkProcess("BlizzardError.exe")) {
-            log.warn("BlizzardError.exe is running, restarting.");
+            log.warn("Crash detected: BlizzardError.exe is running, restarting.");
             await forceQuitProcess("BlizzardError.exe");
             openWarcraft();
           }
@@ -1912,6 +1927,10 @@ if (!gotLock) {
               log.error(e);
             }
           }
+        }
+
+        if (settings.client.translateToLobby && translatedMessage) {
+          sendChatMessage(sender + ": " + translatedMessage);
         }
 
         if (!settings.autoHost.private || !app.isPackaged) {
