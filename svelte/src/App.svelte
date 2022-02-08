@@ -118,18 +118,24 @@
   let battleTag = "";
   let banReason = "";
   let lastAction = "";
-  let banList: Array<
-    BanWhiteList & {
-      ban_date: string;
-      unban_date: string;
-    }
-  > = [];
-  let whiteList: Array<
-    BanWhiteList & {
-      white_date: string;
-      unwhite_date: string;
-    }
-  > = [];
+  let banList: {
+    data: Array<
+      BanWhiteList & {
+        ban_date: string;
+        unban_date: string;
+      }
+    >;
+    page: number;
+  } = { data: [], page: 0 };
+  let whiteList: {
+    data: Array<
+      BanWhiteList & {
+        white_date: string;
+        unwhite_date: string;
+      }
+    >;
+    page: number;
+  } = { data: [], page: 0 };
   $: region = getTargetRegion(
     settings.autoHost.regionChangeTimeEU,
     settings.autoHost.regionChangeTimeNA
@@ -271,10 +277,10 @@
         settings.autoHost.mapPath = newData.value;
         break;
       case "banList":
-        banList = newData.banList;
+        banList = { data: newData.banList, page: newData.page };
         break;
       case "whiteList":
-        whiteList = newData.whiteList;
+        whiteList = { data: newData.whiteList, page: newData.page };
         break;
       default:
         console.log("Unknown:", data);
@@ -974,6 +980,20 @@
                             updateSettingSingle(
                               "autoHost",
                               "regionChange",
+                              // @ts-ignore
+                              e.target.checked
+                            )}
+                        />
+                        <SettingsCheckbox
+                          key="whitelist"
+                          setting="autoHost"
+                          frontFacingName="Whitelist"
+                          checked={settings.autoHost.whitelist}
+                          tooltip="Only allow certain players to join."
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "autoHost",
+                              "whitelist",
                               // @ts-ignore
                               e.target.checked
                             )}
@@ -1845,21 +1865,52 @@
           />
         </div>
         <div class="modal-body">
-          <table class="table table-striped">
+          <div class="w-full text-center">
+            <button
+              class="btn btn-primary"
+              disabled={banList.page === 0}
+              on:click={() => {
+                toMain({
+                  messageType: "fetchBanList",
+                  page: banList.page - 1,
+                });
+              }}
+            >
+              Previous Page
+            </button>
+            Page: {banList.page}
+            <button
+              class="btn btn-primary"
+              disabled={banList.data.length !== 10}
+              on:click={() => {
+                toMain({
+                  messageType: "fetchBanList",
+                  page: banList.page + 1,
+                });
+              }}
+            >
+              Next Page
+            </button>
+          </div>
+          <table class="table table-sm table-striped table-hover">
             <tr>
               <th>Username</th>
               <th>Date Added</th>
               <th>Admin</th>
               <th>Reason</th>
+              <th>Removal</th>
             </tr>
-            {#each banList as player}
-              <tr>
-                <td>{player.username}</td>
-                <td>{player.ban_date}</td>
-                <td>{player.admin}</td>
-                <td>{player.reason}</td>
-              </tr>
-            {/each}
+            <tbody>
+              {#each banList.data as player}
+                <tr>
+                  <td>{player.username}</td>
+                  <td>{player.ban_date}</td>
+                  <td>{player.admin}</td>
+                  <td>{player.reason}</td>
+                  <td>{player.unban_date}</td>
+                </tr>
+              {/each}
+            </tbody>
           </table>
         </div>
       </div>
@@ -1878,21 +1929,52 @@
           />
         </div>
         <div class="modal-body">
-          <table class="table table-striped">
+          <div class="w-full text-center">
+            <button
+              class="btn btn-primary"
+              disabled={whiteList.page === 0}
+              on:click={() => {
+                toMain({
+                  messageType: "fetchWhiteList",
+                  page: whiteList.page - 1,
+                });
+              }}
+            >
+              Previous Page
+            </button>
+            Page: {whiteList.page}
+            <button
+              class="btn btn-primary"
+              disabled={whiteList.data.length !== 10}
+              on:click={() => {
+                toMain({
+                  messageType: "fetchWhiteList",
+                  page: whiteList.page + 1,
+                });
+              }}
+            >
+              Next Page
+            </button>
+          </div>
+          <table class="table table-sm table-striped table-hover">
             <tr>
               <th>Username</th>
               <th>Date Added</th>
               <th>Admin</th>
               <th>Reason</th>
+              <th>Removal</th>
             </tr>
-            {#each whiteList as player}
-              <tr>
-                <td>{player.username}</td>
-                <td>{player.white_date}</td>
-                <td>{player.admin}</td>
-                <td>{player.reason}</td>
-              </tr>
-            {/each}
+            <tbody>
+              {#each whiteList.data as player}
+                <tr>
+                  <td>{player.username}</td>
+                  <td>{player.white_date}</td>
+                  <td>{player.admin}</td>
+                  <td>{player.reason}</td>
+                  <td>{player.unwhite_date}</td>
+                </tr>
+              {/each}
+            </tbody>
           </table>
         </div>
       </div>
@@ -2114,9 +2196,11 @@
               data-bs-toggle="modal"
               data-bs-target="#banListModal"
               on:click={() => {
-                toMain({
-                  messageType: "fetchBanList",
-                });
+                if (banList.data.length === 0) {
+                  toMain({
+                    messageType: "fetchBanList",
+                  });
+                }
               }}
             >
               Show BanList
@@ -2127,9 +2211,11 @@
               data-bs-toggle="modal"
               data-bs-target="#whiteListModal"
               on:click={() => {
-                toMain({
-                  messageType: "fetchWhiteList",
-                });
+                if (whiteList.data.length === 0) {
+                  toMain({
+                    messageType: "fetchWhiteList",
+                  });
+                }
               }}
             >
               Show WhiteList

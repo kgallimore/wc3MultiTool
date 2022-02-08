@@ -841,10 +841,27 @@ if (!gotLock) {
                 " for being banned" +
                 (row.reason ? " for: " + row.reason : "")
             );
-          } else {
-            log.info("Player joined: " + update.playerJoined.name);
-            announcement();
+            return;
           }
+          if (settings.autoHost.whitelist) {
+            if (update.playerJoined.name !== gameState.selfBattleTag) {
+              const row = db
+                .prepare(
+                  "SELECT * FROM whiteList WHERE username = ? AND unwhite_date IS NULL"
+                )
+                .get(update.playerJoined.name);
+              if (!row) {
+                lobby.banSlot(update.playerJoined.slot);
+                sendChatMessage(update.playerJoined.name + " is not whitelisted");
+                log.info(
+                  "Kicked " + update.playerJoined.name + " for not being whitelisted"
+                );
+                return;
+              }
+            }
+          }
+          log.info("Player joined: " + update.playerJoined.name);
+          announcement();
         } else {
           log.warn("Nameless player joined");
         }
@@ -2883,15 +2900,15 @@ if (!gotLock) {
         break;
       case "fetchBanList":
         const banList = db
-          .prepare("SELECT * FROM banList LIMIT 100 OFFSET ?")
-          .all(args.page ?? 0);
-        sendWindow("banList", { banList });
+          .prepare("SELECT * FROM banList LIMIT 10 OFFSET ?")
+          .all((args.page ?? 0) * 10);
+        sendWindow("banList", { banList, page: args.page ?? 0 });
         break;
       case "fetchWhiteList":
         const whiteList = db
-          .prepare("SELECT * FROM whiteList LIMIT 100 OFFSET ?")
-          .all(args.page ?? 0);
-        sendWindow("whiteList", { whiteList });
+          .prepare("SELECT * FROM whiteList LIMIT 10 OFFSET ?")
+          .all((args.page ?? 0) * 10);
+        sendWindow("whiteList", { whiteList, page: args.page ?? 0 });
         break;
       case "getMapPath":
         dialog

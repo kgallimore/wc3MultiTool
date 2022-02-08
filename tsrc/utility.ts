@@ -130,6 +130,7 @@ export interface WindowReceive {
     error?: string;
     value?: string;
     lobbyData?: LobbyUpdates;
+    page?: number;
     banList?: Array<
       BanWhiteList & {
         ban_date: string;
