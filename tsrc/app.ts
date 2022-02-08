@@ -1810,7 +1810,7 @@ if (!gotLock) {
               log.info("Ban target required");
             }
           }
-        } else if (payload.message.content.match(/^\?whitelist/i)) {
+        } else if (payload.message.content.match(/^\?white/i)) {
           if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
             var targetPlayer = payload.message.content.split(" ")[1];
             if (targetPlayer) {
@@ -1836,7 +1836,7 @@ if (!gotLock) {
               sendChatMessage("Target required");
             }
           }
-        } else if (payload.message.content.match(/^\?unwhitelist/i)) {
+        } else if (payload.message.content.match(/^\?unwhite/i)) {
           // TODO: In lobby search and removal
           if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
             var target = payload.message.content.split(" ")[1];
@@ -1956,6 +1956,8 @@ if (!gotLock) {
                 "?open<?all> <name|slotNumber> <?reason>: Opens all / a slot/player"
               );
               sendChatMessage("?unban <name>: Un-bans a player");
+              sendChatMessage("?white <name>: Whitelists a player");
+              sendChatMessage("?unwhite <name>: Un-whitelists a player");
               sendChatMessage("?start: Starts game");
               sendChatMessage("?swap <name|slotNumber> <name|slotNumber>: Swaps players");
             }

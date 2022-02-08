@@ -2009,6 +2009,7 @@
           <li>If ELO is enabled lobby may fail to start</li>
           <li>Can get stuck on loading screen if WC gets stuck loading</li>
           <li>Updating discord options can require a program restart</li>
+          <li>Anti crash may fail</li>
         </ul>
       </details>
     </div>
@@ -2017,13 +2018,18 @@
         <summary>Updates this version (click to expand)</summary>
         <strong>New:</strong>
         <ul>
-          <li>UI tooltips</li>
-          <li>Minor UI elemnt to show if WC3MT is successfully installed and working.</li>
+          <li>Whitelist option</li>
+          <li>Minimum stat requirement options (games/wins/loss/rank/rating)</li>
+          <li>Removed UI element</li>
+          <li>Send translated chat to lobby</li>
+          <li>Auto start at number of players</li>
+          <li>View ban list and white list in UI</li>
         </ul>
         <strong>Fixes:</strong>
         <ul>
-          <li>Fix UI javascript failing.</li>
-          <li>Fix lobby chat</li>
+          <li>Language detect failing</li>
+          <li>Comm socket not connecting</li>
+          <li>Wc3stats variant needing a restart to take effect</li>
         </ul>
       </details>
     </div>
@@ -2234,6 +2240,8 @@
             ?kick (name|slotNumber) (?reason): Kicks a slot/player<br />
             ?open (name|slotNumber) (?reason): Opens a slot/player<br />
             ?unban (name): Un-bans a player<br />
+            ?unwhite (name): Un-whitelists a player<br />
+            ?white (name) (?reason): WhiteLists a player<br />
             ?start: Starts game<br />
             ?swap (name|slotNumber) (name|slotNumber): Swaps two players<br />
             <strong>Admin:</strong><br />
