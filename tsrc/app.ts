@@ -230,6 +230,9 @@ if (!gotLock) {
       language: store.get("client.language") ?? "en",
       translateToLobby: store.get("client.translateToLobby") ?? false,
       antiCrash: store.get("client.antiCrash") ?? true,
+      alternateLaunch: store.get("client.alternateLaunch") ?? false,
+      bnetUsername: store.get("client.bnetUsername") ?? "",
+      bnetPassword: store.get("client.bnetPassword") ?? "",
     },
     streaming: {
       enabled: store.get("streaming.enabled") ?? false,
@@ -420,7 +423,9 @@ if (!gotLock) {
       log.info(
         setting + " settings changed:",
         key,
-        key.toLowerCase().includes("token") ? "*HIDDEN*" : value
+        key.toLowerCase().includes("token") || key.toLowerCase().includes("password")
+          ? "*HIDDEN*"
+          : value
       );
       //@ts-ignore
     } else if (settings[setting][key] !== value) {
@@ -428,7 +433,9 @@ if (!gotLock) {
         "Invalid update:",
         setting,
         key,
-        key.toLowerCase().includes("token") ? "*HIDDEN*" : value
+        key.toLowerCase().includes("token") || key.toLowerCase().includes("password")
+          ? "*HIDDEN*"
+          : value
       );
     }
   }
@@ -1378,6 +1385,12 @@ if (!gotLock) {
             case "UpdateUserInfo":
               gameState.selfBattleTag = data.payload.user.battleTag;
               gameState.selfRegion = data.payload.user.userRegion;
+              break;
+            case "SetOverlayScreen":
+              if (data.payload.screen === "AUTHENTICATION_OVERLAY") {
+                setTimeout(handleBnetLogin, 5000);
+              }
+              break;
             default:
               //console.log(data);
               if (
@@ -1429,6 +1442,19 @@ if (!gotLock) {
           }, 1000);
         }
       });
+    }
+  }
+
+  async function handleBnetLogin() {
+    if (settings.client.bnetUsername && settings.client.bnetPassword) {
+      log.info("Attempting to login to Battle.net.");
+      clipboard.writeText(settings.client.bnetUsername);
+      await keyboard.type(Key.Tab);
+      await keyboard.type(Key.LeftControl, Key.V);
+      await keyboard.type(Key.Tab);
+      clipboard.writeText(settings.client.bnetPassword);
+      await keyboard.type(Key.LeftControl, Key.V);
+      await keyboard.type(Key.Enter);
     }
   }
 
@@ -2617,6 +2643,14 @@ if (!gotLock) {
       if (await isWarcraftOpen()) {
         log.info("Warcraft is now open");
         return true;
+      }
+      if (settings.client.alternateLaunch) {
+        //shell.openPath(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe -launch");
+        if (callCount === 0 || callCount % 15 === 0) {
+          exec(`"${warInstallLoc}\\_retail_\\x86_64\\Warcraft III.exe" -launch -uid w3`);
+        }
+        await sleep(1000);
+        return await openWarcraft(region, callCount + 1);
       }
       let battleNetOpen = await checkProcess("Battle.net.exe");
       if (battleNetOpen !== true) {

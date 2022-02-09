@@ -90,8 +90,7 @@ export class WarLobby extends EventEmitter {
         );
       }
     } else {
-      this.emitError(`Lobby update failed. Unrecognized setting: ${setting}`);
-      console.log(keys);
+      console.log(`Lobby update failed. Unrecognized setting: ${setting}`);
     }
   }
 
@@ -234,15 +233,6 @@ export class WarLobby extends EventEmitter {
         payload.players.forEach((newPlayer) => {
           this.slots[newPlayer.slot] = newPlayer;
           if (newPlayer.playerRegion) {
-            this.playerData[newPlayer.name] = {
-              wins: -1,
-              losses: -1,
-              rating: -1,
-              played: -1,
-              lastChange: 0,
-              rank: -1,
-              slot: newPlayer.slot,
-            };
             this.fetchStats(newPlayer.name, newPlayer.slot);
           }
         });
@@ -381,6 +371,10 @@ export class WarLobby extends EventEmitter {
   }
 
   async fetchStats(name: string, slotNumber: number) {
+    if (!name || !slotNumber) {
+      this.emitError("Invalid player name or slot number: " + name + " / " + slotNumber);
+      return;
+    }
     this.playerData[name] = {
       wins: -1,
       losses: -1,

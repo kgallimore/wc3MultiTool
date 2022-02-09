@@ -24,6 +24,9 @@ export interface ClientSettings {
   language: "en" | "es" | "fr" | "de" | "it" | "ja" | "ko" | "pt" | "ru" | "zh";
   translateToLobby: boolean;
   antiCrash: boolean;
+  alternateLaunch: boolean;
+  bnetUsername: string;
+  bnetPassword: string;
 }
 export interface AutoHostSettings {
   type: "off" | "lobbyHost" | "rapidHost" | "smartHost";

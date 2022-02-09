@@ -92,6 +92,9 @@
       language: "en",
       translateToLobby: false,
       antiCrash: true,
+      alternateLaunch: false,
+      bnetPassword: "",
+      bnetUsername: "",
     },
     streaming: {
       enabled: false,
@@ -482,6 +485,27 @@
                           e.target.checked
                         )}
                     />
+                    <SettingsCheckbox
+                      frontFacingName="Alternate Launch"
+                      setting="client"
+                      key="alternateLaunch"
+                      tooltip="Launches Warcraft directly without OCR"
+                      checked={settings.client.alternateLaunch}
+                      on:change={(e) => {
+                        // @ts-ignore
+                        if (!e.target.checked) {
+                          updateSettingSingle("client", "bnetUsername", "");
+                          updateSettingSingle("client", "bnetPassword", "");
+                        }
+                        // @ts-ignore
+                        updateSettingSingle(
+                          "client",
+                          "alternateLaunch",
+                          // @ts-ignore
+                          e.target.checked
+                        );
+                      }}
+                    />
                   </div>
                 </div>
               </div>
@@ -541,6 +565,53 @@
                   </div>
                 {/if}
               </div>
+              {#if settings.client.alternateLaunch}
+                <div class="border border-dashed p-1 m-1">
+                  <div class="row">
+                    <div class="col text-center m-auto text-warning">
+                      Please don't actually use this. Your information is stored
+                      insecurely, and malicious actors may steal this data. Would you
+                      trust me with your password?
+                    </div>
+                  </div>
+                  <div class="row">
+                    <div class="col">
+                      <label for="bnetUsername">Battle.net Username</label>
+                      <input
+                        type="text"
+                        class="form-control"
+                        id="bnetUsername"
+                        placeholder="BNet Username"
+                        value={settings.client.bnetUsername}
+                        maxlength="35"
+                        on:change={(e) =>
+                          updateSettingSingle(
+                            "client",
+                            "bnetUsername", // @ts-ignore
+                            e.target.value
+                          )}
+                      />
+                    </div>
+                    <div class="col">
+                      <label for="bnetPassword">Battle.net Password</label>
+                      <input
+                        type="password"
+                        class="form-control"
+                        id="bnetPassword"
+                        placeholder="BNet Password"
+                        value={settings.client.bnetPassword}
+                        maxlength="35"
+                        on:change={(e) =>
+                          updateSettingSingle(
+                            "client",
+                            "bnetPassword", // @ts-ignore
+                            e.target.value
+                          )}
+                      />
+                    </div>
+                  </div>
+                </div>
+              {/if}
             </form>
             <form name="elo" class="p-2">
               <div class="row">
@@ -986,20 +1057,22 @@
                               e.target.checked
                             )}
                         />
-                        <SettingsCheckbox
-                          key="regionChange"
-                          setting="autoHost"
-                          frontFacingName="Auto Change Regions"
-                          checked={settings.autoHost.regionChange}
-                          tooltip="Will automatically change regions at the specified time."
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "autoHost",
-                              "regionChange",
-                              // @ts-ignore
-                              e.target.checked
-                            )}
-                        />
+                        {#if !settings.client.alternateLaunch}
+                          <SettingsCheckbox
+                            key="regionChange"
+                            setting="autoHost"
+                            frontFacingName="Auto Change Regions"
+                            checked={settings.autoHost.regionChange}
+                            tooltip="Will automatically change regions at the specified time."
+                            on:change={(e) =>
+                              updateSettingSingle(
+                                "autoHost",
+                                "regionChange",
+                                // @ts-ignore
+                                e.target.checked
+                              )}
+                          />
+                        {/if}
                         <SettingsCheckbox
                           key="whitelist"
                           setting="autoHost"
@@ -1351,7 +1424,7 @@
                       </div>
                     </div>
                   {/if}
-                  {#if settings.autoHost.regionChange}
+                  {#if settings.autoHost.regionChange && !settings.client.alternateLaunch}
                     <div class="row p-2">
                       <div class="col flex text-center">
                         Current UTC time is: {utcTime}
