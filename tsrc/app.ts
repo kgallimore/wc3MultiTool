@@ -229,6 +229,7 @@ if (!gotLock) {
       commAddress: store.get("client.commAddress") ?? "",
       language: store.get("client.language") ?? "en",
       translateToLobby: store.get("client.translateToLobby") ?? false,
+      antiCrash: store.get("client.antiCrash") ?? true,
     },
     streaming: {
       enabled: store.get("streaming.enabled") ?? false,
@@ -1418,13 +1419,15 @@ if (!gotLock) {
       clientWebSocket.on("close", function close() {
         clearLobby();
         log.warn("Game client connection closed!");
-        setTimeout(async () => {
-          if (await checkProcess("BlizzardError.exe")) {
-            log.warn("Crash detected: BlizzardError.exe is running, restarting.");
-            await forceQuitProcess("BlizzardError.exe");
-            openWarcraft();
-          }
-        }, 1000);
+        if (settings.client.antiCrash) {
+          setTimeout(async () => {
+            if (await checkProcess("BlizzardError.exe")) {
+              log.warn("Crash detected: BlizzardError.exe is running, restarting.");
+              await forceQuitProcess("BlizzardError.exe");
+              openWarcraft();
+            }
+          }, 1000);
+        }
       });
     }
   }

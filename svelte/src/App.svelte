@@ -91,6 +91,7 @@
       commAddress: "",
       language: "en",
       translateToLobby: false,
+      antiCrash: true,
     },
     streaming: {
       enabled: false,
@@ -462,6 +463,21 @@
                         updateSettingSingle(
                           "client",
                           "startOnLogin",
+                          // @ts-ignore
+                          e.target.checked
+                        )}
+                    />
+                    <SettingsCheckbox
+                      frontFacingName="Anti-Crash"
+                      setting="client"
+                      key="antiCrash"
+                      tooltip="Restart Warcraft on crash."
+                      checked={settings.client.antiCrash}
+                      on:change={(e) =>
+                        // @ts-ignore
+                        updateSettingSingle(
+                          "client",
+                          "antiCrash",
                           // @ts-ignore
                           e.target.checked
                         )}

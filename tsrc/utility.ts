@@ -23,6 +23,7 @@ export interface ClientSettings {
   commAddress: string;
   language: "en" | "es" | "fr" | "de" | "it" | "ja" | "ko" | "pt" | "ru" | "zh";
   translateToLobby: boolean;
+  antiCrash: boolean;
 }
 export interface AutoHostSettings {
   type: "off" | "lobbyHost" | "rapidHost" | "smartHost";
