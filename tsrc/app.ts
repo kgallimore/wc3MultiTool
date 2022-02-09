@@ -2012,7 +2012,7 @@ if (!gotLock) {
           if (
             settings.client.language &&
             !payload.message.content.startsWith("?") &&
-            ![settings.client.language, "und"].includes(detectedLanguage[0]) &&
+            ![settings.client.language, null, "null"].includes(detectedLanguage[0]) &&
             detectedLanguage[1] > 0.5
           ) {
             log.verbose(

@@ -243,7 +243,7 @@ export class WarLobby extends EventEmitter {
               rank: -1,
               slot: newPlayer.slot,
             };
-            this.fetchStats(newPlayer.name);
+            this.fetchStats(newPlayer.name, newPlayer.slot);
           }
         });
         this.emitUpdate({ newLobby: this.export() });
@@ -354,16 +354,7 @@ export class WarLobby extends EventEmitter {
           (slot) => slot.playerRegion && !this.playerData[slot.name]
         )) {
           this.emitUpdate({ playerJoined: slot });
-          this.playerData[slot.name] = {
-            wins: -1,
-            losses: -1,
-            rating: -1,
-            played: -1,
-            lastChange: 0,
-            rank: -1,
-            slot: slot.slot,
-          };
-          this.fetchStats(slot.name);
+          this.fetchStats(slot.name, slot.slot);
           playersChanged = true;
         }
         for (const player of Object.keys(this.playerData).filter(
@@ -389,13 +380,22 @@ export class WarLobby extends EventEmitter {
     }
   }
 
-  async fetchStats(name: string) {
+  async fetchStats(name: string, slotNumber: number) {
+    this.playerData[name] = {
+      wins: -1,
+      losses: -1,
+      rating: -1,
+      played: -1,
+      lastChange: 0,
+      rank: -1,
+      slot: slotNumber,
+    };
     if (this.#appSettings.eloType !== "off") {
       try {
         if (!this.lookupName) {
           this.emitInfo("Waiting for lookup name");
           setTimeout(() => {
-            this.fetchStats(name);
+            this.fetchStats(name, slotNumber);
           }, 1000);
           return;
         } else if (this.eloAvailable) {
@@ -430,7 +430,7 @@ export class WarLobby extends EventEmitter {
             if (this.playerData[name]) {
               if (jsonData.body.length > 0) {
                 let { name, slot, ...desiredData } = jsonData.body[0];
-                data = { slot: this.playerData[name].slot, ...desiredData };
+                data = { slot: slotNumber, ...desiredData };
               }
               data = data ?? {
                 played: 0,
@@ -439,7 +439,7 @@ export class WarLobby extends EventEmitter {
                 rating: elo,
                 lastChange: 0,
                 rank: 9999,
-                slot: this.playerData[name].slot,
+                slot: slotNumber,
               };
               this.playerData[name] = data;
               this.emitUpdate({
