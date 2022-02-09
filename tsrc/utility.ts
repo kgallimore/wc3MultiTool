@@ -428,7 +428,6 @@ export interface LobbyAppSettings {
   minGames: number;
   minWins: number;
   minRating: number;
-  minPlayers: number;
 }
 
 export interface OpenLobbyParams {

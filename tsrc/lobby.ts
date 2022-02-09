@@ -57,8 +57,7 @@ export class WarLobby extends EventEmitter {
     minRank: number = 0,
     minWins: number = 0,
     minGames: number = 0,
-    minRating: number = 0,
-    minPlayers: number
+    minRating: number = 0
   ) {
     super();
     this.#appSettings = {
@@ -75,7 +74,6 @@ export class WarLobby extends EventEmitter {
       minWins,
       minGames,
       minRating,
-      minPlayers,
     };
   }
 
@@ -781,32 +779,13 @@ export class WarLobby extends EventEmitter {
 
   isLobbyReady() {
     let teams = this.exportTeamStructure(true);
-    if (this.#appSettings.minPlayers > 0) {
-      let playerNumber = Object.keys(this.playerData).length;
-      if (playerNumber < this.#appSettings.minPlayers) {
-        console.log(
-          "Not yet hit player target: " +
-            playerNumber.toString() +
-            "/" +
-            this.#appSettings.minPlayers.toString()
-        );
+    for (const team of Object.values(teams)) {
+      if (team.filter((slot) => slot.slotStatus === 0).length > 0) {
+        console.log("Missing Player");
         return false;
-      } else {
-        console.log(
-          "Hit player target: " +
-            playerNumber.toString() +
-            "/" +
-            this.#appSettings.minPlayers.toString()
-        );
-      }
-    } else {
-      for (const team of Object.values(teams)) {
-        if (team.filter((slot) => slot.slotStatus === 0).length > 0) {
-          console.log("Missing Player");
-          return false;
-        }
       }
     }
+
     if (this.#appSettings.eloType !== "off") {
       if (!this.lookupName) {
         console.log("No lookup name");

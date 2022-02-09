@@ -773,8 +773,7 @@ if (!gotLock) {
       settings.elo.minRank,
       settings.elo.minWins,
       settings.elo.minGames,
-      settings.elo.minRating,
-      settings.autoHost.minPlayers
+      settings.elo.minRating
     );
     lobby.on("update", (update: LobbyUpdates) => {
       if (
@@ -862,11 +861,23 @@ if (!gotLock) {
           }
           log.info("Player joined: " + update.playerJoined.name);
           announcement();
+          if (
+            settings.autoHost.type !== "off" &&
+            settings.autoHost.minPlayers !== 0 &&
+            lobby.nonSpecPlayers.length >= settings.autoHost.minPlayers
+          ) {
+            if (!gameState.inGame) {
+              startGame();
+            }
+          }
         } else {
           log.warn("Nameless player joined");
         }
       } else if (update.lobbyReady) {
         if (lobby?.lobbyStatic?.isHost) {
+          if (settings.autoHost.sounds) {
+            playSound("ready.wav");
+          }
           if (
             settings.autoHost.type === "smartHost" ||
             settings.autoHost.type === "rapidHost"
@@ -875,12 +886,9 @@ if (!gotLock) {
             // Wait a quarter second to make sure no one left
             setTimeout(() => {
               if (lobby.isLobbyReady()) {
-                playSound("ready.wav");
                 startGame();
               }
             }, 250);
-          } else if (settings.autoHost.sounds) {
-            playSound("ready.wav");
           }
         }
       }
@@ -1678,8 +1686,8 @@ if (!gotLock) {
             let [command, ...args] = payload.message.content.split(" ");
             if (args.length === 2) {
               if (
-                (isInt(args[1], 25) || lobby.searchPlayer(args[1]).length === 1) &&
-                (isInt(args[0], 25) || lobby.searchPlayer(args[0]).length === 1)
+                (isInt(args[1], 24, 1) || lobby.searchPlayer(args[1]).length === 1) &&
+                (isInt(args[0], 24, 1) || lobby.searchPlayer(args[0]).length === 1)
               ) {
                 sendChatMessage("!swap " + args[1] + " " + args[0]);
               } else {
@@ -1695,7 +1703,7 @@ if (!gotLock) {
               var target = payload.message.content.split(" ")[1];
               var handicap = parseInt(payload.message.content.split(" ")[2]);
               if (handicap) {
-                if (isInt(target, 25)) {
+                if (isInt(target, 24, 1)) {
                   lobby.setHandicapSlot(parseInt(target) - 1, handicap);
                 } else {
                   lobby.setPlayerHandicap(target, handicap);
@@ -1711,7 +1719,7 @@ if (!gotLock) {
           if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
             var target = payload.message.content.split(" ")[1];
             if (target) {
-              if (isInt(target, 25) && parseInt(target) > 0) {
+              if (isInt(target, 24, 1)) {
                 lobby.closeSlot(parseInt(target) - 1);
               } else {
                 let targets = lobby.searchPlayer(target);
@@ -1731,7 +1739,7 @@ if (!gotLock) {
           if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
             var target = payload.message.content.split(" ")[1];
             if (target) {
-              if (isInt(target, 25) && parseInt(target) > 0) {
+              if (isInt(target, 24, 1)) {
                 lobby.openSlot(parseInt(target) - 1);
               } else {
                 let targets = lobby.searchPlayer(target);
@@ -1751,7 +1759,7 @@ if (!gotLock) {
           if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
             var target = payload.message.content.split(" ")[1];
             if (target) {
-              if (isInt(target, 25) && parseInt(target) > 0) {
+              if (isInt(target, 24, 1)) {
                 lobby.kickSlot(parseInt(target) - 1);
               } else {
                 let targets = lobby.searchPlayer(target);
@@ -1772,7 +1780,7 @@ if (!gotLock) {
             var targetPlayer = payload.message.content.split(" ")[1];
             if (targetPlayer) {
               var reason = payload.message.content.split(" ").slice(2).join(" ") || "";
-              if (isInt(targetPlayer, 25) && parseInt(targetPlayer) > 0) {
+              if (isInt(targetPlayer, 24, 1)) {
                 lobby.banSlot(parseInt(targetPlayer) - 1);
                 banPlayer(lobby.slots[targetPlayer].name, sender, lobby.region, reason);
               } else {
@@ -1815,7 +1823,7 @@ if (!gotLock) {
             var targetPlayer = payload.message.content.split(" ")[1];
             if (targetPlayer) {
               var reason = payload.message.content.split(" ").slice(2).join(" ") || "";
-              if (isInt(targetPlayer, 25) && parseInt(targetPlayer) > 0) {
+              if (isInt(targetPlayer, 24, 1)) {
                 whitePlayer(lobby.slots[targetPlayer].name, sender, lobby.region, reason);
               } else {
                 if (targetPlayer.match(/^\D\S{2,11}#\d{4,8}$/)) {
@@ -1927,6 +1935,28 @@ if (!gotLock) {
           } else {
             sendChatMessage("You do not have permission to use this command.");
           }
+        } else if (payload.message.content.match(/^\?autostart/i)) {
+          if (lobby.lobbyStatic?.isHost && checkRole(sender, "admin")) {
+            var target = payload.message.content.split(" ")[1];
+            if (target) {
+              if (isInt(target, 24, 0)) {
+                var startTarget = parseInt(target);
+                sendChatMessage("Setting autostart number to: " + startTarget.toString());
+                if (settings.autoHost.type === "off") {
+                  sendChatMessage("Autohost must be enabled to autostart.");
+                }
+                updateSetting("autoHost", "minPlayers", startTarget);
+              } else {
+                sendChatMessage("Invalid autostart number");
+              }
+            } else {
+              sendChatMessage(
+                "Autostart current number: " + settings.autoHost.minPlayers
+              );
+            }
+          } else {
+            sendChatMessage("You do not have permission to use this command.");
+          }
         } else if (payload.message.content.match(/^\?(help)|(commands)/i)) {
           if (lobby.lobbyStatic?.isHost) {
             if (lobby.eloAvailable) {
@@ -1975,11 +2005,12 @@ if (!gotLock) {
         }
         var translatedMessage = "";
         if (payload.message.content.length > 4) {
-          var detectedLanguage = detectLang.detect(payload.message.content, 1)[0][0];
+          var detectedLanguage = detectLang.detect(payload.message.content, 1)[0];
           if (
             settings.client.language &&
             !payload.message.content.startsWith("?") &&
-            ![settings.client.language, "und"].includes(detectedLanguage)
+            ![settings.client.language, "und"].includes(detectedLanguage[0]) &&
+            detectedLanguage[1] > 0.5
           ) {
             log.verbose(
               "Translating '" + payload.message.content + "' from " + detectedLanguage
@@ -1988,6 +2019,9 @@ if (!gotLock) {
               translatedMessage = await translate(payload.message.content, {
                 to: settings.client.language,
               });
+              if (translatedMessage === payload.message.content) {
+                translatedMessage = "";
+              }
             } catch (e) {
               log.error(e);
             }
@@ -2262,10 +2296,21 @@ if (!gotLock) {
     }
   }
 
-  function isInt(string: string, max: number | boolean = false): boolean {
+  function isInt(
+    string: string,
+    max: number | boolean = false,
+    min: number | boolean = false
+  ): boolean {
     var isInt = /^-?\d+$/.test(string);
-    if (isInt && max !== false) {
-      return parseInt(string) <= max;
+    if (isInt) {
+      let intTest = parseInt(string);
+      if (max !== false && min !== false) {
+        return intTest <= max && intTest >= min;
+      } else if (max !== false) {
+        return intTest <= max;
+      } else if (min !== false) {
+        return intTest >= min;
+      }
     }
     return isInt;
   }
