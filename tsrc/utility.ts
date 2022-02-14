@@ -196,13 +196,13 @@ export interface TeamData {
 }
 
 export interface PlayerData {
-  slot: number;
-  played: number;
-  wins: number;
-  losses: number;
-  rating: number;
-  lastChange: number;
-  rank: number;
+  joinedAt: number;
+  played?: number;
+  wins?: number;
+  losses?: number;
+  rating?: number;
+  lastChange?: number;
+  rank?: number;
 }
 export interface PlayerPayload {
   // 0 = open, 1 = closed, 2 = filled
@@ -354,14 +354,13 @@ export interface LobbyUpdates {
 }
 
 export interface PlayerTeamsData {
-  [key: string]: Array<
-    {
-      name: string;
-      slotStatus: 0 | 1 | 2;
-      slot: number;
-      realPlayer: boolean;
-    } & PlayerData
-  >;
+  [key: string]: Array<{
+    name: string;
+    slotStatus: 0 | 1 | 2;
+    slot: number;
+    realPlayer: boolean;
+    data: PlayerData;
+  }>;
 }
 
 export interface ChatMessage {
@@ -370,18 +369,14 @@ export interface ChatMessage {
   time: number;
 }
 export interface MicroLobbyData {
-  lookupName: string;
-  wc3StatsVariant: string;
-  eloAvailable: boolean;
-  eloType: "wc3stats" | "pyroTD" | "off";
+  lobbyStatic: GameClientLobbyPayloadStatic;
   region: Regions;
   slots: { [key: string]: PlayerPayload };
-  lobbyStatic: GameClientLobbyPayloadStatic;
-  playerData: {
-    [key: string]: PlayerData;
+  teamListLookup: {
+    [key: string]: { type: TeamTypes; name: string };
   };
-  teamList: { otherTeams: TeamData; specTeams: TeamData; playerTeams: TeamData };
   chatMessages: Array<ChatMessage>;
+  playerData: { [key: string]: { joinedAt: number; [key: string]: string | number } };
 }
 
 export interface HubReceive {

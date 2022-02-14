@@ -442,7 +442,7 @@ if (!gotLock) {
 
   async function eloMapNameCheck(type: "wc3stats" | "pyroTD" | "off", mapName: string) {
     // Clean the name from the map name
-    let clean = await lobby.cleanMapName(mapName);
+    let clean = await lobby.eloMapName(mapName);
     updateSetting("elo", "lookupName", clean.name);
     updateSetting("elo", "available", clean.elo);
     updateSetting("elo", "wc3StatsVariant", "");
@@ -658,8 +658,6 @@ if (!gotLock) {
   });
 
   app.on("activate", () => {
-    // On OS X it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
     }
