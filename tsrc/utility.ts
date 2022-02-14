@@ -541,3 +541,11 @@ export const ColorLookup = {
   ],
   discord: [],
 };
+
+export function ensureInt(value: string | number) {
+  if (typeof value === "string") {
+    return parseInt(value);
+  } else {
+    return value;
+  }
+}

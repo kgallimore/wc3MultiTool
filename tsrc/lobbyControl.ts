@@ -7,6 +7,7 @@ import type {
   LobbyAppSettings,
   GameClientLobbyPayload,
 } from "./utility";
+import { ensureInt } from "./utility";
 import EventEmitter from "events";
 
 require = require("esm")(module);
@@ -19,9 +20,6 @@ export class LobbyControl extends EventEmitter {
 
   voteStartVotes: Array<string> = [];
   eloAvailable: boolean = false;
-  playerData: {
-    [key: string]: PlayerData;
-  } = {};
   bestCombo: Array<string> | Array<Array<string>> = [];
   lobby: MicroLobby | null = null;
 
@@ -111,7 +109,6 @@ export class LobbyControl extends EventEmitter {
 
   clear() {
     this.voteStartVotes = [];
-    this.playerData = {};
     this.bestCombo = [];
     this.#refreshing = false;
     if (this.#staleTimer) {
@@ -234,6 +231,7 @@ export class LobbyControl extends EventEmitter {
       this.eloAvailable &&
       this.#appSettings.balanceTeams
     ) {
+      let lobby = this.lobby;
       this.emitInfo("Auto balancing teams");
       if (this.bestCombo === undefined || this.bestCombo.length == 0) {
         if (teams.length < 2) {
@@ -242,8 +240,10 @@ export class LobbyControl extends EventEmitter {
         } else if (teams.length === 2) {
           let leastSwapTeam = "Team ?";
           let swaps: Array<Array<string>> = [];
-          let players = Object.entries(this.playerData);
-          let totalElo = players.reduce((a, b) => a + b[1].rating 0, 0);
+          let players = Object.entries(lobby.playerData).filter(
+            (x) => x[1].rating && lobby.nonSpecPlayers.includes(x[0])
+          );
+          let totalElo = players.reduce((a, b) => a + ensureInt(b[1].rating), 0);
           let smallestEloDiff = Number.POSITIVE_INFINITY;
           let bestCombo: Array<string> = [];
           const combos: Array<Array<string>> = new Combination(
@@ -251,7 +251,10 @@ export class LobbyControl extends EventEmitter {
             Math.floor(players.length / 2)
           );
           for (const combo of combos) {
-            const comboElo = combo.reduce((a, b) => a + this.playerData[b].rating, 0);
+            const comboElo = combo.reduce(
+              (a, b) => a + ensureInt(lobby.playerData[b].rating),
+              0
+            );
             const eloDiff = Math.abs(totalElo / 2 - comboElo);
             if (eloDiff < smallestEloDiff) {
               smallestEloDiff = eloDiff;
@@ -275,7 +278,7 @@ export class LobbyControl extends EventEmitter {
             (!this.#appSettings.excludeHostFromSwap &&
               bestComboInTeam1.length >= bestComboInTeam2.length) ||
             (this.#appSettings.excludeHostFromSwap &&
-              this.bestCombo.includes(this.lobby.lobbyStatic?.playerHost || ""))
+              this.bestCombo.includes(lobby.lobbyStatic?.playerHost || ""))
           ) {
             // Go through team 1 and grab everyone who is not in the best combo
             leastSwapTeam = teams[0][0];
@@ -300,7 +303,7 @@ export class LobbyControl extends EventEmitter {
             });
           }
           swaps = [swapsFromTeam1, swapsFromTeam2];
-          if (!this.lobby.lobbyStatic?.isHost) {
+          if (!lobby.lobbyStatic.isHost) {
             this.emitChat(leastSwapTeam + " should be: " + this.bestCombo.join(", "));
           } else {
             for (let i = 0; i < swaps[0].length; i++) {
@@ -314,10 +317,7 @@ export class LobbyControl extends EventEmitter {
             this.emitUpdate({ lobbyReady: true });
           }
         } else {
-          this.bestCombo = this.lobbyCombinations(
-            Object.keys(this.playerData),
-            teams.length
-          );
+          this.bestCombo = this.lobbyCombinations(lobby.nonSpecPlayers, teams.length);
           if (this.lobby.lobbyStatic?.isHost) {
             let dataCopy: [
               string,
@@ -330,7 +330,7 @@ export class LobbyControl extends EventEmitter {
             ][] = JSON.parse(JSON.stringify(teams));
             let playerDataCopy: {
               [key: string]: PlayerData;
-            } = JSON.parse(JSON.stringify(this.playerData));
+            } = JSON.parse(JSON.stringify(lobby.playerData));
             for (let i = 0; i < this.bestCombo.length; i++) {
               // For each Team
               for (let x = 0; x < this.bestCombo[i].length; x++) {
@@ -383,7 +383,9 @@ export class LobbyControl extends EventEmitter {
               }
             }
           } else {
-            let playerTeamNames = Object.keys(this.lobby.teamList.playerTeams.data);
+            let playerTeamNames = Object.values(this.lobby.teamListLookup).filter(
+              (team) => team.type === "playerTeams"
+            );
             for (let i = 0; i < playerTeamNames.length; i++) {
               this.emitChat(
                 playerTeamNames[i] + " should be " + this.bestCombo[i].join(", ")
@@ -583,6 +585,6 @@ export class LobbyControl extends EventEmitter {
   }
 
   getPlayerData(player: string) {
-    return this.playerData[player] ?? false;
+    return this.lobby?.playerData[player] ?? false;
   }
 }
