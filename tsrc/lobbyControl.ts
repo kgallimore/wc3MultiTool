@@ -1,12 +1,12 @@
 import fetch from "cross-fetch";
-import { MicroLobby } from "./lobbyData";
-import type {
+import {
+  MicroLobby,
   PlayerData,
   LobbyUpdates,
   PlayerTeamsData,
-  LobbyAppSettings,
   GameClientLobbyPayload,
-} from "./utility";
+} from "wc3lobbydata";
+import type { LobbyAppSettings } from "./utility";
 import { ensureInt } from "./utility";
 import EventEmitter from "events";
 

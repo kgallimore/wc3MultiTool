@@ -43,7 +43,7 @@ import sqlite3 from "better-sqlite3";
 //import translate from "translate";
 import { DisClient } from "./disc";
 import { SEClient, SEEvent } from "./stream";
-import { WarLobby } from "./lobby";
+import { LobbyControl } from "./lobbyControl";
 import { OBSSocket } from "./obs";
 import parser from "w3gjs";
 import LanguageDetect from "languagedetect";
@@ -58,19 +58,23 @@ if (!app.isPackaged) {
 import {
   AppSettings,
   WindowSend,
-  GameClientLobbyPayload,
   GameClientMessage,
   WindowReceive,
   SettingsKeys,
   mmdResults,
-  LobbyUpdates,
   HubReceive,
   LobbyAppSettings,
-  PlayerData,
-  Regions,
   getTargetRegion,
   OpenLobbyParams,
 } from "./utility";
+
+import {
+  GameClientLobbyPayload,
+  LobbyUpdates,
+  MicroLobby,
+  PlayerData,
+  Regions,
+} from "wc3lobbydata";
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -243,7 +247,7 @@ if (!gotLock) {
       sendTipsInLobby: store.get("streaming.sendTipsInLobby") ?? false,
     },
   };
-  let lobby: WarLobby;
+  let lobbyController: LobbyControl;
 
   var identifier: string = store.get("anonymousIdentifier") as string;
   if (!identifier || identifier.length !== 21) {
@@ -312,7 +316,7 @@ if (!gotLock) {
   app.on("before-quit", () => {
     sendToHub("lobbyUpdate", { leftLobby: true });
     discClient?.lobbyClosed();
-    lobby?.clear();
+    lobbyController?.clear();
   });
 
   async function protocolHandler(url: string) {
@@ -394,14 +398,14 @@ if (!gotLock) {
       } else if (key === "commAddress") {
         commSetup();
       }
-      if (lobby) {
+      if (lobbyController) {
         let updateKey: keyof LobbyAppSettings;
         if (setting === "elo" && key === "type") {
           updateKey = "eloType";
         } else {
           updateKey = key as keyof LobbyAppSettings;
         }
-        lobby.updateSetting(updateKey, value);
+        lobbyController.updateSetting(updateKey, value);
       }
       if (key === "performanceMode") {
         togglePerformanceMode(value);
@@ -442,7 +446,7 @@ if (!gotLock) {
 
   async function eloMapNameCheck(type: "wc3stats" | "pyroTD" | "off", mapName: string) {
     // Clean the name from the map name
-    let clean = await lobby.eloMapName(mapName);
+    let clean = await lobbyController.eloMapName(mapName);
     updateSetting("elo", "lookupName", clean.name);
     updateSetting("elo", "available", clean.elo);
     updateSetting("elo", "wc3StatsVariant", "");
@@ -651,7 +655,7 @@ if (!gotLock) {
   app.on("window-all-closed", () => {
     sendToHub("lobbyUpdate", { leftLobby: true });
     discClient?.lobbyClosed();
-    lobby?.clear();
+    lobbyController?.clear();
     if (process.platform !== "darwin") {
       app.quit();
     }
@@ -675,8 +679,11 @@ if (!gotLock) {
     hubWebSocket.onopen = (ev) => {
       if (ev.target.readyState !== WebSocket.OPEN) return;
       log.info("Connected to hub");
-      if (lobby.lobbyStatic && (!settings.autoHost.private || !app.isPackaged)) {
-        sendToHub("lobbyUpdate", { newLobby: lobby.export() });
+      if (
+        lobbyController.lobby?.lobbyStatic &&
+        (!settings.autoHost.private || !app.isPackaged)
+      ) {
+        sendToHub("lobbyUpdate", { newLobby: lobbyController.lobby.exportMin() });
       }
       setTimeout(hubHeartbeat, 30000);
     };
@@ -766,7 +773,7 @@ if (!gotLock) {
   }
 
   function lobbySetup() {
-    lobby = new WarLobby(
+    lobbyController = new LobbyControl(
       settings.elo.type,
       settings.elo.wc3StatsVariant,
       settings.elo.balanceTeams,
@@ -781,137 +788,142 @@ if (!gotLock) {
       settings.elo.minGames,
       settings.elo.minRating
     );
-    lobby.on("update", (update: LobbyUpdates) => {
-      if (
-        update.playerPayload ||
-        update.playerData ||
-        update.newLobby ||
-        update.leftLobby
-      ) {
-        if (update.leftLobby) {
-          clearLobby();
-        }
-        sendWindow("lobbyUpdate", { lobbyData: update });
-        sendToHub("lobbyUpdate", update);
-        if (discClient) {
-          if (update.newLobby) {
-            discClient.sendNewLobby(update.newLobby, lobby.exportTeamStructure());
-          } else {
-            discClient.updateLobby(lobby.exportTeamStructure());
+    lobbyController.on("update", (update: LobbyUpdates) => {
+      if (lobbyController.lobby) {
+        if (
+          update.playerPayload ||
+          update.playerData ||
+          update.newLobby ||
+          update.leftLobby
+        ) {
+          if (update.leftLobby) {
+            clearLobby();
           }
-        }
-        if (settings.obs.textSource) {
-          fs.writeFileSync(
-            path.join(app.getPath("documents"), "wc3mt.txt"),
-            lobby.exportTeamStructureString()
-          );
-        }
-        if (settings.elo.announce && update.playerData) {
-          sendChatMessage(
-            update.playerData.name +
-              " ELO: " +
-              update.playerData.data.rating +
-              ", Rank: " +
-              update.playerData.data.rank +
-              ", Played: " +
-              update.playerData.data.played +
-              ", Wins: " +
-              update.playerData.data.wins +
-              ", Losses: " +
-              update.playerData.data.losses +
-              ", Last Change: " +
-              update.playerData.data.lastChange
-          );
-        }
-      } else if (update.stale) {
-        leaveGame();
-      } else if (update.playerLeft) {
-        log.info("Player left: " + update.playerLeft);
-      } else if (update.playerJoined) {
-        if (update.playerJoined.name) {
-          db.open;
-          const row = db
-            .prepare("SELECT * FROM banList WHERE username = ? AND unban_date IS NULL")
-            .get(update.playerJoined.name);
-          if (row) {
-            lobby.banSlot(update.playerJoined.slot);
+          sendWindow("lobbyUpdate", { lobbyData: update });
+          sendToHub("lobbyUpdate", update);
+          if (discClient) {
+            if (update.newLobby) {
+              discClient.sendNewLobby(
+                update.newLobby,
+                lobbyController.lobby.exportTeamStructure()
+              );
+            } else {
+              discClient.updateLobby(lobbyController.lobby.exportTeamStructure());
+            }
+          }
+          if (settings.obs.textSource) {
+            fs.writeFileSync(
+              path.join(app.getPath("documents"), "wc3mt.txt"),
+              lobbyController.lobby.exportTeamStructureString()
+            );
+          }
+          if (settings.elo.announce && update.playerData) {
             sendChatMessage(
-              update.playerJoined.name +
-                " is permanently banned" +
-                (row.reason ? ": " + row.reason : "")
+              update.playerData.name +
+                " ELO: " +
+                update.playerData.data.rating +
+                ", Rank: " +
+                update.playerData.data.rank +
+                ", Played: " +
+                update.playerData.data.played +
+                ", Wins: " +
+                update.playerData.data.wins +
+                ", Losses: " +
+                update.playerData.data.losses +
+                ", Last Change: " +
+                update.playerData.data.lastChange
             );
-            log.info(
-              "Kicked " +
-                update.playerJoined.name +
-                " for being banned" +
-                (row.reason ? " for: " + row.reason : "")
-            );
-            return;
           }
-          if (settings.autoHost.whitelist) {
-            if (update.playerJoined.name !== gameState.selfBattleTag) {
-              const row = db
-                .prepare(
-                  "SELECT * FROM whiteList WHERE username = ? AND unwhite_date IS NULL"
-                )
-                .get(update.playerJoined.name);
-              if (!row) {
-                lobby.banSlot(update.playerJoined.slot);
-                sendChatMessage(update.playerJoined.name + " is not whitelisted");
-                log.info(
-                  "Kicked " + update.playerJoined.name + " for not being whitelisted"
-                );
-                return;
+        } else if (update.stale) {
+          leaveGame();
+        } else if (update.playerLeft) {
+          log.info("Player left: " + update.playerLeft);
+        } else if (update.playerJoined) {
+          if (update.playerJoined.name) {
+            db.open;
+            const row = db
+              .prepare("SELECT * FROM banList WHERE username = ? AND unban_date IS NULL")
+              .get(update.playerJoined.name);
+            if (row) {
+              lobbyController.banSlot(update.playerJoined.slot);
+              sendChatMessage(
+                update.playerJoined.name +
+                  " is permanently banned" +
+                  (row.reason ? ": " + row.reason : "")
+              );
+              log.info(
+                "Kicked " +
+                  update.playerJoined.name +
+                  " for being banned" +
+                  (row.reason ? " for: " + row.reason : "")
+              );
+              return;
+            }
+            if (settings.autoHost.whitelist) {
+              if (update.playerJoined.name !== gameState.selfBattleTag) {
+                const row = db
+                  .prepare(
+                    "SELECT * FROM whiteList WHERE username = ? AND unwhite_date IS NULL"
+                  )
+                  .get(update.playerJoined.name);
+                if (!row) {
+                  lobbyController.banSlot(update.playerJoined.slot);
+                  sendChatMessage(update.playerJoined.name + " is not whitelisted");
+                  log.info(
+                    "Kicked " + update.playerJoined.name + " for not being whitelisted"
+                  );
+                  return;
+                }
               }
             }
-          }
-          log.info("Player joined: " + update.playerJoined.name);
-          announcement();
-          if (
-            settings.autoHost.type !== "off" &&
-            settings.autoHost.minPlayers !== 0 &&
-            lobby.nonSpecPlayers.length >= settings.autoHost.minPlayers
-          ) {
-            if (!gameState.inGame) {
-              startGame();
-            }
-          }
-        } else {
-          log.warn("Nameless player joined");
-        }
-      } else if (update.lobbyReady) {
-        if (lobby?.lobbyStatic?.isHost) {
-          if (settings.autoHost.sounds) {
-            playSound("ready.wav");
-          }
-          if (
-            settings.autoHost.type === "smartHost" ||
-            settings.autoHost.type === "rapidHost"
-          ) {
-            sendProgress("Starting Game", 100);
-            // Wait a quarter second to make sure no one left
-            setTimeout(() => {
-              if (lobby.isLobbyReady()) {
+            log.info("Player joined: " + update.playerJoined.name);
+            announcement();
+            if (
+              settings.autoHost.type !== "off" &&
+              settings.autoHost.minPlayers !== 0 &&
+              lobbyController.lobby.nonSpecPlayers.length >= settings.autoHost.minPlayers
+            ) {
+              if (!gameState.inGame) {
                 startGame();
               }
-            }, 250);
+            }
+          } else {
+            log.warn("Nameless player joined");
+          }
+        } else if (update.lobbyReady) {
+          if (lobbyController.lobby.lobbyStatic?.isHost) {
+            if (settings.autoHost.sounds) {
+              playSound("ready.wav");
+            }
+            if (
+              settings.autoHost.type === "smartHost" ||
+              settings.autoHost.type === "rapidHost"
+            ) {
+              sendProgress("Starting Game", 100);
+              // Wait a quarter second to make sure no one left
+              setTimeout(() => {
+                if (lobbyController.isLobbyReady()) {
+                  startGame();
+                }
+              }, 250);
+            }
           }
         }
       }
     });
-    lobby.on("sendChat", (data: string) => {
+    lobbyController.on("sendChat", (data: string) => {
       sendChatMessage(data);
     });
-    lobby.on("sendMessage", (data: { type: string; payload: any }) => {
+    lobbyController.on("sendMessage", (data: { type: string; payload: any }) => {
       sendMessage(data.type, data.payload);
     });
-    lobby.on("error", (data: string) => {
+    lobbyController.on("error", (data: string) => {
       log.warn(data);
     });
-    lobby.on("info", (data: string) => {
+    lobbyController.on("info", (data: string) => {
       log.info(data);
     });
-    lobby.on("progress", (data: { step: string; progress: number }) => {
+    lobbyController.on("progress", (data: { step: string; progress: number }) => {
       log.info(data);
       sendWindow("progress", { progress: data });
     });
@@ -1014,7 +1026,10 @@ if (!gotLock) {
         break;
       case "sendMessage":
         if (data.data.message === "StopGameAdvertisements") {
-          if (gameState.menuState !== "LOADING_SCREEN" && lobby.lookupName) {
+          if (
+            gameState.menuState !== "LOADING_SCREEN" &&
+            lobbyController.lobby?.lookupName
+          ) {
             log.info("Re-hosting Stale Lobby");
             sendChatMessage("Re-hosting Stale Lobby");
             leaveGame();
@@ -1098,7 +1113,7 @@ if (!gotLock) {
       await openWarcraft();
     }
     if (
-      !lobby.lobbyStatic?.lobbyName &&
+      !lobbyController.lobby?.lobbyStatic.lobbyName &&
       !inGame &&
       !["CUSTOM_GAME_LOBBY", "LOADING_SCREEN", "GAME_LOBBY"].includes(gameState.menuState)
     ) {
@@ -1151,10 +1166,12 @@ if (!gotLock) {
       }
       await sleep(1000);
       return await createGame(false, callCount + 1, lobbyName);
-    } else if (lobby.lobbyStatic?.lobbyName === lobbyName) {
+    } else if (lobbyController.lobby?.lobbyStatic.lobbyName === lobbyName) {
       log.info("Game successfully created");
       return true;
-    } else if (!lobby.lobbyStatic?.lobbyName.includes(settings.autoHost.gameName)) {
+    } else if (
+      !lobbyController.lobby?.lobbyStatic.lobbyName.includes(settings.autoHost.gameName)
+    ) {
       log.info("Game created with incorrect increment.");
       return true;
     } else {
@@ -1487,12 +1504,15 @@ if (!gotLock) {
     // TODO: fix lobby close if game was started
     if (refreshTimer) clearInterval(refreshTimer);
     sentMessages = [];
-    if (gameState.menuState !== "LOADING_SCREEN" && lobby.lobbyStatic?.lobbyName) {
+    if (
+      gameState.menuState !== "LOADING_SCREEN" &&
+      lobbyController.lobby?.lobbyStatic.lobbyName
+    ) {
       sendWindow("lobbyUpdate", { lobbyData: { leftLobby: true } });
       sendToHub("lobbyUpdate", { leftLobby: true });
       discClient?.lobbyClosed();
     }
-    lobby?.clear();
+    lobbyController?.clear();
   }
 
   async function openParamsJoin() {
@@ -1512,7 +1532,7 @@ if (!gotLock) {
         openWarcraft(openLobbyParams.region);
         return;
       }
-      if (inGame || lobby.lookupName) {
+      if (inGame || lobbyController.lobby?.lookupName) {
         leaveGame();
         return;
       }
@@ -1552,22 +1572,25 @@ if (!gotLock) {
         ) {
           return;
         }
-        if (!lobby.newChat(payload.message.sender, payload.message.content)) return;
+        if (
+          !lobbyController.lobby?.newChat(payload.message.sender, payload.message.content)
+        )
+          return;
         if (payload.message.content.match(/^\?votestart$/i)) {
           if (
             settings.autoHost.voteStart &&
-            lobby.voteStartVotes &&
-            lobby.lobbyStatic?.isHost &&
+            lobbyController.voteStartVotes &&
+            lobbyController.lobby.lobbyStatic.isHost &&
             ["rapidHost", "smartHost"].includes(settings.autoHost.type)
           ) {
-            if (!lobby.allPlayers.includes(sender)) {
+            if (!lobbyController.lobby.allPlayers.includes(sender)) {
               sendChatMessage("Only players may vote start.");
               return;
             }
-            if (lobby.voteStartVotes.length === 0) {
+            if (lobbyController.voteStartVotes.length === 0) {
               if (
                 (settings.autoHost.voteStartTeamFill &&
-                  lobby.allPlayerTeamsContainPlayers()) ||
+                  lobbyController.allPlayerTeamsContainPlayers()) ||
                 !settings.autoHost.voteStartTeamFill
               ) {
                 voteTimer = setTimeout(cancelVote, 60000);
@@ -1577,20 +1600,21 @@ if (!gotLock) {
                 return;
               }
             }
-            if (!lobby.voteStartVotes.includes(sender) && voteTimer) {
-              lobby.voteStartVotes.push(sender);
+            if (!lobbyController.voteStartVotes.includes(sender) && voteTimer) {
+              lobbyController.voteStartVotes.push(sender);
               if (
-                lobby.voteStartVotes.length >=
-                lobby.nonSpecPlayers.length * (settings.autoHost.voteStartPercent / 100)
+                lobbyController.voteStartVotes.length >=
+                lobbyController.lobby.nonSpecPlayers.length *
+                  (settings.autoHost.voteStartPercent / 100)
               ) {
                 log.info("Vote start succeeded");
                 startGame();
               } else {
                 sendChatMessage(
                   Math.ceil(
-                    lobby.nonSpecPlayers.length *
+                    lobbyController.lobby.nonSpecPlayers.length *
                       (settings.autoHost.voteStartPercent / 100) -
-                      lobby.voteStartVotes.length
+                      lobbyController.voteStartVotes.length
                   ).toString() + " more vote(s) required."
                 );
               }
@@ -1598,17 +1622,17 @@ if (!gotLock) {
           }
         } else if (payload.message.content.match(/^\?stats/)) {
           if (
-            lobby.lobbyStatic?.isHost &&
+            lobbyController.lobby.lobbyStatic?.isHost &&
             settings.elo.type !== "off" &&
-            lobby.eloAvailable
+            lobbyController.eloAvailable
           ) {
-            let data: PlayerData;
+            let data: false | PlayerData;
             let playerTarget = payload.message.content.split(" ")[1];
             if (playerTarget) {
-              let targets = lobby.searchPlayer(playerTarget);
+              let targets = lobbyController.lobby.searchPlayer(playerTarget);
               if (targets.length === 1) {
                 sender = targets[0];
-                data = lobby.getPlayerData(sender);
+                data = lobbyController.getPlayerData(sender);
               } else if (targets.length > 1) {
                 sendChatMessage("Multiple players found. Please be more specific.");
                 return;
@@ -1617,7 +1641,7 @@ if (!gotLock) {
                 return;
               }
             } else {
-              data = lobby.getPlayerData(sender);
+              data = lobbyController.getPlayerData(sender);
             }
             if (data) {
               if (data.rating === -1) {
@@ -1647,8 +1671,11 @@ if (!gotLock) {
           }
         } else if (payload.message.content.match(/^\?sp$/i)) {
           // TODO: Shuffle players
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
-            let players = lobby.nonSpecPlayers;
+          if (
+            lobbyController.lobby.lobbyStatic.isHost &&
+            checkRole(sender, "moderator")
+          ) {
+            let players = lobbyController.lobby.nonSpecPlayers;
             Object.values(players).forEach((player) => {
               sendChatMessage(
                 "!swap " +
@@ -1660,23 +1687,38 @@ if (!gotLock) {
           }
         } else if (payload.message.content.match(/^\?sf$/i)) {
           // TODO: Shuffle teams
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
-            let players = lobby.exportTeamStructure();
+          if (
+            lobbyController.lobby.lobbyStatic?.isHost &&
+            checkRole(sender, "moderator")
+          ) {
+            let players = lobbyController.lobby.exportTeamStructure();
           }
         } else if (payload.message.content.match(/^\?start$/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          if (
+            lobbyController.lobby.lobbyStatic.isHost &&
+            checkRole(sender, "moderator")
+          ) {
             startGame();
           }
         } else if (payload.message.content.match(/^\?a$/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          if (
+            lobbyController.lobby.lobbyStatic.isHost &&
+            checkRole(sender, "moderator")
+          ) {
             cancelStart();
           }
         } else if (payload.message.content.match(/^\?closeall$/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          if (
+            lobbyController.lobby.lobbyStatic.isHost &&
+            checkRole(sender, "moderator")
+          ) {
             sendChatMessage("!closeall");
           }
         } else if (payload.message.content.match(/^\?hold$/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          if (
+            lobbyController.lobby.lobbyStatic.isHost &&
+            checkRole(sender, "moderator")
+          ) {
             let targetPlayer = payload.message.content.split(" ")[1];
             if (targetPlayer) {
               sendChatMessage("!hold " + targetPlayer);
@@ -1705,16 +1747,24 @@ if (!gotLock) {
             }
           }
         } else if (payload.message.content.match(/^\?openall$/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          if (
+            lobbyController.lobby.lobbyStatic.isHost &&
+            checkRole(sender, "moderator")
+          ) {
             sendChatMessage("!openall");
           }
         } else if (payload.message.content.match(/^\?swap/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          if (
+            lobbyController.lobby.lobbyStatic.isHost &&
+            checkRole(sender, "moderator")
+          ) {
             let [command, ...args] = payload.message.content.split(" ");
             if (args.length === 2) {
               if (
-                (isInt(args[1], 24, 1) || lobby.searchPlayer(args[1]).length === 1) &&
-                (isInt(args[0], 24, 1) || lobby.searchPlayer(args[0]).length === 1)
+                (isInt(args[1], 24, 1) ||
+                  lobbyController.lobby.searchPlayer(args[1]).length === 1) &&
+                (isInt(args[0], 24, 1) ||
+                  lobbyController.lobby.searchPlayer(args[0]).length === 1)
               ) {
                 sendChatMessage("!swap " + args[1] + " " + args[0]);
               } else {
@@ -1725,15 +1775,18 @@ if (!gotLock) {
             }
           }
         } else if (payload.message.content.match(/^\?handi/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          if (
+            lobbyController.lobby.lobbyStatic.isHost &&
+            checkRole(sender, "moderator")
+          ) {
             if (payload.message.content.split(" ").length === 3) {
               var target = payload.message.content.split(" ")[1];
               var handicap = parseInt(payload.message.content.split(" ")[2]);
               if (handicap) {
                 if (isInt(target, 24, 1)) {
-                  lobby.setHandicapSlot(parseInt(target) - 1, handicap);
+                  lobbyController.setHandicapSlot(parseInt(target) - 1, handicap);
                 } else {
-                  lobby.setPlayerHandicap(target, handicap);
+                  lobbyController.setPlayerHandicap(target, handicap);
                 }
               } else {
                 sendChatMessage("Invalid handicap");
@@ -1743,15 +1796,18 @@ if (!gotLock) {
             }
           }
         } else if (payload.message.content.match(/^\?close/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          if (
+            lobbyController.lobby.lobbyStatic.isHost &&
+            checkRole(sender, "moderator")
+          ) {
             var target = payload.message.content.split(" ")[1];
             if (target) {
               if (isInt(target, 24, 1)) {
-                lobby.closeSlot(parseInt(target) - 1);
+                lobbyController.closeSlot(parseInt(target) - 1);
               } else {
-                let targets = lobby.searchPlayer(target);
+                let targets = lobbyController.lobby.searchPlayer(target);
                 if (targets.length === 1) {
-                  lobby.closePlayer(targets[0]);
+                  lobbyController.closePlayer(targets[0]);
                 } else if (targets.length > 1) {
                   sendChatMessage("Multiple matches found. Please be more specific.");
                 } else {
@@ -1763,15 +1819,18 @@ if (!gotLock) {
             }
           }
         } else if (payload.message.content.match(/^\?open/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          if (
+            lobbyController.lobby.lobbyStatic.isHost &&
+            checkRole(sender, "moderator")
+          ) {
             var target = payload.message.content.split(" ")[1];
             if (target) {
               if (isInt(target, 24, 1)) {
-                lobby.openSlot(parseInt(target) - 1);
+                lobbyController.openSlot(parseInt(target) - 1);
               } else {
-                let targets = lobby.searchPlayer(target);
+                let targets = lobbyController.lobby.searchPlayer(target);
                 if (targets.length === 1) {
-                  lobby.kickPlayer(targets[0]);
+                  lobbyController.kickPlayer(targets[0]);
                 } else if (targets.length > 1) {
                   sendChatMessage("Multiple matches found. Please be more specific.");
                 } else {
@@ -1783,15 +1842,18 @@ if (!gotLock) {
             }
           }
         } else if (payload.message.content.match(/^\?kick/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          if (
+            lobbyController.lobby.lobbyStatic.isHost &&
+            checkRole(sender, "moderator")
+          ) {
             var target = payload.message.content.split(" ")[1];
             if (target) {
               if (isInt(target, 24, 1)) {
-                lobby.kickSlot(parseInt(target) - 1);
+                lobbyController.kickSlot(parseInt(target) - 1);
               } else {
-                let targets = lobby.searchPlayer(target);
+                let targets = lobbyController.lobby.searchPlayer(target);
                 if (targets.length === 1) {
-                  lobby.kickPlayer(targets[0]);
+                  lobbyController.kickPlayer(targets[0]);
                 } else if (targets.length > 1) {
                   sendChatMessage("Multiple matches found. Please be more specific.");
                 } else {
@@ -1803,21 +1865,29 @@ if (!gotLock) {
             }
           }
         } else if (payload.message.content.match(/^\?ban/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          if (
+            lobbyController.lobby.lobbyStatic.isHost &&
+            checkRole(sender, "moderator")
+          ) {
             var targetPlayer = payload.message.content.split(" ")[1];
             if (targetPlayer) {
               var reason = payload.message.content.split(" ").slice(2).join(" ") || "";
               if (isInt(targetPlayer, 24, 1)) {
-                lobby.banSlot(parseInt(targetPlayer) - 1);
-                banPlayer(lobby.slots[targetPlayer].name, sender, lobby.region, reason);
+                lobbyController.banSlot(parseInt(targetPlayer) - 1);
+                banPlayer(
+                  lobbyController.lobby.slots[targetPlayer].name,
+                  sender,
+                  lobbyController.lobby.region,
+                  reason
+                );
               } else {
                 if (targetPlayer.match(/^\D\S{2,11}#\d{4,8}$/)) {
                   sendChatMessage("Banning out of lobby player.");
-                  banPlayer(targetPlayer, sender, lobby.region, reason);
+                  banPlayer(targetPlayer, sender, lobbyController.lobby.region, reason);
                 } else {
-                  let targets = lobby.searchPlayer(targetPlayer);
+                  let targets = lobbyController.lobby.searchPlayer(targetPlayer);
                   if (targets.length === 1) {
-                    banPlayer(targets[0], sender, lobby.region, reason);
+                    banPlayer(targets[0], sender, lobbyController.lobby.region, reason);
                   } else if (targets.length > 1) {
                     sendChatMessage("Multiple matches found. Please be more specific.");
                   } else {
@@ -1830,7 +1900,10 @@ if (!gotLock) {
             }
           }
         } else if (payload.message.content.match(/^\?unban/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          if (
+            lobbyController.lobby.lobbyStatic.isHost &&
+            checkRole(sender, "moderator")
+          ) {
             var target = payload.message.content.split(" ")[1];
             if (target) {
               if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
@@ -1846,20 +1919,28 @@ if (!gotLock) {
             }
           }
         } else if (payload.message.content.match(/^\?white/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          if (
+            lobbyController.lobby.lobbyStatic?.isHost &&
+            checkRole(sender, "moderator")
+          ) {
             var targetPlayer = payload.message.content.split(" ")[1];
             if (targetPlayer) {
               var reason = payload.message.content.split(" ").slice(2).join(" ") || "";
               if (isInt(targetPlayer, 24, 1)) {
-                whitePlayer(lobby.slots[targetPlayer].name, sender, lobby.region, reason);
+                whitePlayer(
+                  lobbyController.lobby.slots[targetPlayer].name,
+                  sender,
+                  lobbyController.lobby.region,
+                  reason
+                );
               } else {
                 if (targetPlayer.match(/^\D\S{2,11}#\d{4,8}$/)) {
                   sendChatMessage("Whitelisting out of lobby player.");
-                  whitePlayer(targetPlayer, sender, lobby.region, reason);
+                  whitePlayer(targetPlayer, sender, lobbyController.lobby.region, reason);
                 } else {
-                  let targets = lobby.searchPlayer(targetPlayer);
+                  let targets = lobbyController.lobby.searchPlayer(targetPlayer);
                   if (targets.length === 1) {
-                    whitePlayer(targets[0], sender, lobby.region, reason);
+                    whitePlayer(targets[0], sender, lobbyController.lobby.region, reason);
                   } else if (targets.length > 1) {
                     sendChatMessage("Multiple matches found. Please be more specific.");
                   } else {
@@ -1873,7 +1954,10 @@ if (!gotLock) {
           }
         } else if (payload.message.content.match(/^\?unwhite/i)) {
           // TODO: In lobby search and removal
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          if (
+            lobbyController.lobby.lobbyStatic.isHost &&
+            checkRole(sender, "moderator")
+          ) {
             var target = payload.message.content.split(" ")[1];
             if (target) {
               if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
@@ -1889,18 +1973,18 @@ if (!gotLock) {
             }
           }
         } else if (payload.message.content.match(/^\?perm/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "admin")) {
+          if (lobbyController.lobby.lobbyStatic.isHost && checkRole(sender, "admin")) {
             var target = payload.message.content.split(" ")[1];
             var perm = payload.message.content.split(" ")[2]?.toLowerCase() ?? "mod";
             perm = perm === "mod" ? "moderator" : perm;
             if ((target && perm === "moderator") || perm === "admin") {
               if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
                 sendChatMessage("Assigning out of lobby player " + perm + ".");
-                addAdmin(target, sender, lobby.region, perm);
+                addAdmin(target, sender, lobbyController.lobby.region, perm);
               } else {
-                let targets = lobby.searchPlayer(target);
+                let targets = lobbyController.lobby.searchPlayer(target);
                 if (targets.length === 1) {
-                  if (addAdmin(targets[0], sender, lobby.region, perm)) {
+                  if (addAdmin(targets[0], sender, lobbyController.lobby.region, perm)) {
                     sendChatMessage(targets[0] + " has been promoted to " + perm + ".");
                   } else {
                     sendChatMessage(
@@ -1918,14 +2002,14 @@ if (!gotLock) {
             }
           }
         } else if (payload.message.content.match(/^\?unperm/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "admin")) {
+          if (lobbyController.lobby.lobbyStatic?.isHost && checkRole(sender, "admin")) {
             var target = payload.message.content.split(" ")[1];
             if (target) {
               if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
                 sendChatMessage("Removed perm from out of lobby player: " + target);
                 removeAdmin(target, sender);
               } else {
-                let targets = lobby.searchPlayer(target);
+                let targets = lobbyController.lobby.searchPlayer(target);
                 if (targets.length === 1) {
                   if (removeAdmin(targets[0], sender)) {
                     sendChatMessage(targets[0] + " has been demoted.");
@@ -1943,7 +2027,7 @@ if (!gotLock) {
             }
           }
         } else if (payload.message.content.match(/^\?autohost/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "admin")) {
+          if (lobbyController.lobby.lobbyStatic.isHost && checkRole(sender, "admin")) {
             var target = payload.message.content.split(" ")[1];
             if (target) {
               target = target.toLowerCase();
@@ -1963,7 +2047,7 @@ if (!gotLock) {
             sendChatMessage("You do not have permission to use this command.");
           }
         } else if (payload.message.content.match(/^\?autostart/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "admin")) {
+          if (lobbyController.lobby.lobbyStatic.isHost && checkRole(sender, "admin")) {
             var target = payload.message.content.split(" ")[1];
             if (target) {
               if (isInt(target, 24, 0)) {
@@ -1985,8 +2069,8 @@ if (!gotLock) {
             sendChatMessage("You do not have permission to use this command.");
           }
         } else if (payload.message.content.match(/^\?(help)|(commands)/i)) {
-          if (lobby.lobbyStatic?.isHost) {
-            if (lobby.eloAvailable) {
+          if (lobbyController.lobby.lobbyStatic.isHost) {
+            if (lobbyController.eloAvailable) {
               sendChatMessage(
                 "?stats <?player>: Return back your stats, or target player stats"
               );
@@ -2098,8 +2182,8 @@ if (!gotLock) {
         sendWindow("action", {
           value: "Banned " + player + " by " + admin + (reason ? " for " + reason : ""),
         });
-        if (lobby?.allPlayers.includes(player)) {
-          lobby.banPlayer(player);
+        if (lobbyController.lobby?.allPlayers.includes(player)) {
+          lobbyController.banPlayer(player);
           sendChatMessage(player + " banned" + (reason ? " for " + reason : ""));
         }
       } else {
@@ -2126,7 +2210,7 @@ if (!gotLock) {
           value:
             "Whitelisted " + player + " by " + admin + (reason ? " for " + reason : ""),
         });
-        if (lobby?.allPlayers.includes(player)) {
+        if (lobbyController.lobby?.allPlayers.includes(player)) {
           sendChatMessage(player + " whitelisted" + (reason ? " for " + reason : ""));
         }
       } else {
@@ -2240,14 +2324,14 @@ if (!gotLock) {
       sendChatMessage("Vote timed out.");
       log.info("Vote timed out");
     }
-    if (lobby) {
-      lobby.voteStartVotes = [];
+    if (lobbyController) {
+      lobbyController.voteStartVotes = [];
     }
   }
 
   function handleLobbyUpdate(payload: GameClientLobbyPayload) {
     if (payload.teamData.playableSlots > 1) {
-      lobby.processLobby(payload, gameState.selfRegion as Regions);
+      lobbyController.processLobby(payload, gameState.selfRegion as Regions);
     }
   }
 
@@ -2267,11 +2351,11 @@ if (!gotLock) {
     sendMessage("LeaveGame", {});
     if (
       (inGame || ["GAME_LOBBY", "CUSTOM_GAME_LOBBY"].includes(gameState.menuState)) &&
-      lobby?.lobbyStatic?.lobbyName
+      lobbyController.lobby?.lobbyStatic.lobbyName
     ) {
-      let oldLobbyName = lobby.lobbyStatic.lobbyName;
+      let oldLobbyName = lobbyController.lobby.lobbyStatic.lobbyName;
       await sleep(1000);
-      if (lobby?.lobbyStatic?.lobbyName === oldLobbyName) {
+      if (lobbyController.lobby.lobbyStatic.lobbyName === oldLobbyName) {
         log.info("Lobby did not leave, trying again");
         await exitGame();
         openWarcraft();
@@ -2346,7 +2430,7 @@ if (!gotLock) {
     if (
       (gameState.menuState === "CUSTOM_GAME_LOBBY" ||
         gameState.menuState === "GAME_LOBBY") &&
-      lobby.lobbyStatic?.isHost
+      lobbyController.lobby?.lobbyStatic.isHost
     ) {
       let currentTime = Date.now();
       if (
@@ -2357,7 +2441,7 @@ if (!gotLock) {
         if (["rapidHost", "smartHost"].includes(settings.autoHost.type)) {
           if (settings.autoHost.announceIsBot) {
             let text = "Welcome. I am a bot.";
-            if (lobby.eloAvailable && settings.elo.type !== "off") {
+            if (lobbyController.eloAvailable && settings.elo.type !== "off") {
               text += " I will fetch ELO from " + settings.elo.type + ".";
               if (settings.elo.balanceTeams) {
                 text += " I will try to balance teams before we start.";
@@ -2444,7 +2528,9 @@ if (!gotLock) {
           if (settings.autoHost.sounds) {
             playSound("quit.wav");
           }
-        } else if (!lobby.nonSpecPlayers.includes(gameState.selfBattleTag)) {
+        } else if (
+          !lobbyController.lobby?.nonSpecPlayers.includes(gameState.selfBattleTag)
+        ) {
           if (settings.autoHost.leaveAlternate) {
             foundTarget = false;
             keyboard.type(Key.F12);

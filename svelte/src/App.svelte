@@ -8,7 +8,7 @@
   } from "../../tsrc/utility";
   import { onMount } from "svelte";
   import { getTargetRegion } from "../../tsrc/utility";
-  import { MicroLobby } from "../../tsrc/microLobby";
+  import { MicroLobby } from "wc3lobbydata";
   import CloseSlot from "./components/CloseSlot.svelte";
   import SettingsCheckbox from "./components/SettingsCheckbox.svelte";
   let settings: AppSettings = {
@@ -2395,13 +2395,13 @@
                     {/if}{player.name}
                   </td>
                   <td
-                    >{player.rating > -1
+                    >{player.data.rating > -1
                       ? [
-                          player.rating,
-                          player.rank,
-                          player.played,
-                          player.wins,
-                          player.losses,
+                          player.data.rating,
+                          player.data.rank,
+                          player.data.played,
+                          player.data.wins,
+                          player.data.losses,
                         ].join(" / ")
                       : "N/A"}</td
                   >

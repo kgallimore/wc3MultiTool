@@ -1,3 +1,5 @@
+import { LobbyUpdates, Regions, MicroLobbyData } from "wc3lobbydata";
+
 export interface AppSettings {
   autoHost: AutoHostSettings;
   obs: ObsSettings;
@@ -189,20 +191,9 @@ export interface WindowSend {
   };
 }
 
-export type TeamTypes = "otherTeams" | "specTeams" | "playerTeams";
 export interface TeamData {
   data: { [key: string]: number };
   lookup: { [key: number]: string };
-}
-
-export interface PlayerData {
-  joinedAt: number;
-  played?: number;
-  wins?: number;
-  losses?: number;
-  rating?: number;
-  lastChange?: number;
-  rank?: number;
 }
 export interface PlayerPayload {
   // 0 = open, 1 = closed, 2 = filled
@@ -278,51 +269,6 @@ export interface PlayerPayload {
   handicap: number;
   handicapChangeEnabled: boolean;
 }
-export type Regions = "us" | "eu";
-export interface GameClientLobbyPayloadStatic {
-  isHost: boolean;
-  playerHost: string;
-  maxTeams: number;
-  isCustomForces: boolean;
-  isCustomPlayers: boolean;
-  mapData: {
-    mapSize: string | "Extra Small";
-    mapSpeed: string | "Fast";
-    mapName: string;
-    mapPath: string;
-    mapAuthor: string;
-    description: string;
-    suggested_players: string;
-  };
-  lobbyName: string;
-  mapFlags: {
-    flagLockTeams: boolean;
-    flagPlaceTeamsTogether: boolean;
-    flagFullSharedUnitControl: boolean;
-    flagRandomRaces: boolean;
-    flagRandomHero: boolean;
-    settingObservers:
-      | "No Observers"
-      | "Observers on Defeat"
-      | "Referees"
-      | "Full Observers";
-    typeObservers: 0 | 1 | 2 | 3;
-    settingVisibility: "Default" | "Hide Terrain" | "Map Explored" | "Always Visible";
-    typeVisibility: 0 | 1 | 2 | 3;
-  };
-}
-export interface GameClientLobbyPayload extends GameClientLobbyPayloadStatic {
-  teamData: {
-    teams: Array<{ name: string; team: number; filledSlots: number; totalSlots: number }>;
-    playableSlots: number;
-    filledPlayableSlots: number;
-    observerSlotsRemaining: number;
-  };
-  availableTeamColors: {
-    [key: string]: Array<number>;
-  };
-  players: Array<PlayerPayload>;
-}
 export interface GameClientMessage {
   messageType: "ScreenTransitionInfo" | "SetGlueScreen";
   payload: {
@@ -336,47 +282,6 @@ export interface mmdResults {
     [key: string]: { pid: string; won: boolean; extra: { [key: string]: string } };
   };
   lookup: { [key: string]: string };
-}
-
-export interface LobbyUpdates {
-  lobbyReady?: true;
-  leftLobby?: true;
-  newLobby?: MicroLobbyData;
-  slotOpened?: number;
-  slotClosed?: number;
-  stale?: true;
-  playerMoved?: { from: number; to: number };
-  playerLeft?: string;
-  playerJoined?: PlayerPayload;
-  playerPayload?: Array<PlayerPayload>;
-  playerData?: { name: string; data: PlayerData };
-  chatMessage?: { name: string; message: string };
-}
-
-export interface PlayerTeamsData {
-  [key: string]: Array<{
-    name: string;
-    slotStatus: 0 | 1 | 2;
-    slot: number;
-    realPlayer: boolean;
-    data: PlayerData;
-  }>;
-}
-
-export interface ChatMessage {
-  name: string;
-  message: string;
-  time: number;
-}
-export interface MicroLobbyData {
-  lobbyStatic: GameClientLobbyPayloadStatic;
-  region: Regions;
-  slots: { [key: string]: PlayerPayload };
-  teamListLookup: {
-    [key: string]: { type: TeamTypes; name: string };
-  };
-  chatMessages: Array<ChatMessage>;
-  playerData: { [key: string]: { joinedAt: number; [key: string]: string | number } };
 }
 
 export interface HubReceive {

@@ -1,6 +1,7 @@
 import Discord from "discord.js";
 import EventEmitter from "events";
-import type { MicroLobbyData, mmdResults, PlayerTeamsData } from "./utility";
+import type { mmdResults } from "./utility";
+import type { PlayerTeamsData, MicroLobbyData } from "wc3lobbydata";
 import { DeColorName } from "./utility";
 export class DisClient extends EventEmitter {
   client: Discord.Client;
@@ -139,8 +140,11 @@ export class DisClient extends EventEmitter {
       let combinedData = data.map(
         (data) =>
           data.name +
-          (data.rating > -1
-            ? ": " + [data.rating, data.rank, data.wins, data.losses].join("/")
+          (data.data.rating && data.data.rating > -1
+            ? ": " +
+              [data.data.rating, data.data.rank, data.data.wins, data.data.losses].join(
+                "/"
+              )
             : "")
       );
       this.#embed?.addFields([{ name: teamName, value: combinedData.join("\n") ?? "" }]);
@@ -257,13 +261,13 @@ export class DisClient extends EventEmitter {
           let combinedData = data.map(
             (data) =>
               data.name +
-              (data.rating > -1
+              (data.data.rating && data.data.rating > -1
                 ? ": " +
                   [
-                    "Rating: " + data.rating,
-                    "Rank: " + data.rank,
-                    "Wins: " + data.wins,
-                    "Losses: " + data.losses,
+                    "Rating: " + data.data.rating,
+                    "Rank: " + data.data.rank,
+                    "Wins: " + data.data.wins,
+                    "Losses: " + data.data.losses,
                   ].join("/")
                 : "")
           );
