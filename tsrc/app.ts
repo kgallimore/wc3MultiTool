@@ -891,7 +891,7 @@ if (!gotLock) {
             log.warn("Nameless player joined");
           }
         } else if (update.lobbyReady) {
-          if (lobbyController.lobby.lobbyStatic?.isHost) {
+          if (lobbyController.lobby.lobbyStatic.isHost) {
             if (settings.autoHost.sounds) {
               playSound("ready.wav");
             }
@@ -1304,6 +1304,7 @@ if (!gotLock) {
                   log.info(response.statusText);
                   sendWindow("error", { error: response.statusText });
                 } else {
+                  log.info("Uploaded replay to wc3stats");
                   sendProgress("Uploaded replay", 0);
                 }
               },
@@ -1512,7 +1513,7 @@ if (!gotLock) {
       sendToHub("lobbyUpdate", { leftLobby: true });
       discClient?.lobbyClosed();
     }
-    lobbyController?.clear();
+    lobbyController.clear();
   }
 
   async function openParamsJoin() {
@@ -2331,7 +2332,7 @@ if (!gotLock) {
 
   function handleLobbyUpdate(payload: GameClientLobbyPayload) {
     if (payload.teamData.playableSlots > 1) {
-      lobbyController.processLobby(payload, gameState.selfRegion as Regions);
+      lobbyController.ingestLobby(payload, gameState.selfRegion as Regions);
     }
   }
 

@@ -5,6 +5,7 @@ import {
   LobbyUpdates,
   PlayerTeamsData,
   GameClientLobbyPayload,
+  Regions,
 } from "wc3lobbydata";
 import type { LobbyAppSettings } from "./utility";
 import { ensureInt } from "./utility";
@@ -22,6 +23,7 @@ export class LobbyControl extends EventEmitter {
   eloAvailable: boolean = false;
   bestCombo: Array<string> | Array<Array<string>> = [];
   lobby: MicroLobby | null = null;
+  lookupName: string = "";
 
   constructor(
     eloType: "wc3stats" | "pyroTD" | "off",
@@ -56,10 +58,23 @@ export class LobbyControl extends EventEmitter {
     };
   }
 
-  ingestLobby(payload: GameClientLobbyPayload, region: "us" | "eu") {
+  ingestLobby(payload: GameClientLobbyPayload, region: Regions) {
     if (!this.lobby || this.lobby.lobbyStatic.lobbyName !== payload.lobbyName) {
       this.lobby = new MicroLobby({ region, payload });
-      this.emitUpdate({ newLobby: this.lobby });
+      if (this.#appSettings.eloType !== "off") {
+        this.eloMapName(payload.mapData.mapName).then((eloMapName) => {
+          if (eloMapName.elo) {
+            if (this.lobby) {
+              this.lobby.statsAvailable = eloMapName.elo;
+              this.fetchStats(eloMapName.elo, this.lobby.lobbyStatic.lobbyName);
+            }
+          }
+        });
+      }
+      this.emitUpdate({ newLobby: this.lobby.exportMin() });
+    } else {
+      let changedValues = this.lobby.updateLobbySlots(payload.players);
+      this.emitUpdate({ playerPayload: changedValues });
     }
   }
 
@@ -115,6 +130,7 @@ export class LobbyControl extends EventEmitter {
       clearTimeout(this.#staleTimer);
       this.#staleTimer = null;
     }
+    this.lobby = null;
   }
 
   async eloMapName(mapName: string) {
@@ -149,6 +165,117 @@ export class LobbyControl extends EventEmitter {
         return { name, elo: test.status === "ok" };
       }
     } else throw new Error("Unknown or unsupported type");
+  }
+
+  async fetchStats(name: string) {
+    let newData: PlayerData = {
+      wins: -1,
+      losses: -1,
+      rating: -1,
+      played: -1,
+      lastChange: 0,
+      rank: -1,
+    };
+    if (this.#appSettings.eloType !== "off") {
+      try {
+        if (!this.lookupName) {
+          this.emitInfo("Waiting for lookup name");
+          setTimeout(() => {
+            this.fetchStats(name);
+          }, 1000);
+          return;
+        } else if (this.eloAvailable) {
+          if (this.#appSettings.eloType === "wc3stats") {
+            let buildVariant = "";
+            if (this.#isTargetMap && this.#appSettings.wc3StatsVariant) {
+              for (const [key, value] of Object.entries(
+                JSON.parse(this.#appSettings.wc3StatsVariant)
+              )) {
+                if (value) buildVariant += "&" + key + "=" + value;
+              }
+            }
+            buildVariant = encodeURI(buildVariant);
+            let targetUrl = `https://api.wc3stats.com/leaderboard&map=${
+              this.lookupName
+            }${buildVariant}&search=${encodeURI(name)}`;
+            this.emitInfo(targetUrl);
+            let jsonData: { body: Array<PlayerData & { name: string }> };
+            try {
+              jsonData = await (await fetch(targetUrl)).json();
+            } catch (e) {
+              this.emitError("Failed to fetch wc3stats data:");
+              this.emitError(e as string);
+              jsonData = { body: [] };
+            }
+            let elo = 500;
+            let data: PlayerData | undefined;
+            if (this.lookupName === "Footmen%20Vs%20Grunts") {
+              elo = 1000;
+            }
+            // If they haven't left, set real ELO
+            if (this.lobby?.playerData[name]) {
+              if (jsonData.body.length > 0) {
+                let { name, ...desiredData } = jsonData.body[0];
+                data = { ...desiredData };
+              }
+              data = data ?? {
+                played: 0,
+                wins: 0,
+                losses: 0,
+                rating: elo,
+                lastChange: 0,
+                rank: 9999,
+              };
+              this.lobby.playerData[name] = data;
+              this.emitUpdate({
+                playerData: {
+                  data,
+                  name,
+                },
+              });
+              this.emitInfo(name + " stats received and saved.");
+              if (this.#appSettings.requireStats) {
+                if (data.played < this.#appSettings.minGames) {
+                  this.emitInfo(
+                    `${name} has not played enough games to qualify for the ladder.`
+                  );
+                  this.banPlayer(name);
+                  return;
+                } else if (data.rating < this.#appSettings.minRating) {
+                  this.emitInfo(`${name} has an ELO rating below the minimum.`);
+                  this.banPlayer(name);
+                  return;
+                } else if (
+                  this.#appSettings.minRank !== 0 &&
+                  data.rank < this.#appSettings.minRank
+                ) {
+                  this.emitInfo(`${name} has a rank below the minimum.`);
+                  this.banPlayer(name);
+                  return;
+                } else if (data.wins < this.#appSettings.minWins) {
+                  this.emitInfo(
+                    `${name} has not won enough games to qualify for the ladder.`
+                  );
+                  this.banPlayer(name);
+                  return;
+                }
+              }
+              if (this.isLobbyReady()) {
+                this.emitInfo("Lobby is ready.");
+                this.autoBalance();
+              }
+            } else {
+              this.emitInfo(name + " left before ELO was found");
+            }
+          } else {
+            //this.emitInfo("No elo enabled");
+          }
+        }
+      } catch (err: any) {
+        this.emitError("Failed to fetch stats:");
+        this.emitError(err);
+      }
+    }
   }
 
   staleLobby() {
