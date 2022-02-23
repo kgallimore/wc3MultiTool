@@ -66,14 +66,15 @@ import {
   LobbyAppSettings,
   getTargetRegion,
   OpenLobbyParams,
+  isValidUrl,
 } from "./utility";
 
 import {
   GameClientLobbyPayload,
   LobbyUpdates,
-  MicroLobby,
   PlayerData,
   Regions,
+  MicroLobby,
 } from "wc3lobbydata";
 
 const gotLock = app.requestSingleInstanceLock();
@@ -368,6 +369,7 @@ if (!gotLock) {
   });
 
   function updateSetting(setting: keyof AppSettings, key: SettingsKeys, value: any) {
+    // TODO Replace with proxy
     if (
       // @ts-ignore
       settings[setting]?.[key] !== undefined &&
@@ -814,24 +816,24 @@ if (!gotLock) {
           if (settings.obs.textSource) {
             fs.writeFileSync(
               path.join(app.getPath("documents"), "wc3mt.txt"),
-              lobbyController.lobby.exportTeamStructureString()
+              lobbyController.exportTeamStructureString()
             );
           }
-          if (settings.elo.announce && update.playerData) {
+          if (settings.elo.announce && update.playerData?.data?.extra) {
             sendChatMessage(
               update.playerData.name +
                 " ELO: " +
-                update.playerData.data.rating +
+                update.playerData.data.extra.rating +
                 ", Rank: " +
-                update.playerData.data.rank +
+                update.playerData.data.extra.rank +
                 ", Played: " +
-                update.playerData.data.played +
+                update.playerData.data.extra.played +
                 ", Wins: " +
-                update.playerData.data.wins +
+                update.playerData.data.extra.wins +
                 ", Losses: " +
-                update.playerData.data.losses +
+                update.playerData.data.extra.losses +
                 ", Last Change: " +
-                update.playerData.data.lastChange
+                update.playerData.data.extra.lastChange
             );
           }
         } else if (update.stale) {
@@ -1625,7 +1627,7 @@ if (!gotLock) {
           if (
             lobbyController.lobby.lobbyStatic?.isHost &&
             settings.elo.type !== "off" &&
-            lobbyController.eloAvailable
+            lobbyController.lobby.statsAvailable
           ) {
             let data: false | PlayerData;
             let playerTarget = payload.message.content.split(" ")[1];
@@ -1645,23 +1647,23 @@ if (!gotLock) {
               data = lobbyController.getPlayerData(sender);
             }
             if (data) {
-              if (data.rating === -1) {
+              if (!data.extra || data.extra?.rating === -1) {
                 sendChatMessage("Data pending");
               } else {
                 sendChatMessage(
                   sender +
                     " ELO: " +
-                    data.rating +
+                    data.extra.rating +
                     ", Rank: " +
-                    data.rank +
+                    data.extra.rank +
                     ", Played: " +
-                    data.played +
+                    data.extra.played +
                     ", Wins: " +
-                    data.wins +
+                    data.extra.wins +
                     ", Losses: " +
-                    data.losses +
+                    data.extra.losses +
                     ", Last Change: " +
-                    data.lastChange
+                    data.extra.lastChange
                 );
               }
             } else {
@@ -2071,7 +2073,7 @@ if (!gotLock) {
           }
         } else if (payload.message.content.match(/^\?(help)|(commands)/i)) {
           if (lobbyController.lobby.lobbyStatic.isHost) {
-            if (lobbyController.eloAvailable) {
+            if (lobbyController.lobby.statsAvailable) {
               sendChatMessage(
                 "?stats <?player>: Return back your stats, or target player stats"
               );
@@ -2442,7 +2444,7 @@ if (!gotLock) {
         if (["rapidHost", "smartHost"].includes(settings.autoHost.type)) {
           if (settings.autoHost.announceIsBot) {
             let text = "Welcome. I am a bot.";
-            if (lobbyController.eloAvailable && settings.elo.type !== "off") {
+            if (lobbyController.lobby.statsAvailable && settings.elo.type !== "off") {
               text += " I will fetch ELO from " + settings.elo.type + ".";
               if (settings.elo.balanceTeams) {
                 text += " I will try to balance teams before we start.";
@@ -2991,13 +2993,13 @@ if (!gotLock) {
           }, 250);
         }
       } else {
-        log.warn("Comm socket not connected.");
+        //log.warn("Comm socket not connected.");
       }
     }
   }
 
   function commSetup() {
-    if (settings.client.commAddress) {
+    if (settings.client.commAddress && isValidUrl(settings.client.commAddress)) {
       log.info("Connecting to comm socket: " + settings.client.commAddress);
       if (commSocket) {
         log.info("Comm socket already connected. Disconnecting old socket.");

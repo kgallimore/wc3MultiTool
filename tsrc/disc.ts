@@ -140,11 +140,14 @@ export class DisClient extends EventEmitter {
       let combinedData = data.map(
         (data) =>
           data.name +
-          (data.data.rating && data.data.rating > -1
+          (data.data.extra && data.data.extra.rating > -1
             ? ": " +
-              [data.data.rating, data.data.rank, data.data.wins, data.data.losses].join(
-                "/"
-              )
+              [
+                data.data.extra.rating,
+                data.data.extra.rank,
+                data.data.extra.wins,
+                data.data.extra.losses,
+              ].join("/")
             : "")
       );
       this.#embed?.addFields([{ name: teamName, value: combinedData.join("\n") ?? "" }]);
@@ -261,13 +264,13 @@ export class DisClient extends EventEmitter {
           let combinedData = data.map(
             (data) =>
               data.name +
-              (data.data.rating && data.data.rating > -1
+              (data.data.extra && data.data.extra.rating > -1
                 ? ": " +
                   [
-                    "Rating: " + data.data.rating,
-                    "Rank: " + data.data.rank,
-                    "Wins: " + data.data.wins,
-                    "Losses: " + data.data.losses,
+                    "Rating: " + data.data.extra.rating,
+                    "Rank: " + data.data.extra.rank,
+                    "Wins: " + data.data.extra.wins,
+                    "Losses: " + data.data.extra.losses,
                   ].join("/")
                 : "")
           );

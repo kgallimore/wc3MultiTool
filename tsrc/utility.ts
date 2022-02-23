@@ -1,4 +1,4 @@
-import { LobbyUpdates, Regions, MicroLobbyData } from "wc3lobbydata";
+import type { LobbyUpdates, Regions, MicroLobbyData } from "wc3LobbyData";
 
 export interface AppSettings {
   autoHost: AutoHostSettings;
@@ -195,80 +195,6 @@ export interface TeamData {
   data: { [key: string]: number };
   lookup: { [key: number]: string };
 }
-export interface PlayerPayload {
-  // 0 = open, 1 = closed, 2 = filled
-  slotStatus: 0 | 1 | 2;
-  slot:
-    | 0
-    | 1
-    | 2
-    | 3
-    | 4
-    | 5
-    | 6
-    | 7
-    | 8
-    | 9
-    | 10
-    | 11
-    | 12
-    | 13
-    | 14
-    | 15
-    | 16
-    | 17
-    | 18
-    | 19
-    | 20
-    | 21
-    | 22
-    | 23;
-  team: number;
-  //What are slot types?
-  // 0 = useable, 1 = managed?
-  slotType: number | 0 | 1;
-  isObserver: boolean;
-  isSelf: boolean;
-  slotTypeChangeEnabled: boolean;
-  // always 255?
-  id: number;
-  name: string | "Computer (Easy)" | "Computer (Normal)" | "Computer (Insane)";
-  //Regions tbd, usw might replace us
-  playerRegion: Regions | "usw" | "";
-  //what are gateways?
-  playerGateway: number | -1;
-  color:
-    | 0
-    | 1
-    | 2
-    | 3
-    | 4
-    | 5
-    | 6
-    | 7
-    | 8
-    | 9
-    | 10
-    | 11
-    | 12
-    | 13
-    | 14
-    | 15
-    | 16
-    | 17
-    | 18
-    | 19
-    | 20
-    | 21
-    | 22
-    | 23;
-  colorChangeEnabled: boolean;
-  teamChangeEnabled: boolean;
-  race: 0 | 1 | 2 | 3 | 4;
-  raceChangeEnabled: boolean;
-  handicap: number;
-  handicapChangeEnabled: boolean;
-}
 export interface GameClientMessage {
   messageType: "ScreenTransitionInfo" | "SetGlueScreen";
   payload: {
@@ -341,57 +267,6 @@ export interface OpenLobbyParams {
   region?: Regions;
 }
 
-export function InvalidData(
-  name: string,
-  data: any,
-  type: ValidObjectTypes,
-  objectKeys: ObjectLookup = {}
-): false | string {
-  if (typeof data !== type) {
-    return (
-      "Type mismatch for " +
-      name +
-      ": " +
-      type +
-      " expected, " +
-      typeof data +
-      " received"
-    );
-  } else if (type === "object") {
-    for (const [key, value] of Object.entries(objectKeys)) {
-      if (Array.isArray(value)) {
-        if (!value.includes(data[key])) {
-          console.log(data);
-          return (
-            "Value for " +
-            name +
-            "  not expected. Expected: " +
-            value.join(",") +
-            ", received: " +
-            data[key]
-          );
-        }
-      } else if (typeof value === "object") {
-        let check = InvalidData(
-          key,
-          data[key],
-          "object",
-          objectKeys[key] as ObjectLookup
-        );
-        if (check) {
-          return check;
-        }
-      } else {
-        let check = InvalidData(key, data[key], value as ValidObjectTypes);
-        if (check) {
-          return check;
-        }
-      }
-    }
-  }
-  return false;
-}
-
 export function getTargetRegion(
   regionChangeTimeEU: string,
   regionChangeTimeNA: string
@@ -453,4 +328,16 @@ export function ensureInt(value: string | number) {
   } else {
     return value;
   }
+}
+
+export function isValidUrl(target: string) {
+  let url;
+
+  try {
+    url = new URL(target);
+  } catch (_) {
+    return false;
+  }
+
+  return true;
 }

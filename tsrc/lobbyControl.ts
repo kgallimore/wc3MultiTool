@@ -2,6 +2,7 @@ import fetch from "cross-fetch";
 import {
   MicroLobby,
   PlayerData,
+  PlayerPayload,
   LobbyUpdates,
   PlayerTeamsData,
   GameClientLobbyPayload,
@@ -20,10 +21,10 @@ export class LobbyControl extends EventEmitter {
   #staleTimer: NodeJS.Timeout | null = null;
 
   voteStartVotes: Array<string> = [];
-  eloAvailable: boolean = false;
   bestCombo: Array<string> | Array<Array<string>> = [];
   lobby: MicroLobby | null = null;
-  lookupName: string = "";
+  eloName: string = "";
+  #isTargetMap: boolean = false;
 
   constructor(
     eloType: "wc3stats" | "pyroTD" | "off",
@@ -60,18 +61,39 @@ export class LobbyControl extends EventEmitter {
 
   ingestLobby(payload: GameClientLobbyPayload, region: Regions) {
     if (!this.lobby || this.lobby.lobbyStatic.lobbyName !== payload.lobbyName) {
-      this.lobby = new MicroLobby({ region, payload });
-      if (this.#appSettings.eloType !== "off") {
-        this.eloMapName(payload.mapData.mapName).then((eloMapName) => {
-          if (eloMapName.elo) {
-            if (this.lobby) {
-              this.lobby.statsAvailable = eloMapName.elo;
-              this.fetchStats(eloMapName.elo, this.lobby.lobbyStatic.lobbyName);
+      if (
+        payload.players.length > 0 &&
+        Object.values(payload.players).find((slot) => slot.isSelf) !== undefined
+      ) {
+        this.lobby = new MicroLobby({ region, payload });
+        if (this.#appSettings.eloType !== "off") {
+          this.eloMapName(payload.mapData.mapName).then((eloMapName) => {
+            this.eloName = eloMapName.name;
+            if (eloMapName.elo) {
+              if (this.lobby) {
+                this.lobby.statsAvailable = eloMapName.elo;
+                Object.values(this.lobby.slots)
+                  .filter(
+                    (slot) => slot.slotStatus === 2 && (slot.playerRegion || slot.isSelf)
+                  )
+                  .forEach((slot) => {
+                    this.fetchStats(slot.name);
+                  });
+              }
             }
-          }
-        });
+          });
+        }
+        if (
+          payload.mapData.mapPath.split(/\/|\\/).slice(-1)[0] !==
+          this.#appSettings.mapPath.split(/\/|\\/).slice(-1)[0]
+        ) {
+          this.#isTargetMap = false;
+        } else {
+          this.#isTargetMap = true;
+        }
+        console.log(this.lobby.exportMin());
+        this.emitUpdate({ newLobby: this.lobby.exportMin() });
       }
-      this.emitUpdate({ newLobby: this.lobby.exportMin() });
     } else {
       let changedValues = this.lobby.updateLobbySlots(payload.players);
       this.emitUpdate({ playerPayload: changedValues });
@@ -134,7 +156,7 @@ export class LobbyControl extends EventEmitter {
   }
 
   async eloMapName(mapName: string) {
-    if (this.#appSettings.eloType === "wc3stats" || this.#appSettings.eloType === "off") {
+    if (this.#appSettings.eloType === "wc3stats") {
       if (mapName.match(/(HLW)/i)) {
         return { name: "HLW", elo: true };
       } else if (mapName.match(/(pyro\s*td\s*league)/i)) {
@@ -168,23 +190,15 @@ export class LobbyControl extends EventEmitter {
   }
 
   async fetchStats(name: string) {
-    let newData: PlayerData = {
-      wins: -1,
-      losses: -1,
-      rating: -1,
-      played: -1,
-      lastChange: 0,
-      rank: -1,
-    };
     if (this.#appSettings.eloType !== "off") {
       try {
-        if (!this.lookupName) {
+        if (!this.eloName) {
           this.emitInfo("Waiting for lookup name");
           setTimeout(() => {
             this.fetchStats(name);
           }, 1000);
           return;
-        } else if (this.eloAvailable) {
+        } else if (this.lobby?.statsAvailable) {
           if (this.#appSettings.eloType === "wc3stats") {
             let buildVariant = "";
             if (this.#isTargetMap && this.#appSettings.wc3StatsVariant) {
@@ -196,10 +210,10 @@ export class LobbyControl extends EventEmitter {
             }
             buildVariant = encodeURI(buildVariant);
             let targetUrl = `https://api.wc3stats.com/leaderboard&map=${
-              this.lookupName
+              this.eloName
             }${buildVariant}&search=${encodeURI(name)}`;
             this.emitInfo(targetUrl);
-            let jsonData: { body: Array<PlayerData & { name: string }> };
+            let jsonData: { body: Array<PlayerData["extra"] & { name: string }> };
             try {
               jsonData = await (await fetch(targetUrl)).json();
             } catch (e) {
@@ -208,8 +222,8 @@ export class LobbyControl extends EventEmitter {
               jsonData = { body: [] };
             }
             let elo = 500;
-            let data: PlayerData | undefined;
-            if (this.lookupName === "Footmen%20Vs%20Grunts") {
+            let data: PlayerData["extra"] | undefined;
+            if (this.eloName === "Footmen Vs Grunts") {
               elo = 1000;
             }
             // If they haven't left, set real ELO
@@ -226,10 +240,10 @@ export class LobbyControl extends EventEmitter {
                 lastChange: 0,
                 rank: 9999,
               };
-              this.lobby.playerData[name] = data;
+              this.lobby.playerData[name].extra = data;
               this.emitUpdate({
                 playerData: {
-                  data,
+                  extraData: data,
                   name,
                 },
               });
@@ -353,9 +367,8 @@ export class LobbyControl extends EventEmitter {
   autoBalance() {
     let teams = Object.entries(this.exportDataStructure(true));
     if (
-      this.lobby &&
       this.#appSettings.eloType !== "off" &&
-      this.eloAvailable &&
+      this.lobby?.statsAvailable &&
       this.#appSettings.balanceTeams
     ) {
       let lobby = this.lobby;
@@ -368,9 +381,12 @@ export class LobbyControl extends EventEmitter {
           let leastSwapTeam = "Team ?";
           let swaps: Array<Array<string>> = [];
           let players = Object.entries(lobby.playerData).filter(
-            (x) => x[1].rating && lobby.nonSpecPlayers.includes(x[0])
+            (x) => x[1].extra && lobby.nonSpecPlayers.includes(x[0])
           );
-          let totalElo = players.reduce((a, b) => a + ensureInt(b[1].rating), 0);
+          let totalElo = players.reduce(
+            (a, b) => (b[1].extra ? a + ensureInt(b[1].extra.rating) : a),
+            0
+          );
           let smallestEloDiff = Number.POSITIVE_INFINITY;
           let bestCombo: Array<string> = [];
           const combos: Array<Array<string>> = new Combination(
@@ -379,7 +395,10 @@ export class LobbyControl extends EventEmitter {
           );
           for (const combo of combos) {
             const comboElo = combo.reduce(
-              (a, b) => a + ensureInt(lobby.playerData[b].rating),
+              (a, b) =>
+                a +
+                // @ts-ignore
+                ensureInt(lobby.playerData[b].extra.rating),
               0
             );
             const eloDiff = Math.abs(totalElo / 2 - comboElo);
@@ -446,64 +465,45 @@ export class LobbyControl extends EventEmitter {
         } else {
           this.bestCombo = this.lobbyCombinations(lobby.nonSpecPlayers, teams.length);
           if (this.lobby.lobbyStatic?.isHost) {
-            let dataCopy: [
-              string,
-              ({
-                name: string;
-                slotStatus: 0 | 1 | 2;
-                slot: number;
-                realPlayer: boolean;
-              } & PlayerData)[]
-            ][] = JSON.parse(JSON.stringify(teams));
-            let playerDataCopy: {
-              [key: string]: PlayerData;
-            } = JSON.parse(JSON.stringify(lobby.playerData));
+            let lobbyCopy = new MicroLobby(this.lobby.exportMin());
+            let playerTeams = Object.entries(lobbyCopy.teamListLookup)
+              .filter(([teamNumber, teamData]) => teamData.type === "playerTeams")
+              .map((data) => data[0]);
             for (let i = 0; i < this.bestCombo.length; i++) {
               // For each Team
+              let currentTeam: Array<PlayerPayload>;
               for (let x = 0; x < this.bestCombo[i].length; x++) {
+                currentTeam = Object.values(lobbyCopy.slots).filter(
+                  (player) => ensureInt(player.team) === ensureInt(playerTeams[i])
+                );
                 // For each player in the team
                 let targetPlayer = this.bestCombo[i][x];
                 // If the team does not include the target player, check through the team for an incorrect player and swap them
                 if (
-                  dataCopy[i][1].find((player) => player.name === targetPlayer) ===
-                  undefined
+                  currentTeam.find((player) => player.name === targetPlayer) === undefined
                 ) {
-                  for (const currentPlayer of dataCopy[i][1]) {
+                  for (let currentPlayer of currentTeam) {
                     if (!this.bestCombo[i].includes(currentPlayer.name)) {
                       this.emitProgress(
                         "Swapping " + currentPlayer.name + " and " + targetPlayer,
                         100
                       );
                       this.emitChat("!swap " + currentPlayer.name + " " + targetPlayer);
-                      // Find where the target player was
-                      let targetPlayerData:
-                        | ({
-                            name: string;
-                            slotStatus: 0 | 1 | 2;
-                            slot: number;
-                            realPlayer: boolean;
-                          } & PlayerData)
-                        | null = null;
-                      let targetPlayerTeam = -1;
-                      for (let teamNum = 0; teamNum < dataCopy.length; teamNum++) {
-                        let filteredList = dataCopy[teamNum][1].filter(
-                          (player) => player.name === targetPlayer
-                        );
-                        if (filteredList.length > 0) {
-                          targetPlayerData = filteredList[0];
-                          targetPlayerTeam = teamNum;
-                          break;
-                        }
-                      }
-                      if (targetPlayerData && targetPlayerTeam) {
-                        dataCopy[i][1][currentPlayer.slot] = targetPlayerData;
-                        dataCopy[targetPlayerTeam][1][playerDataCopy[targetPlayer].slot] =
-                          currentPlayer;
-                        playerDataCopy[currentPlayer.name].slot = targetPlayerData.slot;
-                        playerDataCopy[targetPlayer].slot = currentPlayer.slot;
-                      } else {
-                        throw new Error("Could not find target player");
-                      }
+                      // Swap the data of the two players
+                      let targetPlayerOldSlot = lobbyCopy.playerToSlot(targetPlayer);
+                      let targetPlayerOldData = lobbyCopy.slots[targetPlayerOldSlot];
+                      let currentPlayerSlot = currentPlayer.slot;
+                      // Only swapping the team number is really required since the slot number information is doubled as the key for the slot, but still swapped just in case.
+                      // Set the slot info for the current player to the info that it is being swapped to
+                      currentPlayer.team = targetPlayerOldData.team;
+                      currentPlayer.slot = targetPlayerOldData.slot;
+                      // Set the slot info for the target player to the info that it is being swapped to
+                      targetPlayerOldData.team = ensureInt(playerTeams[i]);
+                      targetPlayerOldData.slot = currentPlayerSlot;
+                      // Set the slots to their new data.
+                      lobbyCopy.slots[currentPlayer.slot] = targetPlayerOldData;
+                      lobbyCopy.slots[targetPlayerOldSlot] = currentPlayer;
+                      break;
                     }
                   }
                 }
@@ -541,13 +541,13 @@ export class LobbyControl extends EventEmitter {
       if (!this.lobby?.lookupName) {
         console.log("No lookup name");
         return false;
-      } else if (this.eloAvailable) {
+      } else if (this.lobby.statsAvailable) {
         for (const team of Object.values(teams)) {
           if (
             team.filter(
               (slot) =>
                 slot.slotStatus == 0 ||
-                (slot.realPlayer && slot.data.rating && slot.data.rating < 0)
+                (slot.realPlayer && slot.data.extra && slot.data.extra.rating < 0)
             ).length > 0
           ) {
             console.log("Missing ELO data");
@@ -686,13 +686,16 @@ export class LobbyControl extends EventEmitter {
     Object.entries(data).forEach(([teamName, data]) => {
       exportString += teamName + ":\n";
       let combinedData = data.map(
-        (data) =>
-          data.name +
-          (data.data?.rating && data.data.rating > -1
+        (playerData) =>
+          playerData.name +
+          (playerData.data.extra?.rating && playerData.data.extra.rating > -1
             ? ": " +
-              [data.data.rating, data.data.rank, data.data.wins, data.data.losses].join(
-                "/"
-              )
+              [
+                playerData.data.extra.rating,
+                playerData.data.extra.rank,
+                playerData.data.extra.wins,
+                playerData.data.extra.losses,
+              ].join("/")
             : "")
       );
       exportString += combinedData.join("\n") ?? "";
@@ -709,6 +712,30 @@ export class LobbyControl extends EventEmitter {
       return returnValue;
     }
     return lobby.exportTeamStructure(playerTeamsOnly);
+  }
+
+  exportTeamStructureString(playerTeamsOnly: boolean = true) {
+    let data = this.exportDataStructure(playerTeamsOnly);
+    let exportString = "";
+    Object.entries(data).forEach(([teamName, data]) => {
+      exportString += teamName + ":\n";
+      let combinedData = data.map(
+        (data) =>
+          data.name +
+          (data.data.extra && data.data.extra.rating > -1
+            ? ": " +
+              [
+                data.data.extra.rating,
+                data.data.extra.rank,
+                data.data.extra.wins,
+                data.data.extra.losses,
+              ].join("/")
+            : "")
+      );
+      exportString += combinedData.join("\n") ?? "";
+      exportString += "\n";
+    });
+    return exportString;
   }
 
   getPlayerData(player: string) {

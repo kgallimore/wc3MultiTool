@@ -1,14 +1,15 @@
 <script lang="ts">
-  import type {
+  import {
     AppSettings,
     BanWhiteList,
     SettingsKeys,
     WindowReceive,
     WindowSend,
+    isValidUrl,
   } from "../../tsrc/utility";
   import { onMount } from "svelte";
   import { getTargetRegion } from "../../tsrc/utility";
-  import { MicroLobby } from "wc3lobbydata";
+  import { MicroLobby, PlayerData } from "wc3lobbydata";
   import CloseSlot from "./components/CloseSlot.svelte";
   import SettingsCheckbox from "./components/SettingsCheckbox.svelte";
   let settings: AppSettings = {
@@ -155,9 +156,16 @@
       ("0" + new Date().getUTCMinutes().toString()).slice(-2);
   }, 60000);
 
-  let structuredTeamData = currentStatus.lobby
-    ? Object.entries(currentStatus.lobby.exportTeamStructure(false))
-    : [];
+  let structuredTeamData: [
+    string,
+    {
+      name: string;
+      slotStatus: 0 | 2 | 1;
+      slot: number;
+      realPlayer: boolean;
+      data: PlayerData;
+    }[]
+  ][] = [];
   $: botAnnouncement = `Welcome. I am a bot. ${
     settings.elo.available && settings.elo.type !== "off"
       ? `I will fetch ELO from ${settings.elo.type}. ${
@@ -192,6 +200,15 @@
       return data.body.variants[0].stats;
     }
     return [];
+  }
+
+  function updatestructuredTeamData() {
+    let exported = currentStatus.lobby.exportTeamStructure(false);
+    if (exported) {
+      structuredTeamData = Object.entries(exported);
+    } else {
+      structuredTeamData = [];
+    }
   }
 
   function init() {
@@ -238,16 +255,15 @@
       case "lobbyUpdate":
         let lobbyData = newData.lobbyData;
         if (lobbyData.newLobby) {
-          currentStatus.lobby = new MicroLobby(lobbyData.newLobby);
-          structuredTeamData = Object.entries(
-            currentStatus.lobby.exportTeamStructure(false)
-          );
+          currentStatus.lobby = new MicroLobby({
+            region: "us",
+            fullData: lobbyData.newLobby,
+          });
+          updatestructuredTeamData();
         } else if (lobbyData.playerPayload || lobbyData.playerData) {
           if (currentStatus.lobby) {
-            currentStatus.lobby.ingestUpdate(lobbyData);
-            structuredTeamData = Object.entries(
-              currentStatus.lobby.exportTeamStructure(false)
-            );
+            let updated = currentStatus.lobby.ingestUpdate(lobbyData).isUpdated;
+            if (updated) updatestructuredTeamData();
           }
         } else if (lobbyData.leftLobby) {
           currentStatus.lobby = null;
@@ -513,17 +529,24 @@
                 <div class="col">
                   <label for="commAddress">Comm Address</label>
                   <input
-                    type="text"
+                    type="url"
                     class="form-control"
                     id="commAddress"
                     placeholder="WebSocket Address"
                     value={settings.client.commAddress}
-                    on:change={(e) =>
-                      updateSettingSingle(
-                        "client",
-                        "commAddress", // @ts-ignore
-                        e.target.value
-                      )}
+                    on:change={(e) => {
+                      // @ts-ignore
+                      let value = e.target.value;
+                      if (isValidUrl(value) || value === "") {
+                        updateSettingSingle(
+                          "client",
+                          "commAddress", // @ts-ignore
+                          value
+                        );
+                      } else {
+                        alert("Invalid Comm URL");
+                      }
+                    }}
                   />
                 </div>
               </div>
@@ -2358,7 +2381,7 @@
             <td id="mapName">{currentStatus.lobby.lobbyStatic.mapData.mapName}</td>
             <td id="lobbyName">{currentStatus.lobby.lobbyStatic.lobbyName}</td>
             <td id="gameHost">{currentStatus.lobby.lobbyStatic.playerHost}</td>
-            <td id="eloAvailable">{currentStatus.lobby.eloAvailable}</td>
+            <td id="eloAvailable">{currentStatus.lobby.statsAvailable}</td>
           {:else}
             <td id="mapName" />
             <td id="lobbyName" />
@@ -2395,13 +2418,13 @@
                     {/if}{player.name}
                   </td>
                   <td
-                    >{player.data.rating > -1
+                    >{player.data.extra && player.data.extra.rating > -1
                       ? [
-                          player.data.rating,
-                          player.data.rank,
-                          player.data.played,
-                          player.data.wins,
-                          player.data.losses,
+                          player.data.extra.rating,
+                          player.data.extra.rank,
+                          player.data.extra.played,
+                          player.data.extra.wins,
+                          player.data.extra.losses,
                         ].join(" / ")
                       : "N/A"}</td
                   >
