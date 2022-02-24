@@ -1,4 +1,4 @@
-import type { LobbyUpdates, Regions, MicroLobbyData } from "wc3LobbyData";
+import type { LobbyUpdates, Regions, MicroLobbyData } from "wc3mt-lobby-container";
 
 export interface AppSettings {
   autoHost: AutoHostSettings;

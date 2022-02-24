@@ -7,7 +7,7 @@ import {
   PlayerTeamsData,
   GameClientLobbyPayload,
   Regions,
-} from "wc3lobbydata";
+} from "wc3mt-lobby-container";
 import type { LobbyAppSettings } from "./utility";
 import { ensureInt } from "./utility";
 import EventEmitter from "events";
@@ -25,6 +25,7 @@ export class LobbyControl extends EventEmitter {
   lobby: MicroLobby | null = null;
   eloName: string = "";
   #isTargetMap: boolean = false;
+  testMode: boolean = false;
 
   constructor(
     eloType: "wc3stats" | "pyroTD" | "off",
@@ -63,40 +64,66 @@ export class LobbyControl extends EventEmitter {
     if (!this.lobby || this.lobby.lobbyStatic.lobbyName !== payload.lobbyName) {
       if (
         payload.players.length > 0 &&
-        Object.values(payload.players).find((slot) => slot.isSelf) !== undefined
+        Object.values(payload.players).find((slot) => slot.isSelf) !== undefined &&
+        payload.playerHost
       ) {
-        this.lobby = new MicroLobby({ region, payload });
-        if (this.#appSettings.eloType !== "off") {
-          this.eloMapName(payload.mapData.mapName).then((eloMapName) => {
-            this.eloName = eloMapName.name;
-            if (eloMapName.elo) {
-              if (this.lobby) {
-                this.lobby.statsAvailable = eloMapName.elo;
-                Object.values(this.lobby.slots)
-                  .filter(
-                    (slot) => slot.slotStatus === 2 && (slot.playerRegion || slot.isSelf)
-                  )
-                  .forEach((slot) => {
-                    this.fetchStats(slot.name);
-                  });
+        try {
+          this.lobby = new MicroLobby({ region, payload });
+          if (this.#appSettings.eloType !== "off") {
+            this.eloMapName(payload.mapData.mapName).then((eloMapName) => {
+              this.eloName = eloMapName.name;
+              if (eloMapName.elo) {
+                if (this.lobby) {
+                  this.lobby.statsAvailable = eloMapName.elo;
+                  Object.values(this.lobby.slots)
+                    .filter(
+                      (slot) =>
+                        slot.slotStatus === 2 && (slot.playerRegion || slot.isSelf)
+                    )
+                    .forEach((slot) => {
+                      this.fetchStats(slot.name);
+                    });
+                }
               }
-            }
-          });
+            });
+          }
+          if (
+            payload.mapData.mapPath.split(/\/|\\/).slice(-1)[0] !==
+            this.#appSettings.mapPath.split(/\/|\\/).slice(-1)[0]
+          ) {
+            this.#isTargetMap = false;
+          } else {
+            this.#isTargetMap = true;
+          }
+          this.emitUpdate({ newLobby: this.lobby.exportMin() });
+        } catch (e) {
+          // @ts-ignore
+          this.emitError(e);
         }
-        if (
-          payload.mapData.mapPath.split(/\/|\\/).slice(-1)[0] !==
-          this.#appSettings.mapPath.split(/\/|\\/).slice(-1)[0]
-        ) {
-          this.#isTargetMap = false;
-        } else {
-          this.#isTargetMap = true;
-        }
-        console.log(this.lobby.exportMin());
-        this.emitUpdate({ newLobby: this.lobby.exportMin() });
       }
     } else {
       let changedValues = this.lobby.updateLobbySlots(payload.players);
-      this.emitUpdate({ playerPayload: changedValues });
+      if (changedValues.playerUpdates.length > 0) {
+        this.emitUpdate({ playerPayload: changedValues.playerUpdates });
+      }
+      if (changedValues.events.isUpdated) {
+        changedValues.events.events.forEach((event) => {
+          this.emitUpdate(event);
+          if (event.playerJoined) {
+            this.fetchStats(event.playerJoined.name);
+            if (this.lobby?.nonSpecPlayers.includes(event.playerJoined.name)) {
+              this.bestCombo = [];
+            }
+          }
+          if (event.playerLeft) {
+            this.bestCombo = [];
+          }
+        });
+        if (this.isLobbyReady()) {
+          this.emitInfo("Lobby is ready.");
+          this.autoBalance();
+        }
+      }
     }
   }
 
@@ -167,7 +194,7 @@ export class LobbyControl extends EventEmitter {
         return { name: "Footmen%20Vs%20Grunts", elo: true };
       } else if (mapName.match(/Broken.*Alliances/i)) {
         return { name: "Broken%20Alliances", elo: true };
-      } else if (mapName.match(/Reforged.*Footmen.*Frenzy/i)) {
+      } else if (mapName.match(/Reforged.*Footmen/i)) {
         return { name: "Reforged%20Footmen%20Frenzy", elo: true };
       } else if (mapName.match(/Direct.*Strike.*Reforged/i)) {
         return { name: "Direct%20Strike", elo: true };
@@ -186,7 +213,11 @@ export class LobbyControl extends EventEmitter {
         let test = await (await fetch(`https://api.wc3stats.com/maps/${name}`)).json();
         return { name, elo: test.status === "ok" };
       }
-    } else throw new Error("Unknown or unsupported type");
+    } else
+      return {
+        name: encodeURI(mapName.trim().replace(/\s*v?\.?(\d+\.)?(\*|\d+)\w*\s*$/gi, "")),
+        elo: false,
+      };
   }
 
   async fetchStats(name: string) {
@@ -236,7 +267,7 @@ export class LobbyControl extends EventEmitter {
                 played: 0,
                 wins: 0,
                 losses: 0,
-                rating: elo,
+                rating: this.testMode ? Math.round(Math.random() * 1000) : elo,
                 lastChange: 0,
                 rank: 9999,
               };
@@ -412,13 +443,12 @@ export class LobbyControl extends EventEmitter {
           let swapsFromTeam2: Array<string> = [];
           const bestComboInTeam1 = this.intersect(
             this.bestCombo,
-            teams[0][1].map((player) => player.name)
+            teams[0][1].filter((player) => player.realPlayer).map((player) => player.name)
           );
           const bestComboInTeam2 = this.intersect(
             this.bestCombo,
-            teams[1][1].map((player) => player.name)
+            teams[1][1].filter((player) => player.realPlayer).map((player) => player.name)
           );
-          this.emitInfo(JSON.stringify(bestComboInTeam1, bestComboInTeam2));
           // If not excludeHostFromSwap and team1 has more best combo people, or excludeHostFromSwap and the best combo includes the host keep all best combo players in team 1.
           if (
             (!this.#appSettings.excludeHostFromSwap &&
@@ -429,7 +459,10 @@ export class LobbyControl extends EventEmitter {
             // Go through team 1 and grab everyone who is not in the best combo
             leastSwapTeam = teams[0][0];
             teams[0][1].forEach((user) => {
-              if (!(this.bestCombo as Array<string>).includes(user.name)) {
+              if (
+                user.realPlayer &&
+                !(this.bestCombo as Array<string>).includes(user.name)
+              ) {
                 swapsFromTeam1.push(user.name);
               }
             });
@@ -440,7 +473,10 @@ export class LobbyControl extends EventEmitter {
           } else {
             leastSwapTeam = teams[1][0];
             teams[1][1].forEach((user) => {
-              if (!(this.bestCombo as Array<string>).includes(user.name)) {
+              if (
+                user.realPlayer &&
+                !(this.bestCombo as Array<string>).includes(user.name)
+              ) {
                 swapsFromTeam2.push(user.name);
               }
             });
@@ -530,6 +566,10 @@ export class LobbyControl extends EventEmitter {
 
   isLobbyReady() {
     let teams = this.exportDataStructure(true);
+    if (this.#refreshing) {
+      console.log("Refreshing slots, not ready.");
+      return false;
+    }
     for (const team of Object.values(teams)) {
       if (team.filter((slot) => slot.slotStatus === 0).length > 0) {
         console.log("Missing Player");
@@ -547,7 +587,7 @@ export class LobbyControl extends EventEmitter {
             team.filter(
               (slot) =>
                 slot.slotStatus == 0 ||
-                (slot.realPlayer && slot.data.extra && slot.data.extra.rating < 0)
+                (slot.realPlayer && (!slot.data.extra || slot.data.extra.rating < 0))
             ).length > 0
           ) {
             console.log("Missing ELO data");

@@ -9,7 +9,7 @@
   } from "../../tsrc/utility";
   import { onMount } from "svelte";
   import { getTargetRegion } from "../../tsrc/utility";
-  import { MicroLobby, PlayerData } from "wc3lobbydata";
+  import { MicroLobby, PlayerData } from "wc3mt-lobby-container";
   import CloseSlot from "./components/CloseSlot.svelte";
   import SettingsCheckbox from "./components/SettingsCheckbox.svelte";
   let settings: AppSettings = {
@@ -1248,6 +1248,8 @@
                           class="form-control"
                           id="minPlayers"
                           placeholder="0 to disable"
+                          min="0"
+                          max="24"
                           value={settings.autoHost.minPlayers}
                           on:change={(e) =>
                             updateSettingSingle(
@@ -2356,6 +2358,7 @@
             ?white (name) (?reason): WhiteLists a player<br />
             ?start: Starts game<br />
             ?swap (name|slotNumber) (name|slotNumber): Swaps two players<br />
+            ?sp: Shuffles players randomly<br />
             <strong>Admin:</strong><br />
             ?perm (name) (?admin|mod): Promotes a player to admin or moderator (mod by default).<br
             />
@@ -2398,6 +2401,7 @@
           <table class="table table-hover table-striped table-sm">
             <thead>
               <tr>
+                <th>Actions</th>
                 <th>{teamName} Players</th>
                 <th>ELO/Rank/Games/Wins/Losses</th>
               </tr>
@@ -2415,7 +2419,17 @@
                             ban: { player: player.name, reason: banReason },
                           })}>Ban</button
                       >
-                    {/if}{player.name}
+                    {/if}</td
+                  >
+                  <td>
+                    {player.name}<br />
+                    {player.data.joinedAt
+                      ? new Date(player.data.joinedAt).toLocaleString(undefined, {
+                          timeZone: "UTC",
+                          minute: "2-digit",
+                          hour: "2-digit",
+                        })
+                      : ""}
                   </td>
                   <td
                     >{player.data.extra && player.data.extra.rating > -1

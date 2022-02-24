@@ -1,7 +1,7 @@
 import Discord from "discord.js";
 import EventEmitter from "events";
 import type { mmdResults } from "./utility";
-import type { PlayerTeamsData, MicroLobbyData } from "wc3lobbydata";
+import type { PlayerTeamsData, MicroLobbyData } from "wc3mt-lobby-container";
 import { DeColorName } from "./utility";
 export class DisClient extends EventEmitter {
   client: Discord.Client;

@@ -74,8 +74,7 @@ import {
   LobbyUpdates,
   PlayerData,
   Regions,
-  MicroLobby,
-} from "wc3lobbydata";
+} from "wc3mt-lobby-container";
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -790,6 +789,7 @@ if (!gotLock) {
       settings.elo.minGames,
       settings.elo.minRating
     );
+    lobbyController.testMode = !app.isPackaged;
     lobbyController.on("update", (update: LobbyUpdates) => {
       if (lobbyController.lobby) {
         if (
@@ -819,22 +819,28 @@ if (!gotLock) {
               lobbyController.exportTeamStructureString()
             );
           }
-          if (settings.elo.announce && update.playerData?.data?.extra) {
-            sendChatMessage(
-              update.playerData.name +
-                " ELO: " +
-                update.playerData.data.extra.rating +
-                ", Rank: " +
-                update.playerData.data.extra.rank +
-                ", Played: " +
-                update.playerData.data.extra.played +
-                ", Wins: " +
-                update.playerData.data.extra.wins +
-                ", Losses: " +
-                update.playerData.data.extra.losses +
-                ", Last Change: " +
-                update.playerData.data.extra.lastChange
-            );
+          if (update.playerData) {
+            if (update.playerData.extraData) {
+              if (settings.elo.announce) {
+                sendChatMessage(
+                  update.playerData.name +
+                    " ELO: " +
+                    update.playerData.extraData.rating +
+                    ", Rank: " +
+                    update.playerData.extraData.rank +
+                    ", Played: " +
+                    update.playerData.extraData.played +
+                    ", Wins: " +
+                    update.playerData.extraData.wins +
+                    ", Losses: " +
+                    update.playerData.extraData.losses +
+                    ", Last Change: " +
+                    update.playerData.extraData.lastChange
+                );
+              }
+            } else {
+              log.error("Player data update missing data");
+            }
           }
         } else if (update.stale) {
           leaveGame();
@@ -881,13 +887,10 @@ if (!gotLock) {
             log.info("Player joined: " + update.playerJoined.name);
             announcement();
             if (
-              settings.autoHost.type !== "off" &&
               settings.autoHost.minPlayers !== 0 &&
               lobbyController.lobby.nonSpecPlayers.length >= settings.autoHost.minPlayers
             ) {
-              if (!gameState.inGame) {
-                startGame();
-              }
+              startGame();
             }
           } else {
             log.warn("Nameless player joined");
@@ -991,7 +994,6 @@ if (!gotLock) {
           }
         }
       } else if (settings.obs.sceneSwitchType === "websockets") {
-        console.log("Sending OBS Scene Switch");
         if (obsSocket) {
           if (inGame && settings.obs.inGameWSScene) {
             log.info("Triggering OBS In-Game");
@@ -2104,6 +2106,7 @@ if (!gotLock) {
               sendChatMessage("?unwhite <name>: Un-whitelists a player");
               sendChatMessage("?start: Starts game");
               sendChatMessage("?swap <name|slotNumber> <name|slotNumber>: Swaps players");
+              sendChatMessage("?sp: Shuffles players randomly");
             }
             if (checkRole(sender, "admin")) {
               sendChatMessage(
@@ -2344,9 +2347,11 @@ if (!gotLock) {
   }
 
   function startGame() {
-    sendChatMessage("AutoHost functionality provided by WC3 MultiTool.");
-    log.info("Starting game");
-    sendMessage("LobbyStart", {});
+    if (gameState.menuState === "GAME_LOBBY") {
+      sendChatMessage("AutoHost functionality provided by WC3 MultiTool.");
+      log.info("Starting game");
+      sendMessage("LobbyStart", {});
+    }
   }
 
   async function leaveGame() {
@@ -3062,6 +3067,11 @@ if (!gotLock) {
         break;
       case "init":
         sendWindow("updateSettings", { settings: settings });
+        if (lobbyController.lobby) {
+          sendWindow("lobbyUpdate", {
+            lobbyData: { newLobby: lobbyController.lobby.exportMin() },
+          });
+        }
         break;
       case "openLogs":
         shell.openPath(log.transports.file.getFile().path);
