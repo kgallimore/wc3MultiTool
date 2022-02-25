@@ -2157,7 +2157,6 @@
           <li>
             Intrusive check may fail due to an issue with WC3 not updating chat info
           </li>
-          <li>If ELO is enabled lobby may fail to start</li>
           <li>Can get stuck on loading screen if WC gets stuck loading</li>
           <li>Updating discord options can require a program restart</li>
           <li>Anti crash may fail</li>
@@ -2169,18 +2168,27 @@
         <summary>Updates this version (click to expand)</summary>
         <strong>New:</strong>
         <ul>
-          <li>Whitelist option</li>
-          <li>Minimum stat requirement options (games/wins/loss/rank/rating)</li>
-          <li>Removed UI element</li>
-          <li>Send translated chat to lobby</li>
-          <li>Auto start at number of players</li>
-          <li>View ban list and white list in UI</li>
+          <li>The way lobbies are stored has been completely redone.</li>
+          <li>Anti-crash is toggle-able</li>
+          <li>Autostart command works even with autohost disabled</li>
+          <li>Non-OCR launch (beta)</li>
+          <li>Show join time for each player</li>
+          <li>Shuffle players before starting option</li>
+          <li>Set a delay for starting</li>
+          <li>
+            ?st option to swap players but ignore swaps that place players within the same
+            team
+          </li>
         </ul>
         <strong>Fixes:</strong>
         <ul>
-          <li>Language detect failing</li>
-          <li>Comm socket not connecting</li>
-          <li>Wc3stats variant needing a restart to take effect</li>
+          <li>Failing to start with Elo enabled</li>
+          <li>Stopped sending untranslated chat</li>
+          <li>Less sensitive language detection</li>
+          <li>Fix for setting improper Comm url breaking the tool</li>
+          <li>Reloading the tool's window will still show current lobby</li>
+          <li>Fix both 2 and 3+ team autobalance</li>
+          <li>Shuffling won't shuffle already shuffled players</li>
         </ul>
       </details>
     </div>
@@ -2395,8 +2403,8 @@
             ?white (name) (?reason): WhiteLists a player<br />
             ?start: Starts game<br />
             ?swap (name|slotNumber) (name|slotNumber): Swaps two players<br />
-            ?sp: Shuffles players completely randomly
-            ?st: Shuffles players randomly between teams<br />
+            ?sp: Shuffles players completely randomly ?st: Shuffles players randomly between
+            teams<br />
             <strong>Admin:</strong><br />
             ?perm (name) (?admin|mod): Promotes a player to admin or moderator (mod by default).<br
             />

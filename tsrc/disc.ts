@@ -148,7 +148,8 @@ export class DisClient extends EventEmitter {
                 data.data.extra.wins,
                 data.data.extra.losses,
               ].join("/")
-            : "")
+            : "") +
+          (data.realPlayer ? `\n<t:${Math.floor(data.data.joinedAt / 1000)}:R>` : "")
       );
       this.#embed?.addFields([{ name: teamName, value: combinedData.join("\n") ?? "" }]);
     });
@@ -272,7 +273,8 @@ export class DisClient extends EventEmitter {
                     "Wins: " + data.data.extra.wins,
                     "Losses: " + data.data.extra.losses,
                   ].join("/")
-                : "")
+                : "") +
+              (data.realPlayer ? `\n<t:${Math.floor(data.data.joinedAt / 1000)}:R>` : "")
           );
           newEmbed.addFields([{ name: teamName, value: combinedData.join("\n") ?? "" }]);
         });
