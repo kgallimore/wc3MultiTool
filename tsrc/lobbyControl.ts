@@ -7,6 +7,7 @@ import {
   PlayerTeamsData,
   GameClientLobbyPayload,
   Regions,
+  SlotNumbers,
 } from "wc3mt-lobby-container";
 import type { LobbyAppSettings } from "./utility";
 import { ensureInt } from "./utility";
@@ -26,6 +27,10 @@ export class LobbyControl extends EventEmitter {
   eloName: string = "";
   #isTargetMap: boolean = false;
   testMode: boolean = false;
+
+  #startTimer: NodeJS.Timeout | null = null;
+
+  #expectedSwaps: Array<[string, string]> = [];
 
   constructor(
     eloType: "wc3stats" | "pyroTD" | "off",
@@ -107,6 +112,7 @@ export class LobbyControl extends EventEmitter {
         this.emitUpdate({ playerPayload: changedValues.playerUpdates });
       }
       if (changedValues.events.isUpdated) {
+        var metExpectedSwap = false;
         console.log("Lobby updated", changedValues.events);
         changedValues.events.events.forEach((event) => {
           this.emitUpdate(event);
@@ -114,12 +120,42 @@ export class LobbyControl extends EventEmitter {
             this.fetchStats(event.playerJoined.name);
             if (this.lobby?.nonSpecPlayers.includes(event.playerJoined.name)) {
             }
+            if (this.#startTimer) {
+              this.emitChat(`Lobby start was cancelled`);
+              clearTimeout(this.#startTimer);
+              this.#startTimer = null;
+            }
+          } else if (event.playerLeft) {
+            if (this.#startTimer) {
+              this.emitChat(`Lobby start was cancelled`);
+              clearTimeout(this.#startTimer);
+              this.#startTimer = null;
+            }
+            let player = event.playerLeft;
+            let expectedSwapsCheck = this.#expectedSwaps.findIndex((swaps) =>
+              swaps.includes(player)
+            );
+            if (expectedSwapsCheck !== -1) {
+              this.#expectedSwaps.splice(expectedSwapsCheck, 1);
+              this.emitInfo(`Expected swap removed for ${player}`);
+            }
+          } else if (event.playersSwapped) {
+            let players = event.playersSwapped.players.sort();
+            let expectedIndex = this.#expectedSwaps.findIndex(
+              (swap) => JSON.stringify(swap.sort()) === JSON.stringify(players)
+            );
+            if (expectedIndex !== -1) {
+              this.#expectedSwaps.splice(expectedIndex, 1);
+              metExpectedSwap = true;
+            }
           }
-          this.bestCombo = [];
         });
-        if (this.isLobbyReady()) {
-          this.emitInfo("Lobby is ready.");
-          this.autoBalance();
+        if (!metExpectedSwap) {
+          this.bestCombo = [];
+          if (this.isLobbyReady()) {
+            this.emitInfo("Lobby is ready.");
+            this.autoBalance();
+          }
         }
       }
     }
@@ -346,6 +382,20 @@ export class LobbyControl extends EventEmitter {
     }
   }
 
+  startGame(delay: number = 0) {
+    if (delay > 0) {
+      this.emitChat("Starting game in " + delay + " second(s)!");
+    }
+    this.#startTimer = setTimeout(() => {
+      this.#startTimer = null;
+      if (this.lobby?.lobbyStatic?.isHost) {
+        this.emitInfo("Starting game");
+        this.emitChat("AutoHost functionality provided by WC3 MultiTool.");
+        this.emitMessage("LobbyStart", {});
+      }
+    }, delay * 1000 + 250);
+  }
+
   lobbyCombinations(
     target: Array<string>,
     playerData: {
@@ -353,13 +403,6 @@ export class LobbyControl extends EventEmitter {
     },
     teamSize: number = 3
   ) {
-    // TODO: See if this still works
-    console.log(
-      "Checking for lobby combinations for " +
-        target.length +
-        " players into teams of " +
-        teamSize.toString()
-    );
     let combos: Array<Array<string>> = new Permutation(target);
     let bestCombo: Array<Array<string>> = [];
     let smallestEloDiff = Number.POSITIVE_INFINITY;
@@ -516,7 +559,7 @@ export class LobbyControl extends EventEmitter {
                 break;
               }
               this.emitProgress("Swapping " + swaps[0][i] + " and " + swaps[1][i], 100);
-              this.emitChat("!swap " + swaps[0][i] + " " + swaps[1][i]);
+              this.swapPlayers({ players: [swaps[0][i], swaps[1][i]] });
             }
           }
         } else {
@@ -550,7 +593,7 @@ export class LobbyControl extends EventEmitter {
                         "Swapping " + currentPlayer.name + " and " + targetPlayer,
                         100
                       );
-                      this.emitChat("!swap " + currentPlayer.name + " " + targetPlayer);
+                      this.swapPlayers({ players: [currentPlayer.name, targetPlayer] });
                       // Swap the data of the two players
                       let targetPlayerOldSlot = lobbyCopy.playerToSlot(targetPlayer);
                       let targetPlayerOldData = lobbyCopy.slots[targetPlayerOldSlot];
@@ -628,6 +671,35 @@ export class LobbyControl extends EventEmitter {
     return true;
   }
 
+  shufflePlayers(shuffleTeams: boolean = true) {
+    if (this.lobby?.lobbyStatic.isHost) {
+      let players = this.lobby.nonSpecPlayers;
+      let swappedPlayers: Array<string> = [];
+      Object.values(players).forEach((player) => {
+        let targetPlayer = players[Math.floor(Math.random() * players.length)];
+        if (
+          this.lobby &&
+          targetPlayer !== player &&
+          !swappedPlayers.includes(targetPlayer) &&
+          !swappedPlayers.includes(player)
+        ) {
+          // If teams can be shuffled as well, otherwise if the teams of the players to be swapped are different.
+          if (
+            shuffleTeams ||
+            this.lobby.slots[this.lobby.playerToSlot(player)].team !==
+              this.lobby.slots[this.lobby.playerToSlot(targetPlayer)].team
+          ) {
+            swappedPlayers.push(player);
+            swappedPlayers.push(targetPlayer);
+            this.swapPlayers({
+              players: [player, targetPlayer],
+            });
+          }
+        }
+      });
+    }
+  }
+
   banPlayer(player: string) {
     if (this.lobby?.lobbyStatic.isHost !== true) {
       this.emitError("Only the host can ban players");
@@ -655,6 +727,36 @@ export class LobbyControl extends EventEmitter {
       this.closeSlot(targetSlot.slot);
     } else {
       this.emitChat("Player not found");
+    }
+  }
+
+  swapPlayers(data: { slots?: [SlotNumbers, SlotNumbers]; players?: [string, string] }) {
+    if (this.lobby?.lobbyStatic.isHost) {
+      if (data.slots && data.slots.length === 2) {
+        if (
+          this.lobby.slots[data.slots[0]].playerRegion &&
+          this.lobby.slots[data.slots[1]].playerRegion
+        ) {
+          data.players = [
+            this.lobby.slots[data.slots[0]].name,
+            this.lobby.slots[data.slots[1]].name,
+          ];
+        }
+      }
+      if (data.players && data.players.length === 2) {
+        let target1 = this.lobby.searchPlayer(data.players[0])[0];
+        let target2 = this.lobby.searchPlayer(data.players[1])[0];
+        if (target1 && target2 && target1 !== target2) {
+          this.#expectedSwaps.push([target1, target2].sort() as [string, string]);
+          this.emitChat("!swap " + target1 + " " + target2);
+        } else {
+          this.emitChat("Possible invalid swap targets");
+          this.emitError("Possible invalid swap targets: " + target1 + " and " + target2);
+        }
+      } else {
+        this.emitChat("Possible invalid swap targets");
+        this.emitError("Possible invalid swap targets: " + JSON.stringify(data.players));
+      }
     }
   }
 

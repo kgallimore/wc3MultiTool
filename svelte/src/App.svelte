@@ -42,11 +42,13 @@
       flagRandomHero: false,
       settingVisibility: "0",
       leaveAlternate: false,
+      shufflePlayers: false,
       regionChange: false,
       regionChangeTimeEU: "11:00",
       regionChangeTimeNA: "01:00",
       whitelist: false,
       minPlayers: 0,
+      delayStart: 0,
     },
     obs: {
       enabled: false,
@@ -1033,6 +1035,22 @@
                                 e.target.checked
                               )}
                           />
+                          {#if settings.elo.type === "off" || !settings.elo.balanceTeams}
+                            <SettingsCheckbox
+                              frontFacingName="Shuffle Players"
+                              key="shufflePlayers"
+                              setting="autoHost"
+                              checked={settings.autoHost.shufflePlayers}
+                              tooltip="Shuffles players randomly before starting."
+                              on:change={(e) =>
+                                updateSettingSingle(
+                                  "autoHost",
+                                  "shufflePlayers",
+                                  // @ts-ignore
+                                  e.target.checked
+                                )}
+                            />
+                          {/if}
                           {#if settings.autoHost.voteStart}
                             <SettingsCheckbox
                               frontFacingName="Require All Teams for Votestart"
@@ -1239,8 +1257,27 @@
                       />
                     </div>
                   </div>
-                  {#if ["rapidHost", "smartHost"].includes(settings.autoHost.type)}
-                    <div class="row p-2">
+
+                  <div class="row p-2">
+                    <div class="col">
+                      <label for="delayStart">Delay Start</label>
+                      <input
+                        type="number"
+                        class="form-control"
+                        id="delayStart"
+                        placeholder="Seconds to delay"
+                        min="0"
+                        max="30"
+                        value={settings.autoHost.delayStart}
+                        on:change={(e) =>
+                          updateSettingSingle(
+                            "autoHost",
+                            "delayStart", // @ts-ignore
+                            parseInt(e.target.value)
+                          )}
+                      />
+                    </div>
+                    {#if ["rapidHost", "smartHost"].includes(settings.autoHost.type)}
                       <div class="col">
                         <label for="minPlayers">Minimum Players to Start</label>
                         <input
@@ -1259,8 +1296,8 @@
                             )}
                         />
                       </div>
-                    </div>
-                  {/if}
+                    {/if}
+                  </div>
                   {#if settings.autoHost.moveToSpec}
                     <div class="row p-2">
                       <div class="col">
@@ -1354,7 +1391,7 @@
                               "autoHost",
                               "voteStartPercent",
                               // @ts-ignore
-                              parseInt(e.target.value)
+                              Math.min(Math.max(parseInt(e.target.value), 5), 100)
                             )}
                         />
                       </div>
@@ -1378,7 +1415,7 @@
                               "autoHost",
                               "rapidHostTimer",
                               // @ts-ignore
-                              parseInt(e.target.value)
+                              Math.min(Math.max(parseInt(e.target.value), -1), 360)
                             )}
                         />
                       </div>
@@ -2358,7 +2395,8 @@
             ?white (name) (?reason): WhiteLists a player<br />
             ?start: Starts game<br />
             ?swap (name|slotNumber) (name|slotNumber): Swaps two players<br />
-            ?sp: Shuffles players randomly<br />
+            ?sp: Shuffles players completely randomly
+            ?st: Shuffles players randomly between teams<br />
             <strong>Admin:</strong><br />
             ?perm (name) (?admin|mod): Promotes a player to admin or moderator (mod by default).<br
             />

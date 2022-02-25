@@ -62,8 +62,10 @@ export interface AutoHostSettings {
   regionChange: boolean;
   regionChangeTimeEU: string;
   regionChangeTimeNA: string;
+  shufflePlayers: boolean;
   whitelist: boolean;
   minPlayers: number;
+  delayStart: number;
 }
 export interface ObsSettings {
   enabled: boolean;

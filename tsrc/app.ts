@@ -67,6 +67,7 @@ import {
   getTargetRegion,
   OpenLobbyParams,
   isValidUrl,
+  ensureInt,
 } from "./utility";
 
 import {
@@ -74,6 +75,7 @@ import {
   LobbyUpdates,
   PlayerData,
   Regions,
+  SlotNumbers,
 } from "wc3mt-lobby-container";
 
 const gotLock = app.requestSingleInstanceLock();
@@ -152,54 +154,247 @@ if (!gotLock) {
     queue: [],
   };
 
+  var autoHostSettings = <AppSettings["autoHost"]>{
+    type: store.get("autoHost.type") ?? "off",
+    private: store.get("autoHost.private") ?? false,
+    sounds: store.get("autoHost.sounds") ?? false,
+    increment: store.get("autoHost.increment") ?? true,
+    mapName: store.get("autoHost.mapName") ?? "",
+    gameName: store.get("autoHost.gameName") ?? "",
+    mapPath: store.get("autoHost.mapPath") ?? "N/A",
+    announceIsBot: store.get("autoHost.announceIsBot") ?? false,
+    announceCustom: store.get("autoHost.announceCustom") ?? false,
+    announceRestingInterval: store.get("autoHost.announceRestingInterval") ?? 30,
+    moveToSpec: store.get("autoHost.moveToSpec") ?? false,
+    moveToTeam: store.get("autoHost.moveToTeam") ?? "",
+    rapidHostTimer: store.get("autoHost.rapidHostTimer") ?? 0,
+    smartHostTimeout: store.get("autoHost.smartHostTimeout") ?? 0,
+    voteStart: store.get("autoHost.voteStart") ?? false,
+    voteStartPercent: store.get("autoHost.voteStartPercent") ?? 60,
+    voteStartTeamFill: store.get("autoHost.voteStartTeamFill") ?? true,
+    closeSlots: store.get("autoHost.closeSlots") ?? [],
+    customAnnouncement: store.get("autoHost.customAnnouncement") ?? "",
+    observers: store.get("autoHost.observers") ?? false,
+    advancedMapOptions: store.get("autoHost.advancedMapOptions") ?? false,
+    flagLockTeams: store.get("autoHost.flagLockTeams") ?? true,
+    flagPlaceTeamsTogether: store.get("autoHost.flagPlaceTeamsTogether") ?? true,
+    flagFullSharedUnitControl: store.get("autoHost.flagFullSharedUnitControl") ?? false,
+    flagRandomRaces: store.get("autoHost.flagRandomRaces") ?? false,
+    flagRandomHero: store.get("autoHost.flagRandomHero") ?? false,
+    settingVisibility: store.get("autoHost.settingVisibility") ?? "0",
+    leaveAlternate: store.get("autoHost.leaveAlternate") ?? false,
+    shufflePlayers: store.get("autoHost.shufflePlayers") ?? false,
+    regionChange: store.get("autoHost.regionChange") ?? false,
+    regionChangeTimeEU: store.get("autoHost.regionChangeTimeEU") ?? "11:00",
+    regionChangeTimeNA: store.get("autoHost.regionChangeTimeNA") ?? "01:00",
+    whitelist: store.get("autoHost.whitelist") ?? false,
+    minPlayers: store.get("autoHost.minPlayers") ?? 0,
+    delayStart: store.get("autoHost.delayStart") ?? 0,
+  };
+
+  var autoHostProxy = new Proxy(autoHostSettings, {
+    set: function (target, property, value, receiver) {
+      console.log("Setting " + String(property) + " to " + value);
+      if (property in target) {
+        if (property === "type" && ["off", "on", "auto"].includes(value)) {
+          return false;
+        }
+        if (property === "private" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "sounds" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "increment" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "announceIsBot" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "announceCustom" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "announceRestingInterval") {
+          if (typeof value !== "number") {
+            return false;
+          } else {
+            value = Math.min(Math.max(value, 0), 60);
+          }
+        }
+        if (property === "moveToSpec" && typeof value !== "boolean") {
+          return false;
+        }
+        if (
+          (property === "moveToTeam" && typeof value !== "string") ||
+          value.length > 48
+        ) {
+          return false;
+        }
+        if (property === "rapidHostTimer") {
+          if (typeof value !== "number") {
+            return false;
+          } else {
+            value = Math.min(Math.max(value, -1), 360);
+          }
+        }
+        if (property === "smartHostTimeout") {
+          if (typeof value !== "number") {
+            return false;
+          } else {
+            value = Math.min(Math.max(value, -1), 360);
+          }
+        }
+        if (property === "voteStart" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "voteStartPercent") {
+          if (typeof value !== "number") {
+            return false;
+          } else {
+            value = Math.min(Math.max(value, 5), 100);
+          }
+        }
+        if (property === "voteStartTeamFill" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "closeSlots" && (!Array.isArray(value) || value.length > 24)) {
+          return false;
+        }
+        if (
+          (property === "customAnnouncement" && typeof value !== "string") ||
+          value.length > 512
+        ) {
+          return false;
+        }
+        if (property === "observers" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "advancedMapOptions" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "flagLockTeams" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "flagPlaceTeamsTogether" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "flagFullSharedUnitControl" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "flagRandomRaces" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "flagRandomHero" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "settingVisibility" && ["0", "1", "2"].includes(value)) {
+          return false;
+        }
+        if (property === "leaveAlternate" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "shufflePlayers" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "regionChange" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "regionChangeTimeEU" && typeof value !== "string") {
+          return false;
+        }
+        if (property === "regionChangeTimeNA" && typeof value !== "string") {
+          return false;
+        }
+        if (property === "whitelist" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "minPlayers" && typeof value !== "number") {
+          if (typeof value !== "number") {
+            return false;
+          } else {
+            value = Math.min(Math.max(value, 0), 24);
+          }
+        }
+        if (property === "delayStart") {
+          if (typeof value !== "number") {
+            return false;
+          } else {
+            value = Math.min(Math.max(value, 0), 60);
+          }
+        }
+        store.set(`autoHost.${String(property)}`, value);
+        return Reflect.set(target, property, value, receiver);
+      } else {
+        log.warn("Property " + String(property) + " does not exist on autoHost");
+        return false;
+      }
+    },
+  });
+
+  var obsSettings = <AppSettings["obs"]>{
+    enabled: store.get("obs.enabled") ?? false,
+    sceneSwitchType: store.get("obs.sceneSwitchType") ?? "off",
+    inGameHotkey: store.get("obs.inGameHotkey") ?? false,
+    outOfGameHotkey: store.get("obs.outOfGameHotkey") ?? false,
+    inGameWSScene: store.get("obs.inGameWSScene") ?? "",
+    outOfGameWSScene: store.get("obs.outOfGameWSScene") ?? "",
+    address: store.get("obs.obsAddress") ?? "",
+    token: store.get("obs.obsPassword") ?? "",
+    autoStream: store.get("obs.autoStream") ?? false,
+    textSource: store.get("obs.textSource") ?? false,
+  };
+
+  var obsProxy = new Proxy(obsSettings, {
+    set: function (target, property, value, receiver) {
+      console.log("Setting " + String(property) + " to " + value);
+      if (property in target) {
+        if (property === "enabled" && typeof value !== "boolean") {
+          return false;
+        }
+        if (
+          property === "sceneSwitchType" &&
+          ["off", "hotkeys", "websockets"].includes(value)
+        ) {
+          return false;
+        }
+        if (
+          property === "inGameHotkey" &&
+          (typeof value !== "boolean" || typeof value !== "object")
+        ) {
+          return false;
+        }
+        if (
+          property === "outOfGameHotkey" &&
+          (typeof value !== "boolean" || typeof value !== "object")
+        ) {
+          return false;
+        }
+        if (property === "inGameWSScene" && typeof value !== "string") {
+          return false;
+        }
+        if (property === "outOfGameWSScene" && typeof value !== "string") {
+          return false;
+        }
+        if (property === "address") {
+          if (typeof value !== "string" || !isValidUrl(value)) {
+            return false;
+          }
+        }
+        if (property === "token" && typeof value !== "string") {
+          return false;
+        }
+        store.set(`autoHost.${String(property)}`, value);
+        return Reflect.set(target, property, value, receiver);
+      } else {
+        log.warn("Property " + String(property) + " does not exist on obs");
+        return false;
+      }
+    },
+  });
+
   var settings: AppSettings = <AppSettings>{
-    autoHost: {
-      type: store.get("autoHost.type") ?? "off",
-      private: store.get("autoHost.private") ?? false,
-      sounds: store.get("autoHost.sounds") ?? false,
-      increment: store.get("autoHost.increment") ?? true,
-      mapName: store.get("autoHost.mapName") ?? "",
-      gameName: store.get("autoHost.gameName") ?? "",
-      mapPath: store.get("autoHost.mapPath") ?? "N/A",
-      announceIsBot: store.get("autoHost.announceIsBot") ?? false,
-      announceCustom: store.get("autoHost.announceCustom") ?? false,
-      announceRestingInterval: store.get("autoHost.announceRestingInterval") ?? 30,
-      moveToSpec: store.get("autoHost.moveToSpec") ?? false,
-      moveToTeam: store.get("autoHost.moveToTeam") ?? "",
-      rapidHostTimer: store.get("autoHost.rapidHostTimer") ?? 0,
-      smartHostTimeout: store.get("autoHost.smartHostTimeout") ?? 0,
-      voteStart: store.get("autoHost.voteStart") ?? false,
-      voteStartPercent: store.get("autoHost.voteStartPercent") ?? 60,
-      voteStartTeamFill: store.get("autoHost.voteStartTeamFill") ?? true,
-      closeSlots: store.get("autoHost.closeSlots") ?? [],
-      customAnnouncement: store.get("autoHost.customAnnouncement") ?? "",
-      observers: store.get("autoHost.observers") ?? false,
-      advancedMapOptions: store.get("autoHost.advancedMapOptions") ?? false,
-      flagLockTeams: store.get("autoHost.flagLockTeams") ?? true,
-      flagPlaceTeamsTogether: store.get("autoHost.flagPlaceTeamsTogether") ?? true,
-      flagFullSharedUnitControl: store.get("autoHost.flagFullSharedUnitControl") ?? false,
-      flagRandomRaces: store.get("autoHost.flagRandomRaces") ?? false,
-      flagRandomHero: store.get("autoHost.flagRandomHero") ?? false,
-      settingVisibility: store.get("autoHost.settingVisibility") ?? "0",
-      leaveAlternate: store.get("autoHost.leaveAlternate") ?? false,
-      regionChange: store.get("autoHost.regionChange") ?? false,
-      regionChangeTimeEU: store.get("autoHost.regionChangeTimeEU") ?? "11:00",
-      regionChangeTimeNA: store.get("autoHost.regionChangeTimeNA") ?? "01:00",
-      whitelist: store.get("autoHost.whitelist") ?? false,
-      minPlayers: store.get("autoHost.minPlayers") ?? 0,
-    },
-    obs: {
-      enabled: store.get("obs.enabled") ?? false,
-      sceneSwitchType: store.get("obs.sceneSwitchType") ?? "off",
-      inGameHotkey: store.get("obs.inGameHotkey") ?? false,
-      outOfGameHotkey: store.get("obs.outOfGameHotkey") ?? false,
-      inGameWSScene: store.get("obs.inGameWSScene") ?? "",
-      outOfGameWSScene: store.get("obs.outOfGameWSScene") ?? "",
-      address: store.get("obs.obsAddress") ?? "",
-      token: store.get("obs.obsPassword") ?? "",
-      autoStream: store.get("obs.autoStream") ?? false,
-      textSource: store.get("obs.textSource") ?? false,
-    },
+    autoHost: autoHostSettings,
+    obs: obsSettings,
     elo: {
       type: store.get("elo.type") ?? "off",
       balanceTeams: store.get("elo.balanceTeams") ?? true,
@@ -247,6 +442,7 @@ if (!gotLock) {
       sendTipsInLobby: store.get("streaming.sendTipsInLobby") ?? false,
     },
   };
+
   let lobbyController: LobbyControl;
 
   var identifier: string = store.get("anonymousIdentifier") as string;
@@ -890,7 +1086,7 @@ if (!gotLock) {
               settings.autoHost.minPlayers !== 0 &&
               lobbyController.lobby.nonSpecPlayers.length >= settings.autoHost.minPlayers
             ) {
-              startGame();
+              startGame(settings.autoHost.delayStart);
             }
           } else {
             log.warn("Nameless player joined");
@@ -905,10 +1101,16 @@ if (!gotLock) {
               settings.autoHost.type === "rapidHost"
             ) {
               sendProgress("Starting Game", 100);
-              // Wait a quarter second to make sure no one left
+              if (
+                (settings.elo.type == "off" || !settings.elo.balanceTeams) &&
+                settings.autoHost.shufflePlayers
+              ) {
+                lobbyController.shufflePlayers();
+              }
+              // Wait a quarter second to make sure shuffles are done
               setTimeout(() => {
                 if (lobbyController.isLobbyReady()) {
-                  startGame();
+                  startGame(settings.autoHost.delayStart);
                 }
               }, 250);
             }
@@ -1680,23 +1882,15 @@ if (!gotLock) {
             lobbyController.lobby.lobbyStatic.isHost &&
             checkRole(sender, "moderator")
           ) {
-            let players = lobbyController.lobby.nonSpecPlayers;
-            Object.values(players).forEach((player) => {
-              sendChatMessage(
-                "!swap " +
-                  player +
-                  " " +
-                  players[Math.floor(Math.random() * players.length)]
-              );
-            });
+            lobbyController.shufflePlayers();
           }
-        } else if (payload.message.content.match(/^\?sf$/i)) {
+        } else if (payload.message.content.match(/^\?st$/i)) {
           // TODO: Shuffle teams
           if (
             lobbyController.lobby.lobbyStatic?.isHost &&
             checkRole(sender, "moderator")
           ) {
-            let players = lobbyController.lobby.exportTeamStructure();
+            lobbyController.shufflePlayers(false);
           }
         } else if (payload.message.content.match(/^\?start$/i)) {
           if (
@@ -1765,13 +1959,18 @@ if (!gotLock) {
           ) {
             let [command, ...args] = payload.message.content.split(" ");
             if (args.length === 2) {
-              if (
-                (isInt(args[1], 24, 1) ||
-                  lobbyController.lobby.searchPlayer(args[1]).length === 1) &&
-                (isInt(args[0], 24, 1) ||
-                  lobbyController.lobby.searchPlayer(args[0]).length === 1)
+              if (isInt(args[1], 24, 1) && isInt(args[0], 24, 1)) {
+                lobbyController.swapPlayers({
+                  slots: [
+                    ensureInt(args[0]) as SlotNumbers,
+                    ensureInt(args[1]) as SlotNumbers,
+                  ],
+                });
+              } else if (
+                lobbyController.lobby.searchPlayer(args[1]).length === 1 &&
+                lobbyController.lobby.searchPlayer(args[0]).length === 1
               ) {
-                sendChatMessage("!swap " + args[1] + " " + args[0]);
+                lobbyController.swapPlayers({ players: [args[0], args[1]] });
               } else {
                 sendChatMessage("All swap players not found, or too many matches.");
               }
@@ -2106,7 +2305,8 @@ if (!gotLock) {
               sendChatMessage("?unwhite <name>: Un-whitelists a player");
               sendChatMessage("?start: Starts game");
               sendChatMessage("?swap <name|slotNumber> <name|slotNumber>: Swaps players");
-              sendChatMessage("?sp: Shuffles players randomly");
+              sendChatMessage("?sp: Shuffles players completely randomly");
+              sendChatMessage("?st: Shuffles players randomly between teams");
             }
             if (checkRole(sender, "admin")) {
               sendChatMessage(
@@ -2346,12 +2546,8 @@ if (!gotLock) {
     sendMessage("LobbyCancel", {});
   }
 
-  function startGame() {
-    if (gameState.menuState === "GAME_LOBBY") {
-      sendChatMessage("AutoHost functionality provided by WC3 MultiTool.");
-      log.info("Starting game");
-      sendMessage("LobbyStart", {});
-    }
+  function startGame(delay: number = 0) {
+    lobbyController.startGame(delay);
   }
 
   async function leaveGame() {
