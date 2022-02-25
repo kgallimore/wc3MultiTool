@@ -2653,7 +2653,6 @@ if (!gotLock) {
     ) {
       if (typeof content === "string" && content.length > 0) {
         let newChatSplit = content.match(/.{1,255}/g);
-        console.log("data", newChatSplit);
         if (!newChatSplit) {
           log.warn("Could not split chat message into 255 character chunks");
           return;
