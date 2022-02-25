@@ -561,9 +561,7 @@ export class LobbyControl extends EventEmitter {
           for (const combo of combos) {
             const comboElo = combo.reduce(
               (a, b) =>
-                a +
-                // @ts-ignore
-                ensureInt(lobby.playerData[b].extra.rating),
+                a + ensureInt(lobbyCopy.getAllPlayerData()[b].extra?.rating ?? 500),
               0
             );
             const eloDiff = Math.abs(totalElo / 2 - comboElo);
