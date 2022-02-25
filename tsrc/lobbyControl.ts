@@ -8,6 +8,7 @@ import {
   GameClientLobbyPayload,
   Regions,
   SlotNumbers,
+  TeamTypes,
 } from "wc3mt-lobby-container";
 import type { LobbyAppSettings } from "./utility";
 import { ensureInt } from "./utility";
@@ -100,6 +101,11 @@ export class LobbyControl extends EventEmitter {
           } else {
             this.#isTargetMap = true;
           }
+          let selfSlot = this.lobby.getSelfSlot();
+          this.#appSettings.closeSlots.forEach((slot) => {
+            this.closeSlot(slot);
+          });
+          setTimeout(() => this.moveToSpec(), 150);
           this.emitUpdate({ newLobby: this.lobby.exportMin() });
         } catch (e) {
           // @ts-ignore
@@ -157,6 +163,69 @@ export class LobbyControl extends EventEmitter {
             this.autoBalance();
           }
         }
+      }
+    }
+  }
+
+  moveToSpec() {
+    if (this.lobby && this.#appSettings.moveToSpec) {
+      let lobby = this.lobby;
+      let teams = Object.entries(this.lobby.teamListLookup);
+      let specTeams = Object.entries(this.lobby.teamListLookup).filter(
+        ([teamNumber, teamData]) => teamData.type === "specTeams"
+      );
+      let selfSlot = this.lobby.getSelfSlot();
+      if (selfSlot !== false) {
+        let target: [string, { type: TeamTypes; name: string }] | undefined;
+        if (this.#appSettings.moveToTeam) {
+          target = teams.find(([teamNumber, teamData]) =>
+            teamData.name.match(new RegExp(this.#appSettings.moveToTeam, "i"))
+          );
+          if (!target) {
+            this.emitError("Could not find target team to move to");
+            return;
+          } else {
+            this.emitInfo(
+              `Found target team, moving to team ${target[0]}: ${target[1].name}`
+            );
+          }
+        }
+        if (!target && specTeams.length > 0) {
+          target =
+            specTeams.find(
+              ([teamNumber, teamData]) =>
+                teamData.name.match(/host/i) &&
+                Object.values(lobby.slots).find(
+                  (player) =>
+                    player.team === ensureInt(teamNumber) && player.slotStatus === 0
+                )
+            ) ??
+            specTeams.find(([teamNumber, teamData]) =>
+              Object.values(lobby.slots).find(
+                (player) =>
+                  player.team === ensureInt(teamNumber) && player.slotStatus === 0
+              )
+            );
+        } else {
+          this.emitInfo("There are no available spec teams");
+        }
+        if (target) {
+          this.emitInfo("Found spec slot to move to: " + target[0]);
+          console.log("Moving to spec", target[0], selfSlot);
+          this.emitMessage("SetTeam", {
+            slot: selfSlot,
+            team: ensureInt(target[0]),
+          });
+          if (this.#appSettings.closeSlots.includes(selfSlot)) {
+            setTimeout(() => {
+              if (selfSlot !== false) this.closeSlot(selfSlot);
+            }, 250);
+          }
+        } else {
+          this.emitInfo("No available spec team found");
+        }
+      } else {
+        this.emitError("Could not find self slot");
       }
     }
   }
