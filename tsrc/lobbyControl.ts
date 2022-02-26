@@ -101,7 +101,6 @@ export class LobbyControl extends EventEmitter {
           } else {
             this.#isTargetMap = true;
           }
-          let selfSlot = this.lobby.getSelfSlot();
           this.#appSettings.closeSlots.forEach((slot) => {
             this.closeSlot(slot);
           });
@@ -156,6 +155,12 @@ export class LobbyControl extends EventEmitter {
             }
           }
         });
+        if (this.#staleTimer) {
+          clearTimeout(this.#staleTimer);
+        }
+        this.#staleTimer = setInterval(() => {
+          this.staleLobby();
+        }, 1000 * 60 * 15);
         if (!metExpectedSwap) {
           this.bestCombo = [];
           if (this.isLobbyReady()) {
