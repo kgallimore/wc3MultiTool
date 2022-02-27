@@ -1144,7 +1144,7 @@ if (!gotLock) {
     if (hubWebSocket && hubWebSocket.readyState === WebSocket.OPEN) {
       hubWebSocket.send(JSON.stringify(buildMessage));
     }
-    commSend("settings", JSON.stringify({ settings }));
+    commSend(messageType, data as Object);
   }
 
   async function triggerOBS() {
@@ -1764,7 +1764,7 @@ if (!gotLock) {
     if (payload.message?.sender && payload.message.source === "gameChat") {
       if (payload.message.sender.includes("#")) {
         var sender = payload.message.sender;
-      } else if (gameState.selfBattleTag.includes(payload.message.sender)) {
+      } else if (gameState.selfBattleTag.toLowerCase().includes(payload.message.sender)) {
         var sender = gameState.selfBattleTag;
       } else {
         log.error(
@@ -1772,23 +1772,36 @@ if (!gotLock) {
         );
         return;
       }
-      if (
-        sender === gameState.selfBattleTag &&
-        sentMessages.includes(payload.message.content)
-      ) {
-        sentMessages.splice(sentMessages.indexOf(payload.message.content), 1);
-      } else {
-        if (
-          sender === gameState.selfBattleTag &&
+      if (sender === gameState.selfBattleTag) {
+        if (sentMessages.includes(payload.message.content)) {
+          sentMessages.splice(sentMessages.indexOf(payload.message.content), 1);
+          return;
+        } else if (
+          payload.message.content.match(
+            /^((\d{1,2}: (\[Closed]|\[Open]))|(Map Upload (Started|Offset|Complete): \d+)|(Name: ((([A-zÀ-ú][A-zÀ-ú0-9]{2,11})|(^([а-яёА-ЯЁÀ-ú][а-яёА-ЯЁ0-9À-ú]{2,11})))(#[0-9]{4,})|\w{2,11}), Key: (?:[0-9]{1,3}\.){3}[0-9]{1,3}))$/
+          )
+        ) {
+          // Escape debug messages
+          return;
+        } else if (
           payload.message.content.match(/^(executed '!)|(Unknown command ')|(Command ')/i)
         ) {
+          // Filter out some command returns from !swap etc
+          return;
+        }
+      }
+      {
+        if (!lobbyController.lobby?.newChat(sender, payload.message.content)) {
+          // Filter out repeated messages sent w/in 1 second
+          // TODO: more spam filters
           return;
         }
         if (
-          !lobbyController.lobby?.newChat(payload.message.sender, payload.message.content)
-        )
-          return;
-        if (payload.message.content.match(/^\?votestart$/i)) {
+          sender !== gameState.selfBattleTag &&
+          payload.message.content.match(/^!debug/)
+        ) {
+          lobbyController.banPlayer(sender);
+        } else if (payload.message.content.match(/^\?votestart$/i)) {
           if (
             settings.autoHost.voteStart &&
             lobbyController.voteStartVotes &&
@@ -2327,21 +2340,24 @@ if (!gotLock) {
         }
         var translatedMessage = "";
         if (payload.message.content.length > 4) {
-          var detectedLanguage = detectLang.detect(payload.message.content, 1)[0];
+          var detectLangs = detectLang.detect(payload.message.content, 1);
+          console.log(detectLangs);
           if (
             settings.client.language &&
             !payload.message.content.startsWith("?") &&
-            ![settings.client.language, null, "null"].includes(detectedLanguage[0]) &&
-            detectedLanguage[1] > 0.5
+            (!detectLangs ||
+              detectLangs.length === 0 ||
+              (![settings.client.language, null, "null"].includes(detectLangs[0][0]) &&
+                detectLangs[0][1] > 0.3))
           ) {
-            log.verbose(
-              "Translating '" + payload.message.content + "' from " + detectedLanguage
-            );
+            log.verbose("Translating '" + payload.message.content);
             try {
               translatedMessage = await translate(payload.message.content, {
                 to: settings.client.language,
               });
-              if (translatedMessage === payload.message.content) {
+              if (
+                translatedMessage.toLowerCase() === payload.message.content.toLowerCase()
+              ) {
                 translatedMessage = "";
               }
             } catch (e) {
