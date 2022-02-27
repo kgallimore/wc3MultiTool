@@ -1761,11 +1761,16 @@ if (!gotLock) {
 
   async function handleChatMessage(payload: GameClientMessage) {
     // TODO: logging
-    if (payload.message && payload.message.source === "gameChat") {
+    if (payload.message?.sender && payload.message.source === "gameChat") {
       if (payload.message.sender.includes("#")) {
         var sender = payload.message.sender;
-      } else {
+      } else if (gameState.selfBattleTag.includes(payload.message.sender)) {
         var sender = gameState.selfBattleTag;
+      } else {
+        log.error(
+          `Unknown sender: ${payload.message.sender} for message: ${payload.message.content}`
+        );
+        return;
       }
       if (
         sender === gameState.selfBattleTag &&

@@ -118,7 +118,6 @@ export class LobbyControl extends EventEmitter {
       }
       if (changedValues.events.isUpdated) {
         var metExpectedSwap = false;
-        console.log("Lobby updated", changedValues.events);
         changedValues.events.events.forEach((event) => {
           this.emitUpdate(event);
           if (event.playerJoined) {
@@ -181,10 +180,10 @@ export class LobbyControl extends EventEmitter {
       );
       let selfSlot = this.lobby.getSelfSlot();
       if (selfSlot !== false) {
-        let target: [string, { type: TeamTypes; name: string }] | undefined;
+        let target: [string, { type: TeamTypes; name?: string }] | undefined;
         if (this.#appSettings.moveToTeam) {
           target = teams.find(([teamNumber, teamData]) =>
-            teamData.name.match(new RegExp(this.#appSettings.moveToTeam, "i"))
+            teamData.name?.match(new RegExp(this.#appSettings.moveToTeam, "i"))
           );
           if (!target) {
             this.emitError("Could not find target team to move to");
@@ -199,7 +198,7 @@ export class LobbyControl extends EventEmitter {
           target =
             specTeams.find(
               ([teamNumber, teamData]) =>
-                teamData.name.match(/host/i) &&
+                teamData.name?.match(/host/i) &&
                 Object.values(lobby.slots).find(
                   (player) =>
                     player.team === ensureInt(teamNumber) && player.slotStatus === 0
@@ -468,6 +467,7 @@ export class LobbyControl extends EventEmitter {
         this.emitMessage("LobbyStart", {});
       }
     }, delay * 1000 + 250);
+    //this.emitUpdate({ f: " test" });
   }
 
   lobbyCombinations(
