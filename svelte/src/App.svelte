@@ -2168,27 +2168,15 @@
         <summary>Updates this version (click to expand)</summary>
         <strong>New:</strong>
         <ul>
-          <li>The way lobbies are stored has been completely redone.</li>
-          <li>Anti-crash is toggle-able</li>
-          <li>Autostart command works even with autohost disabled</li>
-          <li>Non-OCR launch (beta)</li>
-          <li>Show join time for each player</li>
-          <li>Shuffle players before starting option</li>
-          <li>Set a delay for starting</li>
-          <li>
-            ?st option to swap players but ignore swaps that place players within the same
-            team
-          </li>
+          <li>Temp ban players who use !debug</li>
+          <li>Filter out !debug messages from sending to discord/hub</li>
         </ul>
         <strong>Fixes:</strong>
         <ul>
-          <li>Failing to start with Elo enabled</li>
-          <li>Stopped sending untranslated chat</li>
-          <li>Less sensitive language detection</li>
-          <li>Fix for setting improper Comm url breaking the tool</li>
-          <li>Reloading the tool's window will still show current lobby</li>
-          <li>Fix both 2 and 3+ team autobalance</li>
-          <li>Shuffling won't shuffle already shuffled players</li>
+          <li>Fix not recognizing first team as playerteam if it only had one player</li>
+          <li>Fix melee maps(specifically maps where a team has no team name)</li>
+          <li>Fixes to lobby storage</li>
+          <li>Fix to not allowing empty teams</li>
         </ul>
       </details>
     </div>
