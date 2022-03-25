@@ -115,6 +115,10 @@ if (!gotLock) {
     "Warcraft III\\BattleNet"
   );
 
+  const wc3mtTargetFile = `${app.getPath(
+    "documents"
+  )}\\Warcraft III\\CustomMapData\\wc3mt.txt`;
+
   var win: BrowserWindow;
   var appIcon: Tray | null;
   var currentStatus = false;
@@ -141,7 +145,7 @@ if (!gotLock) {
   var gameStateProxy = new Proxy(gameState, {
     set: function (target, prop, value: any) {
       prop = String(prop);
-      console.log(`Setting ${prop} to ${value} on ${target}`);
+      //console.log(`Setting ${prop} to ${value} on ${target}`);
       if (prop in target) {
         if (
           prop === "inGame" &&
@@ -889,6 +893,10 @@ if (!gotLock) {
         throw err;
       }
     });
+    if (fs.existsSync(wc3mtTargetFile)) {
+      log.info("Removing leftover file");
+      fs.rmSync(wc3mtTargetFile);
+    }
     lobbySetup();
     globalShortcut.register("Alt+CommandOrControl+S", () => {
       sendMessage("PlaySound", { sound: "MenuButtonClick" });
@@ -1504,7 +1512,7 @@ if (!gotLock) {
       gameStateProxy.action = "waitingToLeaveGame";
       if (settings.autoHost.type === "smartHost") {
         log.info("Setting up smart host.");
-        setTimeout(findQuit, 15000);
+        setTimeout(smartQuit, 15000);
       }
       triggerOBS();
       if (
@@ -2668,18 +2676,19 @@ if (!gotLock) {
 
   async function leaveGame() {
     log.info("Leaving Game");
-    sendMessage("LeaveGame", {});
     if (
-      (gameStateProxy.inGame ||
-        ["GAME_LOBBY", "CUSTOM_GAME_LOBBY"].includes(gameStateProxy.menuState)) &&
-      lobbyController.lobby?.lobbyStatic.lobbyName
+      gameStateProxy.inGame ||
+      ["GAME_LOBBY", "CUSTOM_GAME_LOBBY"].includes(gameStateProxy.menuState)
     ) {
-      let oldLobbyName = lobbyController.lobby.lobbyStatic.lobbyName;
-      await sleep(1000);
-      if (lobbyController.lobby.lobbyStatic.lobbyName === oldLobbyName) {
-        log.info("Lobby did not leave, trying again");
-        await exitGame();
-        openWarcraft();
+      sendMessage("LeaveGame", {});
+      if (lobbyController.lobby?.lobbyStatic?.lobbyName) {
+        let oldLobbyName = lobbyController.lobby.lobbyStatic.lobbyName;
+        await sleep(1000);
+        if (lobbyController.lobby.lobbyStatic.lobbyName === oldLobbyName) {
+          log.info("Lobby did not leave, trying again");
+          await exitGame();
+          openWarcraft();
+        }
       }
     }
   }
@@ -2834,18 +2843,20 @@ if (!gotLock) {
 
   async function smartQuit() {
     if (gameStateProxy.inGame || gameStateProxy.menuState === "LOADING_SCREEN") {
-      let targetFile = `${app.getPath(
-        "documents"
-      )}\\Warcraft III\\CustomMapData\\wc3mt.txt`;
-      if (
-        fs.existsSync(targetFile) &&
-        fs
-          .readFileSync(targetFile)
-          .toString()
-          .match(/wc3mt-GameEnd/)
-      ) {
-        fs.rmSync(targetFile);
-        leaveGame();
+      if (fs.existsSync(wc3mtTargetFile)) {
+        // The library seems to create the file at the start of the game anyways, so if it is going to be written to, don't do ocr.
+        if (
+          fs
+            .readFileSync(wc3mtTargetFile)
+            .toString()
+            .match(/wc3mt-GameEnd/)
+        ) {
+          log.info("Game is over, quitting.");
+          fs.rmSync(wc3mtTargetFile);
+          leaveGame();
+        } else {
+          setTimeout(smartQuit, 1000);
+        }
       } else {
         findQuit();
       }
