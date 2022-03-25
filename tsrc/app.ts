@@ -237,7 +237,10 @@ if (!gotLock) {
     voteStartTeamFill: store.get("autoHost.voteStartTeamFill") ?? true,
     closeSlots: store.get("autoHost.closeSlots") ?? [],
     customAnnouncement: store.get("autoHost.customAnnouncement") ?? "",
-    observers: store.get("autoHost.observers") ?? false,
+    observers:
+      typeof store.get("autoHost.observers") !== "string"
+        ? "0"
+        : store.get("autoHost.observers"),
     advancedMapOptions: store.get("autoHost.advancedMapOptions") ?? false,
     flagLockTeams: store.get("autoHost.flagLockTeams") ?? true,
     flagPlaceTeamsTogether: store.get("autoHost.flagPlaceTeamsTogether") ?? true,
@@ -464,6 +467,7 @@ if (!gotLock) {
       announce: store.get("elo.announce") ?? true,
       excludeHostFromSwap: store.get("elo.excludeHostFromSwap") ?? true,
       lookupName: store.get("elo.lookupName") ?? "",
+      privateKey: store.get("elo.privateKey") ?? "",
       available: store.get("elo.available") ?? false,
       wc3StatsVariant:
         store.get("elo.wc3StatsVariant") ?? store.get("elo.wc3statsVariant") ?? "",
@@ -1448,7 +1452,7 @@ if (!gotLock) {
             flagRandomHero: settings.autoHost.advancedMapOptions
               ? settings.autoHost.flagRandomHero
               : false,
-            settingObservers: settings.autoHost.observers ? 2 : 0,
+            settingObservers: parseInt(settings.autoHost.observers),
             settingVisibility: settings.autoHost.advancedMapOptions
               ? parseInt(settings.autoHost.settingVisibility)
               : 0,
@@ -1591,13 +1595,18 @@ if (!gotLock) {
           if (settings.elo.type === "wc3stats") {
             let form = new FormData();
             form.append("replay", fs.createReadStream(mostModified.file));
-            fetch("https://api.wc3stats.com/upload?auto=true", {
-              method: "POST",
-              body: form,
-              headers: {
-                ...form.getHeaders(),
-              },
-            }).then(
+            fetch(
+              `https://api.wc3stats.com/upload${
+                settings.elo.privateKey ? "/" + settings.elo.privateKey : ""
+              }?auto=true`,
+              {
+                method: "POST",
+                body: form,
+                headers: {
+                  ...form.getHeaders(),
+                },
+              }
+            ).then(
               function (response) {
                 if (response.status !== 200) {
                   log.info(response.statusText);

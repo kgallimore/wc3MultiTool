@@ -50,7 +50,7 @@ export interface AutoHostSettings {
   voteStartTeamFill: boolean;
   closeSlots: Array<number>;
   customAnnouncement: string;
-  observers: boolean;
+  observers: "0" | "1" | "2" | "3";
   advancedMapOptions: boolean;
   flagLockTeams: boolean;
   flagPlaceTeamsTogether: boolean;
@@ -106,6 +106,7 @@ export interface EloSettings {
   announce: boolean;
   excludeHostFromSwap: boolean;
   lookupName: string;
+  privateKey: string;
   available: boolean;
   wc3StatsVariant: string;
   handleReplays: boolean;

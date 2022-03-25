@@ -33,7 +33,7 @@
       voteStartTeamFill: true,
       closeSlots: [],
       customAnnouncement: "",
-      observers: false,
+      observers: "0",
       advancedMapOptions: false,
       flagLockTeams: true,
       flagPlaceTeamsTogether: true,
@@ -68,6 +68,7 @@
       announce: true,
       excludeHostFromSwap: true,
       lookupName: "",
+      privateKey: "",
       available: false,
       wc3StatsVariant: "",
       handleReplays: true,
@@ -313,7 +314,7 @@
         console.log("Unknown:", data);
     }
   });
-  function generateHotkeys(e: KeyboardEvent) {
+  function generateHotkeys(e: KeyboardEvent, key: string) {
     e.preventDefault();
     let newValue:
       | { key: string; shiftKey: boolean; ctrlKey: boolean; altKey: boolean }
@@ -342,17 +343,14 @@
       (e.target as HTMLInputElement).value = "";
     }
     if (newValue) {
-      let key = (e.target as HTMLElement).getAttribute("data-key");
-      if (key) {
-        toMain({
-          messageType: "updateSettingSingle",
-          update: {
-            setting: "obs",
-            key: key as SettingsKeys,
-            value: newValue,
-          },
-        });
-      }
+      toMain({
+        messageType: "updateSettingSingle",
+        update: {
+          setting: "obs",
+          key: key as SettingsKeys,
+          value: newValue,
+        },
+      });
     }
   }
 
@@ -530,7 +528,7 @@
               </div>
               <div class="row">
                 <div class="col">
-                  <label for="commAddress">Comm Address</label>
+                  <label for="commAddress">Comm Address (For Adv Users)</label>
                   <input
                     type="url"
                     class="form-control"
@@ -646,8 +644,6 @@
                   <select
                     id="eloLookup"
                     class="form-select"
-                    data-key="type"
-                    data-setting="elo"
                     value={settings.elo.type}
                     on:change={(e) =>
                       // @ts-ignore
@@ -713,6 +709,26 @@
                               {/await}
                             </select>
                           </div>
+                          {#if settings.elo.handleReplays}
+                            <div class="row">
+                              <div class="col">
+                                <label for="eloPrivateKey">Private Key</label>
+                                <input
+                                  type="text"
+                                  class="form-control"
+                                  id="eloPrivateKey"
+                                  placeholder="Optional"
+                                  value={settings.elo.privateKey}
+                                  on:change={(e) =>
+                                    updateSettingSingle(
+                                      "elo",
+                                      "privateKey", // @ts-ignore
+                                      e.target.value
+                                    )}
+                                />
+                              </div>
+                            </div>
+                          {/if}
                         {/if}
                       {/if}
 
@@ -888,8 +904,6 @@
                   <select
                     id="autoHostState"
                     class="form-select"
-                    data-key="type"
-                    data-setting="autoHost"
                     value={settings.autoHost.type}
                     on:change={(e) =>
                       updateSettingSingle(
@@ -975,20 +989,6 @@
                             updateSettingSingle(
                               "autoHost",
                               "moveToSpec",
-                              // @ts-ignore
-                              e.target.checked
-                            )}
-                        />
-                        <SettingsCheckbox
-                          frontFacingName="Create Observer Slots"
-                          key="observers"
-                          setting="autoHost"
-                          checked={settings.autoHost.observers}
-                          tooltip="Will create observer (referee) slots."
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "autoHost",
-                              "observers",
                               // @ts-ignore
                               e.target.checked
                             )}
@@ -1191,13 +1191,29 @@
                                 e.target.checked
                               )}
                           />
+                          <label for="observerType">Add observers:</label>
+                          <select
+                            class="form-control form-control-sm"
+                            id="observerType"
+                            value={settings.autoHost.observers}
+                            on:change={(e) =>
+                              updateSettingSingle(
+                                "autoHost",
+                                "observers",
+                                // @ts-ignore
+                                e.target.value
+                              )}
+                          >
+                            <option value="0">None</option>
+                            <option value="1">Obs on defeat</option>
+                            <option value="2">Referees(Recommended)</option>
+                            <option value="3">Observers</option>
+                          </select>
                         </div>
                         <label for="autoHostsettingVisibility">Visibility:</label>
                         <select
                           class="form-control form-control-sm"
                           id="autoHostsettingVisibility"
-                          data-key="map"
-                          data-setting="autoHost"
                           value={settings.autoHost.settingVisibility}
                           on:change={(e) =>
                             updateSettingSingle(
@@ -1382,8 +1398,6 @@
                           type="number"
                           id="voteStartPercent"
                           class="form-control"
-                          data-key="voteStartPercent"
-                          data-setting="autoHost"
                           min="5"
                           max="100"
                           value={settings.autoHost.voteStartPercent}
@@ -1406,8 +1420,6 @@
                           type="number"
                           id="rapidHostTimer"
                           class="form-control"
-                          data-key="rapidHostTimer"
-                          data-setting="autoHost"
                           min="-1"
                           max="360"
                           value={settings.autoHost.rapidHostTimer}
@@ -1445,8 +1457,6 @@
                           type="text"
                           id="customAnnouncement"
                           class="form-control"
-                          data-key="customAnnouncement"
-                          data-setting="autoHost"
                           maxlength="120"
                           placeholder="120 Character Max"
                           value={settings.autoHost.customAnnouncement}
@@ -1471,8 +1481,6 @@
                           type="number"
                           id="announceRestingInterval"
                           class="form-control"
-                          data-key="announceRestingInterval"
-                          data-setting="autoHost"
                           min="0"
                           max="600"
                           value={settings.autoHost.announceRestingInterval}
@@ -1503,8 +1511,6 @@
                           type="time"
                           id="regionChangeTimeNA"
                           class="form-control"
-                          data-key="regionChangeTimeNA"
-                          data-setting="autoHost"
                           value={settings.autoHost.regionChangeTimeNA}
                           on:change={(e) =>
                             updateSettingSingle(
@@ -1523,8 +1529,6 @@
                           type="time"
                           id="regionChangeTimeEU"
                           class="form-control"
-                          data-key="regionChangeTimeEU"
-                          data-setting="autoHost"
                           value={settings.autoHost.regionChangeTimeEU}
                           on:change={(e) =>
                             updateSettingSingle(
@@ -1573,8 +1577,6 @@
                           class="form-control"
                           id="discordToken"
                           placeholder="Token"
-                          data-key="token"
-                          data-setting="discord"
                           value={settings.discord.token}
                           on:change={(e) =>
                             updateSettingSingle(
@@ -1593,8 +1595,6 @@
                           class="form-control"
                           id="discordAnnounceChannel"
                           placeholder="Name or ID"
-                          data-key="announceChannel"
-                          data-setting="discord"
                           value={settings.discord.announceChannel}
                           on:change={(e) =>
                             updateSettingSingle(
@@ -1613,8 +1613,6 @@
                           class="form-control"
                           id="discordChatChannel"
                           placeholder="Name or ID"
-                          data-key="chatChannel"
-                          data-setting="discord"
                           value={settings.discord.chatChannel}
                           on:change={(e) =>
                             updateSettingSingle(
@@ -1765,9 +1763,7 @@
                             class="form-control"
                             id="inGameHotkey"
                             placeholder="In game hotkey"
-                            data-key="inGameHotkey"
-                            data-setting="obs"
-                            on:keydown={generateHotkeys}
+                            on:keydown={(event) => generateHotkeys(event, "inGameHotkey")}
                             value={settings.obs.inGameHotkey
                               ? (settings.obs.inGameHotkey.shiftKey ? "Shift + " : "") +
                                 (settings.obs.inGameHotkey.ctrlKey ? "Ctrl + " : "") +
@@ -1785,9 +1781,7 @@
                             class="form-control"
                             id="outOfGameHotkey"
                             placeholder="Out of game hotkey"
-                            data-key="outOfGameHotkey"
-                            data-setting="obs"
-                            on:keydown={generateHotkeys}
+                            on:keydown={(e) => generateHotkeys(e, "outOfGameHotkey")}
                             value={settings.obs.outOfGameHotkey
                               ? (settings.obs.outOfGameHotkey.shiftKey
                                   ? "Shift + "
@@ -2169,15 +2163,20 @@
         <summary>Updates this version (click to expand)</summary>
         <strong>New:</strong>
         <ul>
-          <li>Temp ban players who use !debug</li>
+          <li>
+            New option for smart host to watch for files to leave, bypassing ocr
+            requirements. Check out the discord
+          </li>
           <li>Filter out !debug messages from sending to discord/hub</li>
+          <li>Private key for wc3stats uploads</li>
+          <li>Choose observer type</li>
         </ul>
         <strong>Fixes:</strong>
         <ul>
-          <li>Fix not recognizing first team as playerteam if it only had one player</li>
-          <li>Fix melee maps(specifically maps where a team has no team name)</li>
-          <li>Fixes to lobby storage</li>
-          <li>Fix to not allowing empty teams</li>
+          <li>Fixes to lobby container</li>
+          <li>Announce player shuffle</li>
+          <li>Fixed issue where sometimes senders wouldn't be recognized</li>
+          <li>Fix double start issue</li>
         </ul>
       </details>
     </div>
