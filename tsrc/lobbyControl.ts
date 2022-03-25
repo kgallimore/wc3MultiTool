@@ -457,7 +457,14 @@ export class LobbyControl extends EventEmitter {
 
   startGame(delay: number = 0) {
     if (delay > 0) {
-      this.emitChat("Starting game in " + delay + " second(s)!");
+      if (this.#startTimer) {
+        this.emitChat("Lobby changed. Starting game in " + delay + " second(s)!");
+      } else {
+        this.emitChat("Starting game in " + delay + " second(s)!");
+      }
+    }
+    if (this.#startTimer) {
+      clearTimeout(this.#startTimer);
     }
     this.#startTimer = setTimeout(() => {
       this.#startTimer = null;
@@ -467,7 +474,6 @@ export class LobbyControl extends EventEmitter {
         this.emitMessage("LobbyStart", {});
       }
     }, delay * 1000 + 250);
-    //this.emitUpdate({ f: " test" });
   }
 
   lobbyCombinations(
@@ -745,6 +751,7 @@ export class LobbyControl extends EventEmitter {
 
   shufflePlayers(shuffleTeams: boolean = true) {
     if (this.lobby?.lobbyStatic.isHost) {
+      this.emitChat("Shuffling players...");
       let players = this.lobby.nonSpecPlayers;
       let swappedPlayers: Array<string> = [];
       Object.values(players).forEach((player) => {
