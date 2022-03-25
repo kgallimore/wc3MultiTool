@@ -161,6 +161,36 @@ export interface BanWhiteList {
   region: string;
   reason: string;
 }
+
+export interface ClientCommands {
+  action:
+    | "openLogs"
+    | "openWar"
+    | "closeWar"
+    | "updateSettingSingle"
+    | "init"
+    | "banPlayer"
+    | "unbanPlayer"
+    | "whitePlayer"
+    | "unwhitePlayer"
+    | "changePerm";
+  data?: {
+    settings?: { setting: keyof AppSettings; key: SettingsKeys; value: any };
+    ban?: {
+      player: string;
+      reason?: string;
+    };
+    white?: {
+      player: string;
+      reason?: string;
+    };
+    perm?: {
+      player: string;
+      role: "admin" | "moderator" | "";
+    };
+  };
+}
+
 export interface WindowSend {
   messageType:
     | "openLogs"
@@ -174,10 +204,13 @@ export interface WindowSend {
     | "unwhitePlayer"
     | "changePerm"
     | "fetchBanList"
-    | "fetchWhiteList";
-  data?: {
-    update?: { setting: keyof AppSettings; key: SettingsKeys; value: any };
-  };
+    | "fetchWhiteList"
+    | "createLobby"
+    | "autoHostLobby"
+    | "joinLobby"
+    | "leaveLobby"
+    | "startLobby";
+  update?: { setting: keyof AppSettings; key: SettingsKeys; value: any };
   ban?: {
     player: string;
     reason?: string;
@@ -191,6 +224,7 @@ export interface WindowSend {
     player: string;
     role: "admin" | "moderator" | "";
   };
+  lobbyOptions?: {};
 }
 
 export interface TeamData {
@@ -213,8 +247,8 @@ export interface mmdResults {
 }
 
 export interface HubReceive {
-  messageType: "lobbyUpdate" | "lobbyStarted" | "heartbeat";
-  data: LobbyUpdates | null;
+  messageType: "lobbyUpdate" | "lobbyStarted" | "heartbeat" | "settings" | "gameState";
+  data?: { lobbyUpdates?: LobbyUpdates; settings?: AppSettings; gameState?: GameState };
   appVersion: string;
 }
 export interface HubSend {
@@ -292,6 +326,23 @@ export function getTargetRegion(
       return "eu";
     }
   }
+}
+
+export interface GameState {
+  selfRegion: Regions | "";
+  menuState: "OUT_OF_MENUS" | "MAIN_MENU" | "CUSTOM_LOBBIES" | "GAME_LOBBY" | string;
+  screenState: string;
+  selfBattleTag: string;
+  inGame: boolean;
+  action:
+    | "openingWarcraft"
+    | "creatingLobby"
+    | "waitingToLeaveGame"
+    | "waitingInLobby"
+    | "nothing"
+    | "joiningLobby"
+    | "leavingLobby"
+    | "closingWarcraft";
 }
 
 export const ColorLookup = {

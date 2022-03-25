@@ -1,4 +1,5 @@
 import {
+  Window,
   screen,
   getActiveWindow,
   mouse,
@@ -68,6 +69,7 @@ import {
   OpenLobbyParams,
   isValidUrl,
   ensureInt,
+  GameState,
 } from "./utility";
 
 import {
@@ -76,6 +78,7 @@ import {
   PlayerData,
   Regions,
   SlotNumbers,
+  BattleTagRegex,
 } from "wc3mt-lobby-container";
 
 const gotLock = app.requestSingleInstanceLock();
@@ -117,7 +120,6 @@ if (!gotLock) {
   var currentStatus = false;
   var gameNumber = 0;
   // @ts-ignore
-  var inGame = false;
   var wss: WebSocket.Server | null = null;
   var webUISocket: WebSocket | null = null;
   var clientWebSocket: WebSocket;
@@ -126,21 +128,78 @@ if (!gotLock) {
   var warcraftInFocus = false;
   var warcraftIsOpen = false;
   var warcraftRegion: Region;
-  var voteTimer: NodeJS.Timeout | null, refreshTimer: NodeJS.Timeout | null;
+  var voteTimer: NodeJS.Timeout | null;
   var openLobbyParams: OpenLobbyParams | null;
-  var gameState: {
-    selfRegion: Regions | "";
-    menuState: string;
-    screenState: string;
-    selfBattleTag: string;
-    inGame: boolean;
-  } = {
-    menuState: "Out of Menus",
+  var gameState: GameState = {
+    menuState: "OUT_OF_MENUS",
     screenState: "",
     selfBattleTag: "",
     selfRegion: "",
     inGame: false,
+    action: "nothing",
   };
+  var gameStateProxy = new Proxy(gameState, {
+    set: function (target, prop, value: any) {
+      prop = String(prop);
+      console.log(`Setting ${prop} to ${value} on ${target}`);
+      if (prop in target) {
+        if (
+          prop === "inGame" &&
+          (typeof value === "boolean" ||
+            (typeof value === "string" &&
+              ["true", "false"].includes(value.toLowerCase()))) &&
+          target[prop] != value
+        ) {
+          target[prop] = value == true;
+        } else if (
+          prop === "selfBattleTag" &&
+          typeof value === "string" &&
+          BattleTagRegex.test(value) &&
+          target[prop] !== value
+        ) {
+          target[prop] = value;
+        } else if (
+          prop === "selfRegion" &&
+          ["us", "eu", "usw"].includes(value) &&
+          target[prop] !== value
+        ) {
+          target[prop] = value;
+        } else if (
+          prop === "menuState" &&
+          typeof value === "string" &&
+          target[prop] !== value
+        ) {
+          target[prop] = value;
+        } else if (
+          prop === "screenState" &&
+          typeof value === "string" &&
+          target[prop] !== value
+        ) {
+          target[prop] = value;
+        } else if (
+          prop === "action" &&
+          [
+            "openingWarcraft",
+            "creatingLobby",
+            "waitingToLeaveGame",
+            "waitingInLobby",
+            "nothing",
+          ].includes(value) &&
+          target[prop] !== value
+        ) {
+          target[prop] = value;
+        } else {
+          if (target[prop as keyof GameState] !== value) {
+            // There was some sort of error
+            log.info(`Invalid value for ${prop}`);
+          }
+          return true;
+        }
+        sendToHub("gameState", { gameState: target });
+      }
+      return true;
+    },
+  });
   var clientState: { tableVersion: number; latestUploadedReplay: number } = {
     tableVersion: (store.get("tableVersion") as number) ?? 0,
     latestUploadedReplay: (store.get("latestUploadedReplay") as number) ?? 0,
@@ -510,7 +569,7 @@ if (!gotLock) {
   });
 
   app.on("before-quit", () => {
-    sendToHub("lobbyUpdate", { leftLobby: true });
+    sendToHub("lobbyUpdate", { lobbyUpdates: { leftLobby: true } });
     discClient?.lobbyClosed();
     lobbyController?.clear();
   });
@@ -523,7 +582,7 @@ if (!gotLock) {
         if (await isWarcraftOpen()) {
           if (
             openLobbyParams?.region &&
-            openLobbyParams?.region !== gameState.selfRegion
+            openLobbyParams?.region !== gameStateProxy.selfRegion
           ) {
             log.info(`Changing region to ${openLobbyParams.region}`);
             await exitGame();
@@ -817,7 +876,7 @@ if (!gotLock) {
         webUISocket = null;
         sendProgress();
         sendStatus(false);
-        handleGlueScreen("Out of menus");
+        handleGlueScreen("OUT_OF_MENUS");
       });
     });
     wss.on("error", function (err) {
@@ -850,7 +909,7 @@ if (!gotLock) {
   });
 
   app.on("window-all-closed", () => {
-    sendToHub("lobbyUpdate", { leftLobby: true });
+    sendToHub("lobbyUpdate", { lobbyUpdates: { leftLobby: true } });
     discClient?.lobbyClosed();
     lobbyController?.clear();
     if (process.platform !== "darwin") {
@@ -880,7 +939,9 @@ if (!gotLock) {
         lobbyController.lobby?.lobbyStatic &&
         (!settings.autoHost.private || !app.isPackaged)
       ) {
-        sendToHub("lobbyUpdate", { newLobby: lobbyController.lobby.exportMin() });
+        sendToHub("lobbyUpdate", {
+          lobbyUpdates: { newLobby: lobbyController.lobby.exportMin() },
+        });
       }
       setTimeout(hubHeartbeat, 30000);
     };
@@ -915,7 +976,7 @@ if (!gotLock) {
               if (settings.streaming.sendTipsInDiscord && discClient?.chatChannel) {
                 discClient.sendMessage(tipMessage);
               }
-              if (inGame) {
+              if (gameStateProxy.inGame) {
                 if (settings.streaming.sendTipsInGame) {
                   sendInGameChat(tipMessage);
                 } else {
@@ -996,9 +1057,11 @@ if (!gotLock) {
         ) {
           if (update.leftLobby) {
             clearLobby();
+          } else {
+            gameStateProxy.action = "waitingInLobby";
           }
           sendWindow("lobbyUpdate", { lobbyData: update });
-          sendToHub("lobbyUpdate", update);
+          sendToHub("lobbyUpdate", { lobbyUpdates: update });
           if (discClient) {
             if (update.newLobby) {
               discClient.sendNewLobby(
@@ -1064,7 +1127,7 @@ if (!gotLock) {
               return;
             }
             if (settings.autoHost.whitelist) {
-              if (update.playerJoined.name !== gameState.selfBattleTag) {
+              if (update.playerJoined.name !== gameStateProxy.selfBattleTag) {
                 const row = db
                   .prepare(
                     "SELECT * FROM whiteList WHERE username = ? AND unwhite_date IS NULL"
@@ -1136,21 +1199,18 @@ if (!gotLock) {
     });
   }
 
-  function sendToHub(
-    messageType: HubReceive["messageType"],
-    data: HubReceive["data"] = null
-  ) {
+  function sendToHub(messageType: HubReceive["messageType"], data?: HubReceive["data"]) {
     let buildMessage: HubReceive = { messageType, data, appVersion };
     if (hubWebSocket && hubWebSocket.readyState === WebSocket.OPEN) {
       hubWebSocket.send(JSON.stringify(buildMessage));
     }
-    commSend(messageType, data as Object);
+    commSend(messageType, data);
   }
 
   async function triggerOBS() {
     if (settings.obs.enabled) {
       if (settings.obs.sceneSwitchType === "hotkeys") {
-        if (inGame && settings.obs.inGameHotkey) {
+        if (gameStateProxy.inGame && settings.obs.inGameHotkey) {
           log.info("Triggering OBS In-Game");
           let modifiers: Array<Key> = [];
           if (settings.obs.inGameHotkey) {
@@ -1173,7 +1233,7 @@ if (!gotLock) {
               log.warn("Failed to trigger OBS In-Game", e);
             }
           }
-        } else if (!inGame && settings.obs.outOfGameHotkey) {
+        } else if (!gameStateProxy.inGame && settings.obs.outOfGameHotkey) {
           log.info("Triggering OBS Out of Game");
           let modifiers: Array<Key> = [];
           if (settings.obs.outOfGameHotkey.altKey) {
@@ -1197,10 +1257,10 @@ if (!gotLock) {
         }
       } else if (settings.obs.sceneSwitchType === "websockets") {
         if (obsSocket) {
-          if (inGame && settings.obs.inGameWSScene) {
+          if (gameStateProxy.inGame && settings.obs.inGameWSScene) {
             log.info("Triggering OBS In-Game");
             obsSocket.switchScene(settings.obs.inGameWSScene);
-          } else if (!inGame && settings.obs.outOfGameWSScene) {
+          } else if (!gameStateProxy.inGame && settings.obs.outOfGameWSScene) {
             log.info("Triggering OBS Out of Game");
             obsSocket.switchScene(settings.obs.outOfGameWSScene);
           }
@@ -1218,22 +1278,35 @@ if (!gotLock) {
   }
 
   async function handleWebUIMessage(message: string) {
-    let data = JSON.parse(message) as { messageType: string; data: any };
+    let data = JSON.parse(message) as { messageType: string; data: GameState | any };
     switch (data.messageType) {
       case "state":
-        if (data.data.menuState) {
-          setTimeout(() => {
-            handleGlueScreen(data.data.menuState);
-            gameState = data.data;
-          }, 250);
+        if (typeof data.data !== "string" && data.data.menuState) {
+          let newState: GameState = data.data as GameState;
+          if (newState.menuState) {
+            setTimeout(() => {
+              handleGlueScreen(newState.menuState);
+              Object.entries(newState).forEach(([key, value]) => {
+                // @ts-expect-error
+                gameStateProxy[key] = value;
+              });
+              commSend("gameState", newState);
+            }, 250);
+          } else {
+            Object.entries(newState).forEach(([key, value]) => {
+              // @ts-expect-error
+              gameStateProxy[key] = value;
+            });
+            commSend("gameState", newState);
+          }
         } else {
-          gameState = data.data;
+          log.warn("New state error: ", data.data);
         }
         break;
       case "sendMessage":
         if (data.data.message === "StopGameAdvertisements") {
           if (
-            gameState.menuState !== "LOADING_SCREEN" &&
+            gameStateProxy.menuState !== "LOADING_SCREEN" &&
             lobbyController.lobby?.lookupName
           ) {
             log.info("Re-hosting Stale Lobby");
@@ -1271,16 +1344,20 @@ if (!gotLock) {
     }
   }
 
-  async function autoHostGame() {
-    if (settings.autoHost.type !== "off") {
-      let targetRegion = gameState.selfRegion;
+  async function autoHostGame(override: boolean = false) {
+    if (settings.autoHost.type !== "off" && (!settings.client.commAddress || override)) {
+      let targetRegion = gameStateProxy.selfRegion;
       if (settings.autoHost.regionChange) {
         targetRegion = getTargetRegion(
           settings.autoHost.regionChangeTimeEU,
           settings.autoHost.regionChangeTimeNA
         );
       }
-      if (gameState.selfRegion && targetRegion && gameState.selfRegion !== targetRegion) {
+      if (
+        gameStateProxy.selfRegion &&
+        targetRegion &&
+        gameStateProxy.selfRegion !== targetRegion
+      ) {
         log.info(`Changing autohost region to ${targetRegion}`);
         await exitGame();
         openWarcraft(targetRegion);
@@ -1320,9 +1397,12 @@ if (!gotLock) {
     }
     if (
       !lobbyController.lobby?.lobbyStatic.lobbyName &&
-      !inGame &&
-      !["CUSTOM_GAME_LOBBY", "LOADING_SCREEN", "GAME_LOBBY"].includes(gameState.menuState)
+      !gameStateProxy.inGame &&
+      !["CUSTOM_GAME_LOBBY", "LOADING_SCREEN", "GAME_LOBBY"].includes(
+        gameStateProxy.menuState
+      )
     ) {
+      gameStateProxy.action = "creatingLobby";
       if ((callCount + 5) % 10 === 0) {
         if (settings.autoHost.increment) {
           if (callCount > 45) {
@@ -1391,7 +1471,7 @@ if (!gotLock) {
     if (
       !newScreen ||
       newScreen === "null" ||
-      (newScreen === gameState.menuState && newScreen !== "SCORE_SCREEN")
+      (newScreen === gameStateProxy.menuState && newScreen !== "SCORE_SCREEN")
     ) {
       return;
     }
@@ -1415,9 +1495,13 @@ if (!gotLock) {
           openWarcraft();
         }
       }
-    } else if (gameState.menuState === "LOADING_SCREEN" && newScreen === "SCORE_SCREEN") {
+    } else if (
+      gameStateProxy.menuState === "LOADING_SCREEN" &&
+      newScreen === "SCORE_SCREEN"
+    ) {
       log.info("Game has finished loading in.");
-      inGame = true;
+      gameStateProxy.inGame = true;
+      gameStateProxy.action = "waitingToLeaveGame";
       if (settings.autoHost.type === "smartHost") {
         log.info("Setting up smart host.");
         setTimeout(findQuit, 15000);
@@ -1467,7 +1551,8 @@ if (!gotLock) {
       }
     } else {
       triggerOBS();
-      inGame = false;
+      gameStateProxy.inGame = false;
+      gameStateProxy.action = "nothing";
       if (settings.elo.handleReplays) {
         let mostModified = { file: "", mtime: 0 };
         fs.readdirSync(replayFolders, { withFileTypes: true })
@@ -1523,8 +1608,8 @@ if (!gotLock) {
         }
       }
     }
-    gameState.menuState = newScreen;
-    sendWindow("menusChange", { value: gameState.menuState });
+    gameStateProxy.menuState = newScreen;
+    sendWindow("menusChange", { value: gameStateProxy.menuState });
   }
 
   function handleClientMessage(message: { data: string }) {
@@ -1560,7 +1645,7 @@ if (!gotLock) {
               autoHostGame();
               break;
             case "ScreenTransitionInfo":
-              gameState.screenState = data.payload.screen;
+              gameStateProxy.screenState = data.payload.screen;
               break;
             case "SetGlueScreen":
               if (data.payload.screen) {
@@ -1598,15 +1683,15 @@ if (!gotLock) {
               clearLobby();
               break;
             case "MultiplayerGameCreateResult":
-              if (gameState.menuState === "GAME_LOBBY") {
+              if (gameStateProxy.menuState === "GAME_LOBBY") {
                 setTimeout(() => {
                   handleGlueScreen("CUSTOM_LOBBIES");
                 }, 1000);
               }
               break;
             case "UpdateUserInfo":
-              gameState.selfBattleTag = data.payload.user.battleTag;
-              gameState.selfRegion = data.payload.user.userRegion;
+              gameStateProxy.selfBattleTag = data.payload.user.battleTag;
+              gameStateProxy.selfRegion = data.payload.user.userRegion;
               break;
             case "SetOverlayScreen":
               if (data.payload.screen === "AUTHENTICATION_OVERLAY") {
@@ -1709,17 +1794,17 @@ if (!gotLock) {
 
   function clearLobby() {
     // TODO: fix lobby close if game was started
-    if (refreshTimer) clearInterval(refreshTimer);
     sentMessages = [];
     if (
-      gameState.menuState !== "LOADING_SCREEN" &&
+      gameStateProxy.menuState !== "LOADING_SCREEN" &&
       lobbyController.lobby?.lobbyStatic.lobbyName
     ) {
       sendWindow("lobbyUpdate", { lobbyData: { leftLobby: true } });
-      sendToHub("lobbyUpdate", { leftLobby: true });
+      sendToHub("lobbyUpdate", { lobbyUpdates: { leftLobby: true } });
       discClient?.lobbyClosed();
+      gameStateProxy.action = "nothing";
+      lobbyController.clear();
     }
-    lobbyController.clear();
   }
 
   async function openParamsJoin() {
@@ -1731,15 +1816,16 @@ if (!gotLock) {
       log.info("Setting autoHost to off to join a lobby link.");
       updateSetting("autoHost", "type", "off");
       if (
-        (openLobbyParams.region && openLobbyParams.region !== gameState.selfRegion) ||
-        gameState.menuState === "LOADING_SCREEN"
+        (openLobbyParams.region &&
+          openLobbyParams.region !== gameStateProxy.selfRegion) ||
+        gameStateProxy.menuState === "LOADING_SCREEN"
       ) {
         log.info(`Changing region to match lobby of region ${openLobbyParams.region}`);
         await exitGame();
         openWarcraft(openLobbyParams.region);
         return;
       }
-      if (inGame || lobbyController.lobby?.lookupName) {
+      if (gameStateProxy.inGame || lobbyController.lobby?.lookupName) {
         leaveGame();
         return;
       }
@@ -1764,15 +1850,22 @@ if (!gotLock) {
     if (payload.message?.sender && payload.message.source === "gameChat") {
       if (payload.message.sender.includes("#")) {
         var sender = payload.message.sender;
-      } else if (gameState.selfBattleTag.toLowerCase().includes(payload.message.sender)) {
-        var sender = gameState.selfBattleTag;
+      } else if (
+        gameStateProxy.selfBattleTag.toLowerCase().includes(payload.message.sender)
+      ) {
+        var sender = gameStateProxy.selfBattleTag;
       } else {
-        log.error(
-          `Unknown sender: ${payload.message.sender} for message: ${payload.message.content}`
-        );
-        return;
+        let possiblePlayers = lobbyController.lobby?.searchPlayer(payload.message.sender);
+        if (possiblePlayers && possiblePlayers.length === 1) {
+          var sender = possiblePlayers[0];
+        } else {
+          log.error(
+            `Unknown sender: ${payload.message.sender} for message: ${payload.message.content}`
+          );
+          return;
+        }
       }
-      if (sender === gameState.selfBattleTag) {
+      if (sender === gameStateProxy.selfBattleTag) {
         if (sentMessages.includes(payload.message.content)) {
           sentMessages.splice(sentMessages.indexOf(payload.message.content), 1);
           return;
@@ -1797,7 +1890,7 @@ if (!gotLock) {
           return;
         }
         if (
-          sender !== gameState.selfBattleTag &&
+          sender !== gameStateProxy.selfBattleTag &&
           payload.message.content.match(/^!debug/)
         ) {
           lobbyController.banPlayer(sender);
@@ -2372,12 +2465,14 @@ if (!gotLock) {
 
         if (!settings.autoHost.private || !app.isPackaged) {
           sendToHub("lobbyUpdate", {
-            chatMessage: {
-              name: sender,
-              message:
-                payload.message.content +
-                ": " +
-                (translatedMessage ? translatedMessage : payload.message.content),
+            lobbyUpdates: {
+              chatMessage: {
+                name: sender,
+                message:
+                  payload.message.content +
+                  ": " +
+                  (translatedMessage ? translatedMessage : payload.message.content),
+              },
             },
           });
         }
@@ -2522,7 +2617,7 @@ if (!gotLock) {
 
   function checkRole(player: string, minPerms: "moderator" | "admin") {
     if (!player) return false;
-    if (player === gameState.selfBattleTag || player === "client") {
+    if (player === gameStateProxy.selfBattleTag || player === "client") {
       return true;
     }
     const targetRole = db
@@ -2558,7 +2653,7 @@ if (!gotLock) {
 
   function handleLobbyUpdate(payload: GameClientLobbyPayload) {
     if (payload.teamData.playableSlots > 1) {
-      lobbyController.ingestLobby(payload, gameState.selfRegion as Regions);
+      lobbyController.ingestLobby(payload, gameStateProxy.selfRegion as Regions);
     }
   }
 
@@ -2575,7 +2670,8 @@ if (!gotLock) {
     log.info("Leaving Game");
     sendMessage("LeaveGame", {});
     if (
-      (inGame || ["GAME_LOBBY", "CUSTOM_GAME_LOBBY"].includes(gameState.menuState)) &&
+      (gameStateProxy.inGame ||
+        ["GAME_LOBBY", "CUSTOM_GAME_LOBBY"].includes(gameStateProxy.menuState)) &&
       lobbyController.lobby?.lobbyStatic.lobbyName
     ) {
       let oldLobbyName = lobbyController.lobby.lobbyStatic.lobbyName;
@@ -2592,7 +2688,7 @@ if (!gotLock) {
     if (await isWarcraftOpen()) {
       if (callCount < 5) {
         return await forceQuitWar();
-      } else if (gameState.menuState === "LOADING_SCREEN") {
+      } else if (gameStateProxy.menuState === "LOADING_SCREEN") {
         log.info("Warcraft is loading game, forcing quit");
         return await forceQuitWar();
       } else {
@@ -2653,8 +2749,8 @@ if (!gotLock) {
 
   function announcement() {
     if (
-      (gameState.menuState === "CUSTOM_GAME_LOBBY" ||
-        gameState.menuState === "GAME_LOBBY") &&
+      (gameStateProxy.menuState === "CUSTOM_GAME_LOBBY" ||
+        gameStateProxy.menuState === "GAME_LOBBY") &&
       lobbyController.lobby?.lobbyStatic.isHost
     ) {
       let currentTime = Date.now();
@@ -2671,6 +2767,12 @@ if (!gotLock) {
               if (settings.elo.balanceTeams) {
                 text += " I will try to balance teams before we start.";
               }
+            }
+            if (
+              (settings.elo.type === "off" || !settings.elo.balanceTeams) &&
+              settings.autoHost.shufflePlayers
+            ) {
+              text += " I will shuffle players before we start.";
             }
             if (["smartHost", "rapidHost".includes(settings.autoHost.type)]) {
               text += " I will start when slots are full.";
@@ -2730,10 +2832,32 @@ if (!gotLock) {
     }
   }
 
+  async function smartQuit() {
+    if (gameStateProxy.inGame || gameStateProxy.menuState === "LOADING_SCREEN") {
+      let targetFile = `${app.getPath(
+        "documents"
+      )}\\Warcraft III\\CustomMapData\\wc3mt.txt`;
+      if (
+        fs.existsSync(targetFile) &&
+        fs
+          .readFileSync(targetFile)
+          .toString()
+          .match(/wc3mt-GameEnd/)
+      ) {
+        fs.rmSync(targetFile);
+        leaveGame();
+      } else {
+        findQuit();
+      }
+    }
+  }
+
   async function findQuit() {
-    if ((inGame || gameState.menuState === "LOADING_SCREEN") && webUISocket?.OPEN) {
-      await activeWindowWar();
-      if (warcraftInFocus) {
+    if (
+      (gameStateProxy.inGame || gameStateProxy.menuState === "LOADING_SCREEN") &&
+      webUISocket?.OPEN
+    ) {
+      if (await activeWindowWar()) {
         let foundTarget = false;
         let searchFiles = ["quitNormal.png", "quitHLW.png"];
         for (const file of searchFiles) {
@@ -2754,7 +2878,7 @@ if (!gotLock) {
             playSound("quit.wav");
           }
         } else if (
-          !lobbyController.lobby?.nonSpecPlayers.includes(gameState.selfBattleTag)
+          !lobbyController.lobby?.nonSpecPlayers.includes(gameStateProxy.selfBattleTag)
         ) {
           if (settings.autoHost.leaveAlternate) {
             foundTarget = false;
@@ -2798,7 +2922,7 @@ if (!gotLock) {
           }
         }
       }
-      setTimeout(findQuit, 5000);
+      setTimeout(smartQuit, 5000);
     }
   }
 
@@ -2865,8 +2989,8 @@ if (!gotLock) {
 
   function sendChatMessage(content: string) {
     if (
-      gameState.menuState === "GAME_LOBBY" ||
-      gameState.menuState === "CUSTOM_GAME_LOBBY"
+      gameStateProxy.menuState === "GAME_LOBBY" ||
+      gameStateProxy.menuState === "CUSTOM_GAME_LOBBY"
     ) {
       if (typeof content === "string" && content.length > 0) {
         let newChatSplit = content.match(/.{1,255}/g);
@@ -2885,9 +3009,10 @@ if (!gotLock) {
     }
   }
 
-  async function activeWindowWar() {
+  async function activeWindowWar(): Promise<Window | false> {
     const warcraftOpenCheck = await isWarcraftOpen();
     let height = 1080;
+    let activeWindow: Window | false = false;
     if (warcraftIsOpen && !warcraftOpenCheck) {
       warcraftIsOpen = warcraftOpenCheck;
       new Notification({
@@ -2897,7 +3022,7 @@ if (!gotLock) {
       height = await screen.height();
     } else {
       warcraftIsOpen = warcraftOpenCheck;
-      let activeWindow = await getActiveWindow();
+      activeWindow = await getActiveWindow();
       let title = await activeWindow.title;
       const focused = title === "Warcraft III";
       // Ensure that a notification is only sent the first time, if warcraft was focused before, but is no longer
@@ -2912,9 +3037,9 @@ if (!gotLock) {
         warcraftRegion = await activeWindow.region;
         height = warcraftRegion.height;
       }
-      return activeWindow;
     }
     setResourceDir(height);
+    return activeWindow;
   }
 
   async function isWarcraftOpen() {
@@ -2944,12 +3069,14 @@ if (!gotLock) {
     callCount = 0,
     focusAttempted = false
   ): Promise<boolean> {
+    gameStateProxy.action = "openingWarcraft";
     try {
       if (callCount > 60) {
         log.warn("Failed to open Warcraft after 60 attempts");
       }
       if (await isWarcraftOpen()) {
         log.info("Warcraft is now open");
+        gameStateProxy.action = "nothing";
         return true;
       }
       if (settings.client.alternateLaunch) {
@@ -2976,6 +3103,7 @@ if (!gotLock) {
         }
         if (title === "Blizzard Battle.net Login") {
           log.warn("A login is required to open Warcraft");
+          gameStateProxy.action = "nothing";
           return false;
         }
         if (title === "Battle.net") {
@@ -3011,6 +3139,7 @@ if (!gotLock) {
           return await openWarcraft(region, callCount + 1, true);
         } else {
           log.warn("Failed to focus Battle.net");
+          gameStateProxy.action = "nothing";
           return false;
         }
       }
@@ -3070,9 +3199,9 @@ if (!gotLock) {
           settings.autoHost.regionChangeTimeNA
         );
       }
-      let targetRegion = { asia: 1, eu: 2, us: 3, "": 0 }[region];
+      let targetRegion = { asia: 1, eu: 2, us: 3, usw: 3, "": 0 }[region];
       try {
-        if (targetRegion > 0 && gameState.selfRegion !== region) {
+        if (targetRegion && targetRegion > 0 && gameStateProxy.selfRegion !== region) {
           log.info(`Changing region to ${region}`);
           let changeRegionPosition = await screen.waitFor(
             imageResource("changeRegion.png"),
@@ -3108,6 +3237,7 @@ if (!gotLock) {
         for (let i = 0; i < 10; i++) {
           if (await isWarcraftOpen()) {
             log.info("Warcraft is now open.");
+            gameStateProxy.action = "nothing";
             return true;
           }
           await sleep(100);
@@ -3118,9 +3248,11 @@ if (!gotLock) {
         return await openWarcraft(region, callCount + 15);
       }
       log.warn("Failed to open Warcraft.");
+      gameStateProxy.action = "nothing";
       return false;
     } catch (e) {
       log.warn(e);
+      gameStateProxy.action = "nothing";
       return false;
     }
   }
@@ -3158,11 +3290,11 @@ if (!gotLock) {
     }
     await activeWindowWar();
     try {
-      if (inGame && warcraftInFocus) {
+      if (gameStateProxy.inGame && warcraftInFocus) {
         sendingInGameChat.active = true;
         let nextMessage = sendingInGameChat.queue.shift();
         while (nextMessage) {
-          if (inGame && warcraftInFocus) {
+          if (gameStateProxy.inGame && warcraftInFocus) {
             log.info("Sending chat: " + nextMessage);
             clipboard.writeText(nextMessage);
             await mouse.leftClick();
@@ -3173,7 +3305,7 @@ if (!gotLock) {
           } else {
             log.info(
               "Forced to stop sending messages. In Game: " +
-                inGame +
+                gameStateProxy.inGame +
                 " Warcraft in focus: " +
                 warcraftInFocus
             );
@@ -3203,14 +3335,17 @@ if (!gotLock) {
     }
   }
 
-  function commSend(messageType: string, payload?: string | Object) {
+  function commSend(
+    messageType: HubReceive["messageType"] | WindowReceive["messageType"] | "gameState",
+    data?: string | Object
+  ) {
     if (settings.client.commAddress) {
       if (commSocket) {
         if (commSocket.readyState === commSocket.OPEN) {
-          commSocket.send(JSON.stringify({ messageType, payload }));
+          commSocket.send(JSON.stringify({ messageType, data }));
         } else if (commSocket.readyState === commSocket.CONNECTING) {
           setTimeout(() => {
-            commSend(messageType, payload);
+            commSend(messageType, data);
           }, 250);
         }
       } else {
@@ -3221,20 +3356,26 @@ if (!gotLock) {
 
   function commSetup() {
     if (settings.client.commAddress && isValidUrl(settings.client.commAddress)) {
-      log.info("Connecting to comm socket: " + settings.client.commAddress);
+      log.info(
+        "Connecting to comm socket: " + settings.client.commAddress + "/" + identifier
+      );
       if (commSocket) {
         log.info("Comm socket already connected. Disconnecting old socket.");
         commSocket.close();
         commSocket = null;
       }
-      commSocket = new WebSocket(settings.client.commAddress);
+      commSocket = new WebSocket(settings.client.commAddress + "/" + identifier);
       commSocket.on("open", () => {
         log.info("Connected to comm");
-        commSend("settings", settings);
+        commSend("settings", { settings });
+        commSend("gameState", { gameState: gameState });
       });
       commSocket.on("close", () => {
         log.info("Disconnected from comm");
         commSocket = null;
+        setTimeout(() => {
+          commSetup();
+        }, 1000);
       });
       commSocket.on("error", (error) => {
         log.warn("Error in comm: " + error);
@@ -3363,10 +3504,14 @@ if (!gotLock) {
           });
         break;
       case "updateSettingSingle":
-        let update = args.data?.update;
+        let update = args.update;
         if (update) {
           updateSetting(update.setting, update.key, update.value);
         }
+        break;
+      case "autoHostLobby":
+        log.info("Comm AutoHost lobby");
+        autoHostGame(true);
         break;
       default:
         log.info("Unknown client command:", args);
