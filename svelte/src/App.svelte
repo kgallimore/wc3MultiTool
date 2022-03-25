@@ -174,6 +174,11 @@
           settings.elo.balanceTeams ? "I will try to balance teams before we start." : ""
         }`
       : ""
+  }${
+    (settings.elo.type === "off" || !settings.elo.balanceTeams) &&
+    settings.autoHost.shufflePlayers
+      ? "I will shuffle players before we start."
+      : ""
   } ${
     ["smartHost", "rapidHost"].includes(settings.autoHost.type)
       ? "I will start when slots are full."
@@ -280,7 +285,7 @@
         }
         break;
       case "menusChange":
-        currentStatus.menu = newData.value ?? "Out of Menus";
+        currentStatus.menu = newData.value ?? "OUT_OF_MENUS";
         break;
       case "error":
         let alertDiv = document.createElement("div");
@@ -341,12 +346,10 @@
       if (key) {
         toMain({
           messageType: "updateSettingSingle",
-          data: {
-            update: {
-              setting: "obs",
-              key: key as SettingsKeys,
-              value: newValue,
-            },
+          update: {
+            setting: "obs",
+            key: key as SettingsKeys,
+            value: newValue,
           },
         });
       }
@@ -374,12 +377,10 @@
     if (settings[setting][key] !== value || key === "closeSlots") {
       toMain({
         messageType: "updateSettingSingle",
-        data: {
-          update: {
-            setting: setting,
-            key,
-            value: value,
-          },
+        update: {
+          setting: setting,
+          key,
+          value: value,
         },
       });
     }
@@ -923,7 +924,7 @@
                         role="group"
                       >
                         <SettingsCheckbox
-                          key="increment"
+                          key="private"
                           setting="autoHost"
                           frontFacingName="Private Lobbies"
                           checked={settings.autoHost.private}
