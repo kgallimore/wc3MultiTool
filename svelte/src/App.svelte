@@ -1,14 +1,15 @@
 <script lang="ts">
-  import type {
+  import {
     AppSettings,
     BanWhiteList,
     SettingsKeys,
     WindowReceive,
     WindowSend,
+    isValidUrl,
   } from "../../tsrc/utility";
   import { onMount } from "svelte";
   import { getTargetRegion } from "../../tsrc/utility";
-  import { MicroLobby } from "../../tsrc/microLobby";
+  import { MicroLobby, PlayerData } from "wc3mt-lobby-container";
   import CloseSlot from "./components/CloseSlot.svelte";
   import SettingsCheckbox from "./components/SettingsCheckbox.svelte";
   let settings: AppSettings = {
@@ -32,7 +33,7 @@
       voteStartTeamFill: true,
       closeSlots: [],
       customAnnouncement: "",
-      observers: false,
+      observers: "0",
       advancedMapOptions: false,
       flagLockTeams: true,
       flagPlaceTeamsTogether: true,
@@ -41,11 +42,13 @@
       flagRandomHero: false,
       settingVisibility: "0",
       leaveAlternate: false,
+      shufflePlayers: false,
       regionChange: false,
       regionChangeTimeEU: "11:00",
       regionChangeTimeNA: "01:00",
       whitelist: false,
       minPlayers: 0,
+      delayStart: 0,
     },
     obs: {
       enabled: false,
@@ -65,6 +68,7 @@
       announce: true,
       excludeHostFromSwap: true,
       lookupName: "",
+      privateKey: "",
       available: false,
       wc3StatsVariant: "",
       handleReplays: true,
@@ -155,14 +159,26 @@
       ("0" + new Date().getUTCMinutes().toString()).slice(-2);
   }, 60000);
 
-  let structuredTeamData = currentStatus.lobby
-    ? Object.entries(currentStatus.lobby.exportTeamStructure(false))
-    : [];
+  let structuredTeamData: [
+    string,
+    {
+      name: string;
+      slotStatus: 0 | 2 | 1;
+      slot: number;
+      realPlayer: boolean;
+      data: PlayerData;
+    }[]
+  ][] = [];
   $: botAnnouncement = `Welcome. I am a bot. ${
     settings.elo.available && settings.elo.type !== "off"
       ? `I will fetch ELO from ${settings.elo.type}. ${
           settings.elo.balanceTeams ? "I will try to balance teams before we start." : ""
         }`
+      : ""
+  }${
+    (settings.elo.type === "off" || !settings.elo.balanceTeams) &&
+    settings.autoHost.shufflePlayers
+      ? "I will shuffle players before we start."
       : ""
   } ${
     ["smartHost", "rapidHost"].includes(settings.autoHost.type)
@@ -192,6 +208,15 @@
       return data.body.variants[0].stats;
     }
     return [];
+  }
+
+  function updatestructuredTeamData() {
+    let exported = currentStatus.lobby.exportTeamStructure(false);
+    if (exported) {
+      structuredTeamData = Object.entries(exported);
+    } else {
+      structuredTeamData = [];
+    }
   }
 
   function init() {
@@ -238,16 +263,15 @@
       case "lobbyUpdate":
         let lobbyData = newData.lobbyData;
         if (lobbyData.newLobby) {
-          currentStatus.lobby = new MicroLobby(lobbyData.newLobby);
-          structuredTeamData = Object.entries(
-            currentStatus.lobby.exportTeamStructure(false)
-          );
+          currentStatus.lobby = new MicroLobby({
+            region: "us",
+            fullData: lobbyData.newLobby,
+          });
+          updatestructuredTeamData();
         } else if (lobbyData.playerPayload || lobbyData.playerData) {
           if (currentStatus.lobby) {
-            currentStatus.lobby.ingestUpdate(lobbyData);
-            structuredTeamData = Object.entries(
-              currentStatus.lobby.exportTeamStructure(false)
-            );
+            let updated = currentStatus.lobby.ingestUpdate(lobbyData).isUpdated;
+            if (updated) updatestructuredTeamData();
           }
         } else if (lobbyData.leftLobby) {
           currentStatus.lobby = null;
@@ -262,7 +286,7 @@
         }
         break;
       case "menusChange":
-        currentStatus.menu = newData.value ?? "Out of Menus";
+        currentStatus.menu = newData.value ?? "OUT_OF_MENUS";
         break;
       case "error":
         let alertDiv = document.createElement("div");
@@ -290,7 +314,7 @@
         console.log("Unknown:", data);
     }
   });
-  function generateHotkeys(e: KeyboardEvent) {
+  function generateHotkeys(e: KeyboardEvent, key: string) {
     e.preventDefault();
     let newValue:
       | { key: string; shiftKey: boolean; ctrlKey: boolean; altKey: boolean }
@@ -319,19 +343,14 @@
       (e.target as HTMLInputElement).value = "";
     }
     if (newValue) {
-      let key = (e.target as HTMLElement).getAttribute("data-key");
-      if (key) {
-        toMain({
-          messageType: "updateSettingSingle",
-          data: {
-            update: {
-              setting: "obs",
-              key: key as SettingsKeys,
-              value: newValue,
-            },
-          },
-        });
-      }
+      toMain({
+        messageType: "updateSettingSingle",
+        update: {
+          setting: "obs",
+          key: key as SettingsKeys,
+          value: newValue,
+        },
+      });
     }
   }
 
@@ -356,12 +375,10 @@
     if (settings[setting][key] !== value || key === "closeSlots") {
       toMain({
         messageType: "updateSettingSingle",
-        data: {
-          update: {
-            setting: setting,
-            key,
-            value: value,
-          },
+        update: {
+          setting: setting,
+          key,
+          value: value,
         },
       });
     }
@@ -511,19 +528,26 @@
               </div>
               <div class="row">
                 <div class="col">
-                  <label for="commAddress">Comm Address</label>
+                  <label for="commAddress">Comm Address (For Adv Users)</label>
                   <input
-                    type="text"
+                    type="url"
                     class="form-control"
                     id="commAddress"
                     placeholder="WebSocket Address"
                     value={settings.client.commAddress}
-                    on:change={(e) =>
-                      updateSettingSingle(
-                        "client",
-                        "commAddress", // @ts-ignore
-                        e.target.value
-                      )}
+                    on:change={(e) => {
+                      // @ts-ignore
+                      let value = e.target.value;
+                      if (isValidUrl(value) || value === "") {
+                        updateSettingSingle(
+                          "client",
+                          "commAddress", // @ts-ignore
+                          value
+                        );
+                      } else {
+                        alert("Invalid Comm URL");
+                      }
+                    }}
                   />
                 </div>
               </div>
@@ -620,8 +644,6 @@
                   <select
                     id="eloLookup"
                     class="form-select"
-                    data-key="type"
-                    data-setting="elo"
                     value={settings.elo.type}
                     on:change={(e) =>
                       // @ts-ignore
@@ -687,6 +709,26 @@
                               {/await}
                             </select>
                           </div>
+                          {#if settings.elo.handleReplays}
+                            <div class="row">
+                              <div class="col">
+                                <label for="eloPrivateKey">Private Key</label>
+                                <input
+                                  type="text"
+                                  class="form-control"
+                                  id="eloPrivateKey"
+                                  placeholder="Optional"
+                                  value={settings.elo.privateKey}
+                                  on:change={(e) =>
+                                    updateSettingSingle(
+                                      "elo",
+                                      "privateKey", // @ts-ignore
+                                      e.target.value
+                                    )}
+                                />
+                              </div>
+                            </div>
+                          {/if}
                         {/if}
                       {/if}
 
@@ -854,7 +896,8 @@
                       game after specified timer(minutes). (-1 will force quit at loading
                       screen)<br />
                       <strong>Smart Host:</strong> Hosts lobbies, auto starts, quits the
-                      game if this end screen pops up:
+                      game if you use the wc3mt lib (see discord), with a fallback to
+                      attempting to see if this screen opens(OCR, unreliable):
                       <img class="img-fluid" src="quitNormal.png" alt="Quit Normal" />
                       Intrusive Check will check the chat menu to see if anyone else is left.
                     </details>
@@ -862,8 +905,6 @@
                   <select
                     id="autoHostState"
                     class="form-select"
-                    data-key="type"
-                    data-setting="autoHost"
                     value={settings.autoHost.type}
                     on:change={(e) =>
                       updateSettingSingle(
@@ -898,7 +939,7 @@
                         role="group"
                       >
                         <SettingsCheckbox
-                          key="increment"
+                          key="private"
                           setting="autoHost"
                           frontFacingName="Private Lobbies"
                           checked={settings.autoHost.private}
@@ -954,20 +995,6 @@
                             )}
                         />
                         <SettingsCheckbox
-                          frontFacingName="Create Observer Slots"
-                          key="observers"
-                          setting="autoHost"
-                          checked={settings.autoHost.observers}
-                          tooltip="Will create observer (referee) slots."
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "autoHost",
-                              "observers",
-                              // @ts-ignore
-                              e.target.checked
-                            )}
-                        />
-                        <SettingsCheckbox
                           frontFacingName="Custom Announcement"
                           key="announceCustom"
                           setting="autoHost"
@@ -1010,6 +1037,22 @@
                                 e.target.checked
                               )}
                           />
+                          {#if settings.elo.type === "off" || !settings.elo.balanceTeams}
+                            <SettingsCheckbox
+                              frontFacingName="Shuffle Players"
+                              key="shufflePlayers"
+                              setting="autoHost"
+                              checked={settings.autoHost.shufflePlayers}
+                              tooltip="Shuffles players randomly before starting."
+                              on:change={(e) =>
+                                updateSettingSingle(
+                                  "autoHost",
+                                  "shufflePlayers",
+                                  // @ts-ignore
+                                  e.target.checked
+                                )}
+                            />
+                          {/if}
                           {#if settings.autoHost.voteStart}
                             <SettingsCheckbox
                               frontFacingName="Require All Teams for Votestart"
@@ -1149,13 +1192,29 @@
                                 e.target.checked
                               )}
                           />
+                          <label for="observerType">Add observers:</label>
+                          <select
+                            class="form-control form-control-sm"
+                            id="observerType"
+                            value={settings.autoHost.observers}
+                            on:change={(e) =>
+                              updateSettingSingle(
+                                "autoHost",
+                                "observers",
+                                // @ts-ignore
+                                e.target.value
+                              )}
+                          >
+                            <option value="0">None</option>
+                            <option value="1">Obs on defeat</option>
+                            <option value="2">Referees(Recommended)</option>
+                            <option value="3">Observers</option>
+                          </select>
                         </div>
                         <label for="autoHostsettingVisibility">Visibility:</label>
                         <select
                           class="form-control form-control-sm"
                           id="autoHostsettingVisibility"
-                          data-key="map"
-                          data-setting="autoHost"
                           value={settings.autoHost.settingVisibility}
                           on:change={(e) =>
                             updateSettingSingle(
@@ -1216,8 +1275,27 @@
                       />
                     </div>
                   </div>
-                  {#if ["rapidHost", "smartHost"].includes(settings.autoHost.type)}
-                    <div class="row p-2">
+
+                  <div class="row p-2">
+                    <div class="col">
+                      <label for="delayStart">Delay Start</label>
+                      <input
+                        type="number"
+                        class="form-control"
+                        id="delayStart"
+                        placeholder="Seconds to delay"
+                        min="0"
+                        max="30"
+                        value={settings.autoHost.delayStart}
+                        on:change={(e) =>
+                          updateSettingSingle(
+                            "autoHost",
+                            "delayStart", // @ts-ignore
+                            parseInt(e.target.value)
+                          )}
+                      />
+                    </div>
+                    {#if ["rapidHost", "smartHost"].includes(settings.autoHost.type)}
                       <div class="col">
                         <label for="minPlayers">Minimum Players to Start</label>
                         <input
@@ -1225,6 +1303,8 @@
                           class="form-control"
                           id="minPlayers"
                           placeholder="0 to disable"
+                          min="0"
+                          max="24"
                           value={settings.autoHost.minPlayers}
                           on:change={(e) =>
                             updateSettingSingle(
@@ -1234,8 +1314,8 @@
                             )}
                         />
                       </div>
-                    </div>
-                  {/if}
+                    {/if}
+                  </div>
                   {#if settings.autoHost.moveToSpec}
                     <div class="row p-2">
                       <div class="col">
@@ -1319,8 +1399,6 @@
                           type="number"
                           id="voteStartPercent"
                           class="form-control"
-                          data-key="voteStartPercent"
-                          data-setting="autoHost"
                           min="5"
                           max="100"
                           value={settings.autoHost.voteStartPercent}
@@ -1329,7 +1407,7 @@
                               "autoHost",
                               "voteStartPercent",
                               // @ts-ignore
-                              parseInt(e.target.value)
+                              Math.min(Math.max(parseInt(e.target.value), 5), 100)
                             )}
                         />
                       </div>
@@ -1343,8 +1421,6 @@
                           type="number"
                           id="rapidHostTimer"
                           class="form-control"
-                          data-key="rapidHostTimer"
-                          data-setting="autoHost"
                           min="-1"
                           max="360"
                           value={settings.autoHost.rapidHostTimer}
@@ -1353,7 +1429,7 @@
                               "autoHost",
                               "rapidHostTimer",
                               // @ts-ignore
-                              parseInt(e.target.value)
+                              Math.min(Math.max(parseInt(e.target.value), -1), 360)
                             )}
                         />
                       </div>
@@ -1382,8 +1458,6 @@
                           type="text"
                           id="customAnnouncement"
                           class="form-control"
-                          data-key="customAnnouncement"
-                          data-setting="autoHost"
                           maxlength="120"
                           placeholder="120 Character Max"
                           value={settings.autoHost.customAnnouncement}
@@ -1408,8 +1482,6 @@
                           type="number"
                           id="announceRestingInterval"
                           class="form-control"
-                          data-key="announceRestingInterval"
-                          data-setting="autoHost"
                           min="0"
                           max="600"
                           value={settings.autoHost.announceRestingInterval}
@@ -1440,8 +1512,6 @@
                           type="time"
                           id="regionChangeTimeNA"
                           class="form-control"
-                          data-key="regionChangeTimeNA"
-                          data-setting="autoHost"
                           value={settings.autoHost.regionChangeTimeNA}
                           on:change={(e) =>
                             updateSettingSingle(
@@ -1460,8 +1530,6 @@
                           type="time"
                           id="regionChangeTimeEU"
                           class="form-control"
-                          data-key="regionChangeTimeEU"
-                          data-setting="autoHost"
                           value={settings.autoHost.regionChangeTimeEU}
                           on:change={(e) =>
                             updateSettingSingle(
@@ -1510,8 +1578,6 @@
                           class="form-control"
                           id="discordToken"
                           placeholder="Token"
-                          data-key="token"
-                          data-setting="discord"
                           value={settings.discord.token}
                           on:change={(e) =>
                             updateSettingSingle(
@@ -1530,8 +1596,6 @@
                           class="form-control"
                           id="discordAnnounceChannel"
                           placeholder="Name or ID"
-                          data-key="announceChannel"
-                          data-setting="discord"
                           value={settings.discord.announceChannel}
                           on:change={(e) =>
                             updateSettingSingle(
@@ -1550,8 +1614,6 @@
                           class="form-control"
                           id="discordChatChannel"
                           placeholder="Name or ID"
-                          data-key="chatChannel"
-                          data-setting="discord"
                           value={settings.discord.chatChannel}
                           on:change={(e) =>
                             updateSettingSingle(
@@ -1702,9 +1764,7 @@
                             class="form-control"
                             id="inGameHotkey"
                             placeholder="In game hotkey"
-                            data-key="inGameHotkey"
-                            data-setting="obs"
-                            on:keydown={generateHotkeys}
+                            on:keydown={(event) => generateHotkeys(event, "inGameHotkey")}
                             value={settings.obs.inGameHotkey
                               ? (settings.obs.inGameHotkey.shiftKey ? "Shift + " : "") +
                                 (settings.obs.inGameHotkey.ctrlKey ? "Ctrl + " : "") +
@@ -1722,9 +1782,7 @@
                             class="form-control"
                             id="outOfGameHotkey"
                             placeholder="Out of game hotkey"
-                            data-key="outOfGameHotkey"
-                            data-setting="obs"
-                            on:keydown={generateHotkeys}
+                            on:keydown={(e) => generateHotkeys(e, "outOfGameHotkey")}
                             value={settings.obs.outOfGameHotkey
                               ? (settings.obs.outOfGameHotkey.shiftKey
                                   ? "Shift + "
@@ -2095,7 +2153,6 @@
           <li>
             Intrusive check may fail due to an issue with WC3 not updating chat info
           </li>
-          <li>If ELO is enabled lobby may fail to start</li>
           <li>Can get stuck on loading screen if WC gets stuck loading</li>
           <li>Updating discord options can require a program restart</li>
           <li>Anti crash may fail</li>
@@ -2107,18 +2164,21 @@
         <summary>Updates this version (click to expand)</summary>
         <strong>New:</strong>
         <ul>
-          <li>Whitelist option</li>
-          <li>Minimum stat requirement options (games/wins/loss/rank/rating)</li>
-          <li>Removed UI element</li>
-          <li>Send translated chat to lobby</li>
-          <li>Auto start at number of players</li>
-          <li>View ban list and white list in UI</li>
+          <li>
+            New option for smart host to watch for files to leave, bypassing ocr
+            requirements. Check out the discord
+          </li>
+          <li>Filter out !debug messages from sending to discord/hub</li>
+          <li>Private key for wc3stats uploads</li>
+          <li>Choose observer type</li>
+          <li>Swapper role</li>
         </ul>
         <strong>Fixes:</strong>
         <ul>
-          <li>Language detect failing</li>
-          <li>Comm socket not connecting</li>
-          <li>Wc3stats variant needing a restart to take effect</li>
+          <li>Fixes to lobby container</li>
+          <li>Announce player shuffle</li>
+          <li>Fixed issue where sometimes senders wouldn't be recognized</li>
+          <li>Fix double start issue</li>
         </ul>
       </details>
     </div>
@@ -2333,9 +2393,11 @@
             ?white (name) (?reason): WhiteLists a player<br />
             ?start: Starts game<br />
             ?swap (name|slotNumber) (name|slotNumber): Swaps two players<br />
+            ?sp: Shuffles players completely randomly ?st: Shuffles players randomly between
+            teams<br />
             <strong>Admin:</strong><br />
-            ?perm (name) (?admin|mod): Promotes a player to admin or moderator (mod by default).<br
-            />
+            ?perm (name) (?admin|mod|swapper): Promotes a player to a specified role (mod by
+            default).<br />
             ?unperm (name): Demotes player to normal<br />
             ?autohost (?off|rapid|lobby|smart): Gets/?Sets autohost type
           </details>
@@ -2358,7 +2420,7 @@
             <td id="mapName">{currentStatus.lobby.lobbyStatic.mapData.mapName}</td>
             <td id="lobbyName">{currentStatus.lobby.lobbyStatic.lobbyName}</td>
             <td id="gameHost">{currentStatus.lobby.lobbyStatic.playerHost}</td>
-            <td id="eloAvailable">{currentStatus.lobby.eloAvailable}</td>
+            <td id="eloAvailable">{currentStatus.lobby.statsAvailable}</td>
           {:else}
             <td id="mapName" />
             <td id="lobbyName" />
@@ -2375,6 +2437,7 @@
           <table class="table table-hover table-striped table-sm">
             <thead>
               <tr>
+                <th>Actions</th>
                 <th>{teamName} Players</th>
                 <th>ELO/Rank/Games/Wins/Losses</th>
               </tr>
@@ -2392,16 +2455,26 @@
                             ban: { player: player.name, reason: banReason },
                           })}>Ban</button
                       >
-                    {/if}{player.name}
+                    {/if}</td
+                  >
+                  <td>
+                    {player.name}<br />
+                    {player.data.joinedAt
+                      ? new Date(player.data.joinedAt).toLocaleString(undefined, {
+                          timeZone: "UTC",
+                          minute: "2-digit",
+                          hour: "2-digit",
+                        })
+                      : ""}
                   </td>
                   <td
-                    >{player.rating > -1
+                    >{player.data.extra && player.data.extra.rating > -1
                       ? [
-                          player.rating,
-                          player.rank,
-                          player.played,
-                          player.wins,
-                          player.losses,
+                          player.data.extra.rating,
+                          player.data.extra.rank,
+                          player.data.extra.played,
+                          player.data.extra.wins,
+                          player.data.extra.losses,
                         ].join(" / ")
                       : "N/A"}</td
                   >

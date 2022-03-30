@@ -1,6 +1,7 @@
 import Discord from "discord.js";
 import EventEmitter from "events";
-import type { MicroLobbyData, mmdResults, PlayerTeamsData } from "./utility";
+import type { mmdResults } from "./utility";
+import type { PlayerTeamsData, MicroLobbyData } from "wc3mt-lobby-container";
 import { DeColorName } from "./utility";
 export class DisClient extends EventEmitter {
   client: Discord.Client;
@@ -139,9 +140,16 @@ export class DisClient extends EventEmitter {
       let combinedData = data.map(
         (data) =>
           data.name +
-          (data.rating > -1
-            ? ": " + [data.rating, data.rank, data.wins, data.losses].join("/")
-            : "")
+          (data.data.extra && data.data.extra.rating > -1
+            ? ": " +
+              [
+                data.data.extra.rating,
+                data.data.extra.rank,
+                data.data.extra.wins,
+                data.data.extra.losses,
+              ].join("/")
+            : "") +
+          (data.realPlayer ? `\n<t:${Math.floor(data.data.joinedAt / 1000)}:R>` : "")
       );
       this.#embed?.addFields([{ name: teamName, value: combinedData.join("\n") ?? "" }]);
     });
@@ -257,15 +265,16 @@ export class DisClient extends EventEmitter {
           let combinedData = data.map(
             (data) =>
               data.name +
-              (data.rating > -1
+              (data.data.extra && data.data.extra.rating > -1
                 ? ": " +
                   [
-                    "Rating: " + data.rating,
-                    "Rank: " + data.rank,
-                    "Wins: " + data.wins,
-                    "Losses: " + data.losses,
+                    "Rating: " + data.data.extra.rating,
+                    "Rank: " + data.data.extra.rank,
+                    "Wins: " + data.data.extra.wins,
+                    "Losses: " + data.data.extra.losses,
                   ].join("/")
-                : "")
+                : "") +
+              (data.realPlayer ? `\n<t:${Math.floor(data.data.joinedAt / 1000)}:R>` : "")
           );
           newEmbed.addFields([{ name: teamName, value: combinedData.join("\n") ?? "" }]);
         });

@@ -1,3 +1,5 @@
+import type { LobbyUpdates, Regions, MicroLobbyData } from "wc3mt-lobby-container";
+
 export interface AppSettings {
   autoHost: AutoHostSettings;
   obs: ObsSettings;
@@ -48,7 +50,7 @@ export interface AutoHostSettings {
   voteStartTeamFill: boolean;
   closeSlots: Array<number>;
   customAnnouncement: string;
-  observers: boolean;
+  observers: "0" | "1" | "2" | "3";
   advancedMapOptions: boolean;
   flagLockTeams: boolean;
   flagPlaceTeamsTogether: boolean;
@@ -60,8 +62,10 @@ export interface AutoHostSettings {
   regionChange: boolean;
   regionChangeTimeEU: string;
   regionChangeTimeNA: string;
+  shufflePlayers: boolean;
   whitelist: boolean;
   minPlayers: number;
+  delayStart: number;
 }
 export interface ObsSettings {
   enabled: boolean;
@@ -102,6 +106,7 @@ export interface EloSettings {
   announce: boolean;
   excludeHostFromSwap: boolean;
   lookupName: string;
+  privateKey: string;
   available: boolean;
   wc3StatsVariant: string;
   handleReplays: boolean;
@@ -157,6 +162,36 @@ export interface BanWhiteList {
   region: string;
   reason: string;
 }
+
+export interface ClientCommands {
+  action:
+    | "openLogs"
+    | "openWar"
+    | "closeWar"
+    | "updateSettingSingle"
+    | "init"
+    | "banPlayer"
+    | "unbanPlayer"
+    | "whitePlayer"
+    | "unwhitePlayer"
+    | "changePerm";
+  data?: {
+    settings?: { setting: keyof AppSettings; key: SettingsKeys; value: any };
+    ban?: {
+      player: string;
+      reason?: string;
+    };
+    white?: {
+      player: string;
+      reason?: string;
+    };
+    perm?: {
+      player: string;
+      role: "admin" | "moderator" | "";
+    };
+  };
+}
+
 export interface WindowSend {
   messageType:
     | "openLogs"
@@ -170,10 +205,13 @@ export interface WindowSend {
     | "unwhitePlayer"
     | "changePerm"
     | "fetchBanList"
-    | "fetchWhiteList";
-  data?: {
-    update?: { setting: keyof AppSettings; key: SettingsKeys; value: any };
-  };
+    | "fetchWhiteList"
+    | "createLobby"
+    | "autoHostLobby"
+    | "joinLobby"
+    | "leaveLobby"
+    | "startLobby";
+  update?: { setting: keyof AppSettings; key: SettingsKeys; value: any };
   ban?: {
     player: string;
     reason?: string;
@@ -187,141 +225,12 @@ export interface WindowSend {
     player: string;
     role: "admin" | "moderator" | "";
   };
+  lobbyOptions?: {};
 }
 
-export type TeamTypes = "otherTeams" | "specTeams" | "playerTeams";
 export interface TeamData {
   data: { [key: string]: number };
   lookup: { [key: number]: string };
-}
-
-export interface PlayerData {
-  slot: number;
-  played: number;
-  wins: number;
-  losses: number;
-  rating: number;
-  lastChange: number;
-  rank: number;
-}
-export interface PlayerPayload {
-  // 0 = open, 1 = closed, 2 = filled
-  slotStatus: 0 | 1 | 2;
-  slot:
-    | 0
-    | 1
-    | 2
-    | 3
-    | 4
-    | 5
-    | 6
-    | 7
-    | 8
-    | 9
-    | 10
-    | 11
-    | 12
-    | 13
-    | 14
-    | 15
-    | 16
-    | 17
-    | 18
-    | 19
-    | 20
-    | 21
-    | 22
-    | 23;
-  team: number;
-  //What are slot types?
-  // 0 = useable, 1 = managed?
-  slotType: number | 0 | 1;
-  isObserver: boolean;
-  isSelf: boolean;
-  slotTypeChangeEnabled: boolean;
-  // always 255?
-  id: number;
-  name: string | "Computer (Easy)" | "Computer (Normal)" | "Computer (Insane)";
-  //Regions tbd, usw might replace us
-  playerRegion: Regions | "usw" | "";
-  //what are gateways?
-  playerGateway: number | -1;
-  color:
-    | 0
-    | 1
-    | 2
-    | 3
-    | 4
-    | 5
-    | 6
-    | 7
-    | 8
-    | 9
-    | 10
-    | 11
-    | 12
-    | 13
-    | 14
-    | 15
-    | 16
-    | 17
-    | 18
-    | 19
-    | 20
-    | 21
-    | 22
-    | 23;
-  colorChangeEnabled: boolean;
-  teamChangeEnabled: boolean;
-  race: 0 | 1 | 2 | 3 | 4;
-  raceChangeEnabled: boolean;
-  handicap: number;
-  handicapChangeEnabled: boolean;
-}
-export type Regions = "us" | "eu";
-export interface GameClientLobbyPayloadStatic {
-  isHost: boolean;
-  playerHost: string;
-  maxTeams: number;
-  isCustomForces: boolean;
-  isCustomPlayers: boolean;
-  mapData: {
-    mapSize: string | "Extra Small";
-    mapSpeed: string | "Fast";
-    mapName: string;
-    mapPath: string;
-    mapAuthor: string;
-    description: string;
-    suggested_players: string;
-  };
-  lobbyName: string;
-  mapFlags: {
-    flagLockTeams: boolean;
-    flagPlaceTeamsTogether: boolean;
-    flagFullSharedUnitControl: boolean;
-    flagRandomRaces: boolean;
-    flagRandomHero: boolean;
-    settingObservers:
-      | "No Observers"
-      | "Observers on Defeat"
-      | "Referees"
-      | "Full Observers";
-    typeObservers: 0 | 1 | 2 | 3;
-    settingVisibility: "Default" | "Hide Terrain" | "Map Explored" | "Always Visible";
-    typeVisibility: 0 | 1 | 2 | 3;
-  };
-}
-export interface GameClientLobbyPayload extends GameClientLobbyPayloadStatic {
-  teamData: {
-    teams: Array<{ name: string; team: number; filledSlots: number; totalSlots: number }>;
-    playableSlots: number;
-    filledPlayableSlots: number;
-    observerSlotsRemaining: number;
-  };
-  availableTeamColors: {
-    [key: string]: Array<number>;
-  };
-  players: Array<PlayerPayload>;
 }
 export interface GameClientMessage {
   messageType: "ScreenTransitionInfo" | "SetGlueScreen";
@@ -338,55 +247,9 @@ export interface mmdResults {
   lookup: { [key: string]: string };
 }
 
-export interface LobbyUpdates {
-  lobbyReady?: true;
-  leftLobby?: true;
-  newLobby?: MicroLobbyData;
-  slotOpened?: number;
-  slotClosed?: number;
-  stale?: true;
-  playerMoved?: { from: number; to: number };
-  playerLeft?: string;
-  playerJoined?: PlayerPayload;
-  playerPayload?: Array<PlayerPayload>;
-  playerData?: { name: string; data: PlayerData };
-  chatMessage?: { name: string; message: string };
-}
-
-export interface PlayerTeamsData {
-  [key: string]: Array<
-    {
-      name: string;
-      slotStatus: 0 | 1 | 2;
-      slot: number;
-      realPlayer: boolean;
-    } & PlayerData
-  >;
-}
-
-export interface ChatMessage {
-  name: string;
-  message: string;
-  time: number;
-}
-export interface MicroLobbyData {
-  lookupName: string;
-  wc3StatsVariant: string;
-  eloAvailable: boolean;
-  eloType: "wc3stats" | "pyroTD" | "off";
-  region: Regions;
-  slots: { [key: string]: PlayerPayload };
-  lobbyStatic: GameClientLobbyPayloadStatic;
-  playerData: {
-    [key: string]: PlayerData;
-  };
-  teamList: { otherTeams: TeamData; specTeams: TeamData; playerTeams: TeamData };
-  chatMessages: Array<ChatMessage>;
-}
-
 export interface HubReceive {
-  messageType: "lobbyUpdate" | "lobbyStarted" | "heartbeat";
-  data: LobbyUpdates | null;
+  messageType: "lobbyUpdate" | "lobbyStarted" | "heartbeat" | "settings" | "gameState";
+  data?: { lobbyUpdates?: LobbyUpdates; settings?: AppSettings; gameState?: GameState };
   appVersion: string;
 }
 export interface HubSend {
@@ -441,57 +304,6 @@ export interface OpenLobbyParams {
   region?: Regions;
 }
 
-export function InvalidData(
-  name: string,
-  data: any,
-  type: ValidObjectTypes,
-  objectKeys: ObjectLookup = {}
-): false | string {
-  if (typeof data !== type) {
-    return (
-      "Type mismatch for " +
-      name +
-      ": " +
-      type +
-      " expected, " +
-      typeof data +
-      " received"
-    );
-  } else if (type === "object") {
-    for (const [key, value] of Object.entries(objectKeys)) {
-      if (Array.isArray(value)) {
-        if (!value.includes(data[key])) {
-          console.log(data);
-          return (
-            "Value for " +
-            name +
-            "  not expected. Expected: " +
-            value.join(",") +
-            ", received: " +
-            data[key]
-          );
-        }
-      } else if (typeof value === "object") {
-        let check = InvalidData(
-          key,
-          data[key],
-          "object",
-          objectKeys[key] as ObjectLookup
-        );
-        if (check) {
-          return check;
-        }
-      } else {
-        let check = InvalidData(key, data[key], value as ValidObjectTypes);
-        if (check) {
-          return check;
-        }
-      }
-    }
-  }
-  return false;
-}
-
 export function getTargetRegion(
   regionChangeTimeEU: string,
   regionChangeTimeNA: string
@@ -515,6 +327,23 @@ export function getTargetRegion(
       return "eu";
     }
   }
+}
+
+export interface GameState {
+  selfRegion: Regions | "";
+  menuState: "OUT_OF_MENUS" | "MAIN_MENU" | "CUSTOM_LOBBIES" | "GAME_LOBBY" | string;
+  screenState: string;
+  selfBattleTag: string;
+  inGame: boolean;
+  action:
+    | "openingWarcraft"
+    | "creatingLobby"
+    | "waitingToLeaveGame"
+    | "waitingInLobby"
+    | "nothing"
+    | "joiningLobby"
+    | "leavingLobby"
+    | "closingWarcraft";
 }
 
 export const ColorLookup = {
@@ -546,3 +375,23 @@ export const ColorLookup = {
   ],
   discord: [],
 };
+
+export function ensureInt(value: string | number) {
+  if (typeof value === "string") {
+    return parseInt(value);
+  } else {
+    return value;
+  }
+}
+
+export function isValidUrl(target: string) {
+  let url;
+
+  try {
+    url = new URL(target);
+  } catch (_) {
+    return false;
+  }
+
+  return true;
+}

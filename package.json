@@ -1,10 +1,10 @@
 {
   "name": "wc3multitool",
-  "version": "0.9.7",
+  "version": "0.9.13",
   "description": "A multi-tool for Warcraft 3",
   "repository": {
     "type": "git",
-    "url": "git://github.com/trenchguns/wc3multitool.git"
+    "url": "git://github.com/kgallimore/wc3multitool.git"
   },
   "main": "src/app.js",
   "scripts": {
@@ -23,7 +23,7 @@
   "build": {
     "appId": "wc3multitool",
     "productName": "WC3 Multi-Tool",
-    "copyright": "Trenchguns",
+    "copyright": "Keith Gallimore",
     "extraFiles": [
       {
         "from": "./src/webui.html",
@@ -165,6 +165,7 @@
     "translate": "^1.4.1",
     "translate-google": "^1.5.0",
     "w3gjs": "^2.4.3",
+    "wc3mt-lobby-container": "^1.0.9",
     "ws": "^8.4.0"
   }
 }

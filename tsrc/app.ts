@@ -1,4 +1,5 @@
 import {
+  Window,
   screen,
   getActiveWindow,
   mouse,
@@ -43,7 +44,7 @@ import sqlite3 from "better-sqlite3";
 //import translate from "translate";
 import { DisClient } from "./disc";
 import { SEClient, SEEvent } from "./stream";
-import { WarLobby } from "./lobby";
+import { LobbyControl } from "./lobbyControl";
 import { OBSSocket } from "./obs";
 import parser from "w3gjs";
 import LanguageDetect from "languagedetect";
@@ -58,19 +59,27 @@ if (!app.isPackaged) {
 import {
   AppSettings,
   WindowSend,
-  GameClientLobbyPayload,
   GameClientMessage,
   WindowReceive,
   SettingsKeys,
   mmdResults,
-  LobbyUpdates,
   HubReceive,
   LobbyAppSettings,
-  PlayerData,
-  Regions,
   getTargetRegion,
   OpenLobbyParams,
+  isValidUrl,
+  ensureInt,
+  GameState,
 } from "./utility";
+
+import {
+  GameClientLobbyPayload,
+  LobbyUpdates,
+  PlayerData,
+  Regions,
+  SlotNumbers,
+  BattleTagRegex,
+} from "wc3mt-lobby-container";
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -106,12 +115,15 @@ if (!gotLock) {
     "Warcraft III\\BattleNet"
   );
 
+  const wc3mtTargetFile = `${app.getPath(
+    "documents"
+  )}\\Warcraft III\\CustomMapData\\wc3mt.txt`;
+
   var win: BrowserWindow;
   var appIcon: Tray | null;
   var currentStatus = false;
   var gameNumber = 0;
   // @ts-ignore
-  var inGame = false;
   var wss: WebSocket.Server | null = null;
   var webUISocket: WebSocket | null = null;
   var clientWebSocket: WebSocket;
@@ -120,21 +132,78 @@ if (!gotLock) {
   var warcraftInFocus = false;
   var warcraftIsOpen = false;
   var warcraftRegion: Region;
-  var voteTimer: NodeJS.Timeout | null, refreshTimer: NodeJS.Timeout | null;
+  var voteTimer: NodeJS.Timeout | null;
   var openLobbyParams: OpenLobbyParams | null;
-  var gameState: {
-    selfRegion: Regions | "";
-    menuState: string;
-    screenState: string;
-    selfBattleTag: string;
-    inGame: boolean;
-  } = {
-    menuState: "Out of Menus",
+  var gameState: GameState = {
+    menuState: "OUT_OF_MENUS",
     screenState: "",
     selfBattleTag: "",
     selfRegion: "",
     inGame: false,
+    action: "nothing",
   };
+  var gameStateProxy = new Proxy(gameState, {
+    set: function (target, prop, value: any) {
+      prop = String(prop);
+      //console.log(`Setting ${prop} to ${value} on ${target}`);
+      if (prop in target) {
+        if (
+          prop === "inGame" &&
+          (typeof value === "boolean" ||
+            (typeof value === "string" &&
+              ["true", "false"].includes(value.toLowerCase()))) &&
+          target[prop] != value
+        ) {
+          target[prop] = value == true;
+        } else if (
+          prop === "selfBattleTag" &&
+          typeof value === "string" &&
+          BattleTagRegex.test(value) &&
+          target[prop] !== value
+        ) {
+          target[prop] = value;
+        } else if (
+          prop === "selfRegion" &&
+          ["us", "eu", "usw"].includes(value) &&
+          target[prop] !== value
+        ) {
+          target[prop] = value;
+        } else if (
+          prop === "menuState" &&
+          typeof value === "string" &&
+          target[prop] !== value
+        ) {
+          target[prop] = value;
+        } else if (
+          prop === "screenState" &&
+          typeof value === "string" &&
+          target[prop] !== value
+        ) {
+          target[prop] = value;
+        } else if (
+          prop === "action" &&
+          [
+            "openingWarcraft",
+            "creatingLobby",
+            "waitingToLeaveGame",
+            "waitingInLobby",
+            "nothing",
+          ].includes(value) &&
+          target[prop] !== value
+        ) {
+          target[prop] = value;
+        } else {
+          if (target[prop as keyof GameState] !== value) {
+            // There was some sort of error
+            log.info(`Invalid value for ${prop}`);
+          }
+          return true;
+        }
+        sendToHub("gameState", { gameState: target });
+      }
+      return true;
+    },
+  });
   var clientState: { tableVersion: number; latestUploadedReplay: number } = {
     tableVersion: (store.get("tableVersion") as number) ?? 0,
     latestUploadedReplay: (store.get("latestUploadedReplay") as number) ?? 0,
@@ -148,60 +217,257 @@ if (!gotLock) {
     queue: [],
   };
 
+  var autoHostSettings = <AppSettings["autoHost"]>{
+    type: store.get("autoHost.type") ?? "off",
+    private: store.get("autoHost.private") ?? false,
+    sounds: store.get("autoHost.sounds") ?? false,
+    increment: store.get("autoHost.increment") ?? true,
+    mapName: store.get("autoHost.mapName") ?? "",
+    gameName: store.get("autoHost.gameName") ?? "",
+    mapPath: store.get("autoHost.mapPath") ?? "N/A",
+    announceIsBot: store.get("autoHost.announceIsBot") ?? false,
+    announceCustom: store.get("autoHost.announceCustom") ?? false,
+    announceRestingInterval: store.get("autoHost.announceRestingInterval") ?? 30,
+    moveToSpec: store.get("autoHost.moveToSpec") ?? false,
+    moveToTeam: store.get("autoHost.moveToTeam") ?? "",
+    rapidHostTimer: store.get("autoHost.rapidHostTimer") ?? 0,
+    smartHostTimeout: store.get("autoHost.smartHostTimeout") ?? 0,
+    voteStart: store.get("autoHost.voteStart") ?? false,
+    voteStartPercent: store.get("autoHost.voteStartPercent") ?? 60,
+    voteStartTeamFill: store.get("autoHost.voteStartTeamFill") ?? true,
+    closeSlots: store.get("autoHost.closeSlots") ?? [],
+    customAnnouncement: store.get("autoHost.customAnnouncement") ?? "",
+    observers:
+      typeof store.get("autoHost.observers") !== "string"
+        ? "0"
+        : store.get("autoHost.observers"),
+    advancedMapOptions: store.get("autoHost.advancedMapOptions") ?? false,
+    flagLockTeams: store.get("autoHost.flagLockTeams") ?? true,
+    flagPlaceTeamsTogether: store.get("autoHost.flagPlaceTeamsTogether") ?? true,
+    flagFullSharedUnitControl: store.get("autoHost.flagFullSharedUnitControl") ?? false,
+    flagRandomRaces: store.get("autoHost.flagRandomRaces") ?? false,
+    flagRandomHero: store.get("autoHost.flagRandomHero") ?? false,
+    settingVisibility: store.get("autoHost.settingVisibility") ?? "0",
+    leaveAlternate: store.get("autoHost.leaveAlternate") ?? false,
+    shufflePlayers: store.get("autoHost.shufflePlayers") ?? false,
+    regionChange: store.get("autoHost.regionChange") ?? false,
+    regionChangeTimeEU: store.get("autoHost.regionChangeTimeEU") ?? "11:00",
+    regionChangeTimeNA: store.get("autoHost.regionChangeTimeNA") ?? "01:00",
+    whitelist: store.get("autoHost.whitelist") ?? false,
+    minPlayers: store.get("autoHost.minPlayers") ?? 0,
+    delayStart: store.get("autoHost.delayStart") ?? 0,
+  };
+
+  var autoHostProxy = new Proxy(autoHostSettings, {
+    set: function (target, property, value, receiver) {
+      console.log("Setting " + String(property) + " to " + value);
+      if (property in target) {
+        if (property === "type" && ["off", "on", "auto"].includes(value)) {
+          return false;
+        }
+        if (property === "private" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "sounds" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "increment" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "announceIsBot" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "announceCustom" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "announceRestingInterval") {
+          if (typeof value !== "number") {
+            return false;
+          } else {
+            value = Math.min(Math.max(value, 0), 60);
+          }
+        }
+        if (property === "moveToSpec" && typeof value !== "boolean") {
+          return false;
+        }
+        if (
+          (property === "moveToTeam" && typeof value !== "string") ||
+          value.length > 48
+        ) {
+          return false;
+        }
+        if (property === "rapidHostTimer") {
+          if (typeof value !== "number") {
+            return false;
+          } else {
+            value = Math.min(Math.max(value, -1), 360);
+          }
+        }
+        if (property === "smartHostTimeout") {
+          if (typeof value !== "number") {
+            return false;
+          } else {
+            value = Math.min(Math.max(value, -1), 360);
+          }
+        }
+        if (property === "voteStart" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "voteStartPercent") {
+          if (typeof value !== "number") {
+            return false;
+          } else {
+            value = Math.min(Math.max(value, 5), 100);
+          }
+        }
+        if (property === "voteStartTeamFill" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "closeSlots" && (!Array.isArray(value) || value.length > 24)) {
+          return false;
+        }
+        if (
+          (property === "customAnnouncement" && typeof value !== "string") ||
+          value.length > 512
+        ) {
+          return false;
+        }
+        if (property === "observers" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "advancedMapOptions" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "flagLockTeams" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "flagPlaceTeamsTogether" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "flagFullSharedUnitControl" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "flagRandomRaces" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "flagRandomHero" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "settingVisibility" && ["0", "1", "2"].includes(value)) {
+          return false;
+        }
+        if (property === "leaveAlternate" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "shufflePlayers" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "regionChange" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "regionChangeTimeEU" && typeof value !== "string") {
+          return false;
+        }
+        if (property === "regionChangeTimeNA" && typeof value !== "string") {
+          return false;
+        }
+        if (property === "whitelist" && typeof value !== "boolean") {
+          return false;
+        }
+        if (property === "minPlayers" && typeof value !== "number") {
+          if (typeof value !== "number") {
+            return false;
+          } else {
+            value = Math.min(Math.max(value, 0), 24);
+          }
+        }
+        if (property === "delayStart") {
+          if (typeof value !== "number") {
+            return false;
+          } else {
+            value = Math.min(Math.max(value, 0), 60);
+          }
+        }
+        store.set(`autoHost.${String(property)}`, value);
+        return Reflect.set(target, property, value, receiver);
+      } else {
+        log.warn("Property " + String(property) + " does not exist on autoHost");
+        return false;
+      }
+    },
+  });
+
+  var obsSettings = <AppSettings["obs"]>{
+    enabled: store.get("obs.enabled") ?? false,
+    sceneSwitchType: store.get("obs.sceneSwitchType") ?? "off",
+    inGameHotkey: store.get("obs.inGameHotkey") ?? false,
+    outOfGameHotkey: store.get("obs.outOfGameHotkey") ?? false,
+    inGameWSScene: store.get("obs.inGameWSScene") ?? "",
+    outOfGameWSScene: store.get("obs.outOfGameWSScene") ?? "",
+    address: store.get("obs.obsAddress") ?? "",
+    token: store.get("obs.obsPassword") ?? "",
+    autoStream: store.get("obs.autoStream") ?? false,
+    textSource: store.get("obs.textSource") ?? false,
+  };
+
+  var obsProxy = new Proxy(obsSettings, {
+    set: function (target, property, value, receiver) {
+      console.log("Setting " + String(property) + " to " + value);
+      if (property in target) {
+        if (property === "enabled" && typeof value !== "boolean") {
+          return false;
+        }
+        if (
+          property === "sceneSwitchType" &&
+          ["off", "hotkeys", "websockets"].includes(value)
+        ) {
+          return false;
+        }
+        if (
+          property === "inGameHotkey" &&
+          (typeof value !== "boolean" || typeof value !== "object")
+        ) {
+          return false;
+        }
+        if (
+          property === "outOfGameHotkey" &&
+          (typeof value !== "boolean" || typeof value !== "object")
+        ) {
+          return false;
+        }
+        if (property === "inGameWSScene" && typeof value !== "string") {
+          return false;
+        }
+        if (property === "outOfGameWSScene" && typeof value !== "string") {
+          return false;
+        }
+        if (property === "address") {
+          if (typeof value !== "string" || !isValidUrl(value)) {
+            return false;
+          }
+        }
+        if (property === "token" && typeof value !== "string") {
+          return false;
+        }
+        store.set(`autoHost.${String(property)}`, value);
+        return Reflect.set(target, property, value, receiver);
+      } else {
+        log.warn("Property " + String(property) + " does not exist on obs");
+        return false;
+      }
+    },
+  });
+
   var settings: AppSettings = <AppSettings>{
-    autoHost: {
-      type: store.get("autoHost.type") ?? "off",
-      private: store.get("autoHost.private") ?? false,
-      sounds: store.get("autoHost.sounds") ?? false,
-      increment: store.get("autoHost.increment") ?? true,
-      mapName: store.get("autoHost.mapName") ?? "",
-      gameName: store.get("autoHost.gameName") ?? "",
-      mapPath: store.get("autoHost.mapPath") ?? "N/A",
-      announceIsBot: store.get("autoHost.announceIsBot") ?? false,
-      announceCustom: store.get("autoHost.announceCustom") ?? false,
-      announceRestingInterval: store.get("autoHost.announceRestingInterval") ?? 30,
-      moveToSpec: store.get("autoHost.moveToSpec") ?? false,
-      moveToTeam: store.get("autoHost.moveToTeam") ?? "",
-      rapidHostTimer: store.get("autoHost.rapidHostTimer") ?? 0,
-      smartHostTimeout: store.get("autoHost.smartHostTimeout") ?? 0,
-      voteStart: store.get("autoHost.voteStart") ?? false,
-      voteStartPercent: store.get("autoHost.voteStartPercent") ?? 60,
-      voteStartTeamFill: store.get("autoHost.voteStartTeamFill") ?? true,
-      closeSlots: store.get("autoHost.closeSlots") ?? [],
-      customAnnouncement: store.get("autoHost.customAnnouncement") ?? "",
-      observers: store.get("autoHost.observers") ?? false,
-      advancedMapOptions: store.get("autoHost.advancedMapOptions") ?? false,
-      flagLockTeams: store.get("autoHost.flagLockTeams") ?? true,
-      flagPlaceTeamsTogether: store.get("autoHost.flagPlaceTeamsTogether") ?? true,
-      flagFullSharedUnitControl: store.get("autoHost.flagFullSharedUnitControl") ?? false,
-      flagRandomRaces: store.get("autoHost.flagRandomRaces") ?? false,
-      flagRandomHero: store.get("autoHost.flagRandomHero") ?? false,
-      settingVisibility: store.get("autoHost.settingVisibility") ?? "0",
-      leaveAlternate: store.get("autoHost.leaveAlternate") ?? false,
-      regionChange: store.get("autoHost.regionChange") ?? false,
-      regionChangeTimeEU: store.get("autoHost.regionChangeTimeEU") ?? "11:00",
-      regionChangeTimeNA: store.get("autoHost.regionChangeTimeNA") ?? "01:00",
-      whitelist: store.get("autoHost.whitelist") ?? false,
-      minPlayers: store.get("autoHost.minPlayers") ?? 0,
-    },
-    obs: {
-      enabled: store.get("obs.enabled") ?? false,
-      sceneSwitchType: store.get("obs.sceneSwitchType") ?? "off",
-      inGameHotkey: store.get("obs.inGameHotkey") ?? false,
-      outOfGameHotkey: store.get("obs.outOfGameHotkey") ?? false,
-      inGameWSScene: store.get("obs.inGameWSScene") ?? "",
-      outOfGameWSScene: store.get("obs.outOfGameWSScene") ?? "",
-      address: store.get("obs.obsAddress") ?? "",
-      token: store.get("obs.obsPassword") ?? "",
-      autoStream: store.get("obs.autoStream") ?? false,
-      textSource: store.get("obs.textSource") ?? false,
-    },
+    autoHost: autoHostSettings,
+    obs: obsSettings,
     elo: {
       type: store.get("elo.type") ?? "off",
       balanceTeams: store.get("elo.balanceTeams") ?? true,
       announce: store.get("elo.announce") ?? true,
       excludeHostFromSwap: store.get("elo.excludeHostFromSwap") ?? true,
       lookupName: store.get("elo.lookupName") ?? "",
+      privateKey: store.get("elo.privateKey") ?? "",
       available: store.get("elo.available") ?? false,
       wc3StatsVariant:
         store.get("elo.wc3StatsVariant") ?? store.get("elo.wc3statsVariant") ?? "",
@@ -243,7 +509,8 @@ if (!gotLock) {
       sendTipsInLobby: store.get("streaming.sendTipsInLobby") ?? false,
     },
   };
-  let lobby: WarLobby;
+
+  let lobbyController: LobbyControl;
 
   var identifier: string = store.get("anonymousIdentifier") as string;
   if (!identifier || identifier.length !== 21) {
@@ -310,9 +577,9 @@ if (!gotLock) {
   });
 
   app.on("before-quit", () => {
-    sendToHub("lobbyUpdate", { leftLobby: true });
+    sendToHub("lobbyUpdate", { lobbyUpdates: { leftLobby: true } });
     discClient?.lobbyClosed();
-    lobby?.clear();
+    lobbyController?.clear();
   });
 
   async function protocolHandler(url: string) {
@@ -323,7 +590,7 @@ if (!gotLock) {
         if (await isWarcraftOpen()) {
           if (
             openLobbyParams?.region &&
-            openLobbyParams?.region !== gameState.selfRegion
+            openLobbyParams?.region !== gameStateProxy.selfRegion
           ) {
             log.info(`Changing region to ${openLobbyParams.region}`);
             await exitGame();
@@ -364,6 +631,7 @@ if (!gotLock) {
   });
 
   function updateSetting(setting: keyof AppSettings, key: SettingsKeys, value: any) {
+    // TODO Replace with proxy
     if (
       // @ts-ignore
       settings[setting]?.[key] !== undefined &&
@@ -394,14 +662,14 @@ if (!gotLock) {
       } else if (key === "commAddress") {
         commSetup();
       }
-      if (lobby) {
+      if (lobbyController) {
         let updateKey: keyof LobbyAppSettings;
         if (setting === "elo" && key === "type") {
           updateKey = "eloType";
         } else {
           updateKey = key as keyof LobbyAppSettings;
         }
-        lobby.updateSetting(updateKey, value);
+        lobbyController.updateSetting(updateKey, value);
       }
       if (key === "performanceMode") {
         togglePerformanceMode(value);
@@ -442,7 +710,7 @@ if (!gotLock) {
 
   async function eloMapNameCheck(type: "wc3stats" | "pyroTD" | "off", mapName: string) {
     // Clean the name from the map name
-    let clean = await lobby.cleanMapName(mapName);
+    let clean = await lobbyController.eloMapName(mapName);
     updateSetting("elo", "lookupName", clean.name);
     updateSetting("elo", "available", clean.elo);
     updateSetting("elo", "wc3StatsVariant", "");
@@ -616,7 +884,7 @@ if (!gotLock) {
         webUISocket = null;
         sendProgress();
         sendStatus(false);
-        handleGlueScreen("Out of menus");
+        handleGlueScreen("OUT_OF_MENUS");
       });
     });
     wss.on("error", function (err) {
@@ -629,6 +897,10 @@ if (!gotLock) {
         throw err;
       }
     });
+    if (fs.existsSync(wc3mtTargetFile)) {
+      log.info("Removing leftover file");
+      fs.rmSync(wc3mtTargetFile);
+    }
     lobbySetup();
     globalShortcut.register("Alt+CommandOrControl+S", () => {
       sendMessage("PlaySound", { sound: "MenuButtonClick" });
@@ -649,17 +921,15 @@ if (!gotLock) {
   });
 
   app.on("window-all-closed", () => {
-    sendToHub("lobbyUpdate", { leftLobby: true });
+    sendToHub("lobbyUpdate", { lobbyUpdates: { leftLobby: true } });
     discClient?.lobbyClosed();
-    lobby?.clear();
+    lobbyController?.clear();
     if (process.platform !== "darwin") {
       app.quit();
     }
   });
 
   app.on("activate", () => {
-    // On OS X it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
     }
@@ -677,8 +947,13 @@ if (!gotLock) {
     hubWebSocket.onopen = (ev) => {
       if (ev.target.readyState !== WebSocket.OPEN) return;
       log.info("Connected to hub");
-      if (lobby.lobbyStatic && (!settings.autoHost.private || !app.isPackaged)) {
-        sendToHub("lobbyUpdate", { newLobby: lobby.export() });
+      if (
+        lobbyController.lobby?.lobbyStatic &&
+        (!settings.autoHost.private || !app.isPackaged)
+      ) {
+        sendToHub("lobbyUpdate", {
+          lobbyUpdates: { newLobby: lobbyController.lobby.exportMin() },
+        });
       }
       setTimeout(hubHeartbeat, 30000);
     };
@@ -713,7 +988,7 @@ if (!gotLock) {
               if (settings.streaming.sendTipsInDiscord && discClient?.chatChannel) {
                 discClient.sendMessage(tipMessage);
               }
-              if (inGame) {
+              if (gameStateProxy.inGame) {
                 if (settings.streaming.sendTipsInGame) {
                   sendInGameChat(tipMessage);
                 } else {
@@ -768,7 +1043,7 @@ if (!gotLock) {
   }
 
   function lobbySetup() {
-    lobby = new WarLobby(
+    lobbyController = new LobbyControl(
       settings.elo.type,
       settings.elo.wc3StatsVariant,
       settings.elo.balanceTeams,
@@ -783,157 +1058,171 @@ if (!gotLock) {
       settings.elo.minGames,
       settings.elo.minRating
     );
-    lobby.on("update", (update: LobbyUpdates) => {
-      if (
-        update.playerPayload ||
-        update.playerData ||
-        update.newLobby ||
-        update.leftLobby
-      ) {
-        if (update.leftLobby) {
-          clearLobby();
-        }
-        sendWindow("lobbyUpdate", { lobbyData: update });
-        sendToHub("lobbyUpdate", update);
-        if (discClient) {
-          if (update.newLobby) {
-            discClient.sendNewLobby(update.newLobby, lobby.exportTeamStructure());
+    lobbyController.testMode = !app.isPackaged;
+    lobbyController.on("update", (update: LobbyUpdates) => {
+      if (lobbyController.lobby) {
+        if (
+          update.playerPayload ||
+          update.playerData ||
+          update.newLobby ||
+          update.leftLobby
+        ) {
+          if (update.leftLobby) {
+            clearLobby();
           } else {
-            discClient.updateLobby(lobby.exportTeamStructure());
+            gameStateProxy.action = "waitingInLobby";
           }
-        }
-        if (settings.obs.textSource) {
-          fs.writeFileSync(
-            path.join(app.getPath("documents"), "wc3mt.txt"),
-            lobby.exportTeamStructureString()
-          );
-        }
-        if (settings.elo.announce && update.playerData) {
-          sendChatMessage(
-            update.playerData.name +
-              " ELO: " +
-              update.playerData.data.rating +
-              ", Rank: " +
-              update.playerData.data.rank +
-              ", Played: " +
-              update.playerData.data.played +
-              ", Wins: " +
-              update.playerData.data.wins +
-              ", Losses: " +
-              update.playerData.data.losses +
-              ", Last Change: " +
-              update.playerData.data.lastChange
-          );
-        }
-      } else if (update.stale) {
-        leaveGame();
-      } else if (update.playerLeft) {
-        log.info("Player left: " + update.playerLeft);
-      } else if (update.playerJoined) {
-        if (update.playerJoined.name) {
-          db.open;
-          const row = db
-            .prepare("SELECT * FROM banList WHERE username = ? AND unban_date IS NULL")
-            .get(update.playerJoined.name);
-          if (row) {
-            lobby.banSlot(update.playerJoined.slot);
-            sendChatMessage(
-              update.playerJoined.name +
-                " is permanently banned" +
-                (row.reason ? ": " + row.reason : "")
-            );
-            log.info(
-              "Kicked " +
-                update.playerJoined.name +
-                " for being banned" +
-                (row.reason ? " for: " + row.reason : "")
-            );
-            return;
+          sendWindow("lobbyUpdate", { lobbyData: update });
+          sendToHub("lobbyUpdate", { lobbyUpdates: update });
+          if (discClient) {
+            if (update.newLobby) {
+              discClient.sendNewLobby(
+                update.newLobby,
+                lobbyController.lobby.exportTeamStructure()
+              );
+            } else {
+              discClient.updateLobby(lobbyController.lobby.exportTeamStructure());
+            }
           }
-          if (settings.autoHost.whitelist) {
-            if (update.playerJoined.name !== gameState.selfBattleTag) {
-              const row = db
-                .prepare(
-                  "SELECT * FROM whiteList WHERE username = ? AND unwhite_date IS NULL"
-                )
-                .get(update.playerJoined.name);
-              if (!row) {
-                lobby.banSlot(update.playerJoined.slot);
-                sendChatMessage(update.playerJoined.name + " is not whitelisted");
-                log.info(
-                  "Kicked " + update.playerJoined.name + " for not being whitelisted"
+          if (settings.obs.textSource) {
+            fs.writeFileSync(
+              path.join(app.getPath("documents"), "wc3mt.txt"),
+              lobbyController.exportTeamStructureString()
+            );
+          }
+          if (update.playerData) {
+            if (update.playerData.extraData) {
+              if (settings.elo.announce) {
+                sendChatMessage(
+                  update.playerData.name +
+                    " ELO: " +
+                    update.playerData.extraData.rating +
+                    ", Rank: " +
+                    update.playerData.extraData.rank +
+                    ", Played: " +
+                    update.playerData.extraData.played +
+                    ", Wins: " +
+                    update.playerData.extraData.wins +
+                    ", Losses: " +
+                    update.playerData.extraData.losses +
+                    ", Last Change: " +
+                    update.playerData.extraData.lastChange
                 );
-                return;
               }
+            } else {
+              log.error("Player data update missing data");
             }
           }
-          log.info("Player joined: " + update.playerJoined.name);
-          announcement();
-          if (
-            settings.autoHost.type !== "off" &&
-            settings.autoHost.minPlayers !== 0 &&
-            lobby.nonSpecPlayers.length >= settings.autoHost.minPlayers
-          ) {
-            if (!gameState.inGame) {
-              startGame();
+        } else if (update.stale) {
+          leaveGame();
+        } else if (update.playerLeft) {
+          log.info("Player left: " + update.playerLeft);
+        } else if (update.playerJoined) {
+          if (update.playerJoined.name) {
+            db.open;
+            const row = db
+              .prepare("SELECT * FROM banList WHERE username = ? AND unban_date IS NULL")
+              .get(update.playerJoined.name);
+            if (row) {
+              lobbyController.banSlot(update.playerJoined.slot);
+              sendChatMessage(
+                update.playerJoined.name +
+                  " is permanently banned" +
+                  (row.reason ? ": " + row.reason : "")
+              );
+              log.info(
+                "Kicked " +
+                  update.playerJoined.name +
+                  " for being banned" +
+                  (row.reason ? " for: " + row.reason : "")
+              );
+              return;
             }
-          }
-        } else {
-          log.warn("Nameless player joined");
-        }
-      } else if (update.lobbyReady) {
-        if (lobby?.lobbyStatic?.isHost) {
-          if (settings.autoHost.sounds) {
-            playSound("ready.wav");
-          }
-          if (
-            settings.autoHost.type === "smartHost" ||
-            settings.autoHost.type === "rapidHost"
-          ) {
-            sendProgress("Starting Game", 100);
-            // Wait a quarter second to make sure no one left
-            setTimeout(() => {
-              if (lobby.isLobbyReady()) {
-                startGame();
+            if (settings.autoHost.whitelist) {
+              if (update.playerJoined.name !== gameStateProxy.selfBattleTag) {
+                const row = db
+                  .prepare(
+                    "SELECT * FROM whiteList WHERE username = ? AND unwhite_date IS NULL"
+                  )
+                  .get(update.playerJoined.name);
+                if (!row) {
+                  lobbyController.banSlot(update.playerJoined.slot);
+                  sendChatMessage(update.playerJoined.name + " is not whitelisted");
+                  log.info(
+                    "Kicked " + update.playerJoined.name + " for not being whitelisted"
+                  );
+                  return;
+                }
               }
-            }, 250);
+            }
+            log.info("Player joined: " + update.playerJoined.name);
+            announcement();
+            if (
+              settings.autoHost.minPlayers !== 0 &&
+              lobbyController.lobby.nonSpecPlayers.length >= settings.autoHost.minPlayers
+            ) {
+              startGame(settings.autoHost.delayStart);
+            }
+          } else {
+            log.warn("Nameless player joined");
+          }
+        } else if (update.lobbyReady) {
+          if (lobbyController.lobby.lobbyStatic.isHost) {
+            if (settings.autoHost.sounds) {
+              playSound("ready.wav");
+            }
+            if (
+              settings.autoHost.type === "smartHost" ||
+              settings.autoHost.type === "rapidHost"
+            ) {
+              sendProgress("Starting Game", 100);
+              if (
+                (settings.elo.type == "off" || !settings.elo.balanceTeams) &&
+                settings.autoHost.shufflePlayers
+              ) {
+                lobbyController.shufflePlayers();
+              }
+              // Wait a quarter second to make sure shuffles are done
+              setTimeout(() => {
+                if (lobbyController.isLobbyReady()) {
+                  startGame(settings.autoHost.delayStart);
+                }
+              }, 250);
+            }
           }
         }
       }
     });
-    lobby.on("sendChat", (data: string) => {
+    lobbyController.on("sendChat", (data: string) => {
       sendChatMessage(data);
     });
-    lobby.on("sendMessage", (data: { type: string; payload: any }) => {
+    lobbyController.on("sendMessage", (data: { type: string; payload: any }) => {
       sendMessage(data.type, data.payload);
     });
-    lobby.on("error", (data: string) => {
+    lobbyController.on("error", (data: string) => {
       log.warn(data);
     });
-    lobby.on("info", (data: string) => {
+    lobbyController.on("info", (data: string) => {
       log.info(data);
     });
-    lobby.on("progress", (data: { step: string; progress: number }) => {
+    lobbyController.on("progress", (data: { step: string; progress: number }) => {
       log.info(data);
       sendWindow("progress", { progress: data });
     });
   }
 
-  function sendToHub(
-    messageType: HubReceive["messageType"],
-    data: HubReceive["data"] = null
-  ) {
+  function sendToHub(messageType: HubReceive["messageType"], data?: HubReceive["data"]) {
     let buildMessage: HubReceive = { messageType, data, appVersion };
     if (hubWebSocket && hubWebSocket.readyState === WebSocket.OPEN) {
       hubWebSocket.send(JSON.stringify(buildMessage));
     }
-    commSend("settings", JSON.stringify({ settings }));
+    commSend(messageType, data);
   }
 
   async function triggerOBS() {
     if (settings.obs.enabled) {
       if (settings.obs.sceneSwitchType === "hotkeys") {
-        if (inGame && settings.obs.inGameHotkey) {
+        if (gameStateProxy.inGame && settings.obs.inGameHotkey) {
           log.info("Triggering OBS In-Game");
           let modifiers: Array<Key> = [];
           if (settings.obs.inGameHotkey) {
@@ -956,7 +1245,7 @@ if (!gotLock) {
               log.warn("Failed to trigger OBS In-Game", e);
             }
           }
-        } else if (!inGame && settings.obs.outOfGameHotkey) {
+        } else if (!gameStateProxy.inGame && settings.obs.outOfGameHotkey) {
           log.info("Triggering OBS Out of Game");
           let modifiers: Array<Key> = [];
           if (settings.obs.outOfGameHotkey.altKey) {
@@ -979,12 +1268,11 @@ if (!gotLock) {
           }
         }
       } else if (settings.obs.sceneSwitchType === "websockets") {
-        console.log("Sending OBS Scene Switch");
         if (obsSocket) {
-          if (inGame && settings.obs.inGameWSScene) {
+          if (gameStateProxy.inGame && settings.obs.inGameWSScene) {
             log.info("Triggering OBS In-Game");
             obsSocket.switchScene(settings.obs.inGameWSScene);
-          } else if (!inGame && settings.obs.outOfGameWSScene) {
+          } else if (!gameStateProxy.inGame && settings.obs.outOfGameWSScene) {
             log.info("Triggering OBS Out of Game");
             obsSocket.switchScene(settings.obs.outOfGameWSScene);
           }
@@ -1002,21 +1290,37 @@ if (!gotLock) {
   }
 
   async function handleWebUIMessage(message: string) {
-    let data = JSON.parse(message) as { messageType: string; data: any };
+    let data = JSON.parse(message) as { messageType: string; data: GameState | any };
     switch (data.messageType) {
       case "state":
-        if (data.data.menuState) {
-          setTimeout(() => {
-            handleGlueScreen(data.data.menuState);
-            gameState = data.data;
-          }, 250);
+        if (typeof data.data !== "string" && data.data.menuState) {
+          let newState: GameState = data.data as GameState;
+          if (newState.menuState) {
+            setTimeout(() => {
+              handleGlueScreen(newState.menuState);
+              Object.entries(newState).forEach(([key, value]) => {
+                // @ts-expect-error
+                gameStateProxy[key] = value;
+              });
+              commSend("gameState", newState);
+            }, 250);
+          } else {
+            Object.entries(newState).forEach(([key, value]) => {
+              // @ts-expect-error
+              gameStateProxy[key] = value;
+            });
+            commSend("gameState", newState);
+          }
         } else {
-          gameState = data.data;
+          log.warn("New state error: ", data.data);
         }
         break;
       case "sendMessage":
         if (data.data.message === "StopGameAdvertisements") {
-          if (gameState.menuState !== "LOADING_SCREEN" && lobby.lookupName) {
+          if (
+            gameStateProxy.menuState !== "LOADING_SCREEN" &&
+            lobbyController.lobby?.lookupName
+          ) {
             log.info("Re-hosting Stale Lobby");
             sendChatMessage("Re-hosting Stale Lobby");
             leaveGame();
@@ -1052,16 +1356,20 @@ if (!gotLock) {
     }
   }
 
-  async function autoHostGame() {
-    if (settings.autoHost.type !== "off") {
-      let targetRegion = gameState.selfRegion;
+  async function autoHostGame(override: boolean = false) {
+    if (settings.autoHost.type !== "off" && (!settings.client.commAddress || override)) {
+      let targetRegion = gameStateProxy.selfRegion;
       if (settings.autoHost.regionChange) {
         targetRegion = getTargetRegion(
           settings.autoHost.regionChangeTimeEU,
           settings.autoHost.regionChangeTimeNA
         );
       }
-      if (gameState.selfRegion && targetRegion && gameState.selfRegion !== targetRegion) {
+      if (
+        gameStateProxy.selfRegion &&
+        targetRegion &&
+        gameStateProxy.selfRegion !== targetRegion
+      ) {
         log.info(`Changing autohost region to ${targetRegion}`);
         await exitGame();
         openWarcraft(targetRegion);
@@ -1100,10 +1408,13 @@ if (!gotLock) {
       await openWarcraft();
     }
     if (
-      !lobby.lobbyStatic?.lobbyName &&
-      !inGame &&
-      !["CUSTOM_GAME_LOBBY", "LOADING_SCREEN", "GAME_LOBBY"].includes(gameState.menuState)
+      !lobbyController.lobby?.lobbyStatic.lobbyName &&
+      !gameStateProxy.inGame &&
+      !["CUSTOM_GAME_LOBBY", "LOADING_SCREEN", "GAME_LOBBY"].includes(
+        gameStateProxy.menuState
+      )
     ) {
+      gameStateProxy.action = "creatingLobby";
       if ((callCount + 5) % 10 === 0) {
         if (settings.autoHost.increment) {
           if (callCount > 45) {
@@ -1141,7 +1452,7 @@ if (!gotLock) {
             flagRandomHero: settings.autoHost.advancedMapOptions
               ? settings.autoHost.flagRandomHero
               : false,
-            settingObservers: settings.autoHost.observers ? 2 : 0,
+            settingObservers: parseInt(settings.autoHost.observers),
             settingVisibility: settings.autoHost.advancedMapOptions
               ? parseInt(settings.autoHost.settingVisibility)
               : 0,
@@ -1153,10 +1464,12 @@ if (!gotLock) {
       }
       await sleep(1000);
       return await createGame(false, callCount + 1, lobbyName);
-    } else if (lobby.lobbyStatic?.lobbyName === lobbyName) {
+    } else if (lobbyController.lobby?.lobbyStatic.lobbyName === lobbyName) {
       log.info("Game successfully created");
       return true;
-    } else if (!lobby.lobbyStatic?.lobbyName.includes(settings.autoHost.gameName)) {
+    } else if (
+      !lobbyController.lobby?.lobbyStatic.lobbyName.includes(settings.autoHost.gameName)
+    ) {
       log.info("Game created with incorrect increment.");
       return true;
     } else {
@@ -1170,7 +1483,7 @@ if (!gotLock) {
     if (
       !newScreen ||
       newScreen === "null" ||
-      (newScreen === gameState.menuState && newScreen !== "SCORE_SCREEN")
+      (newScreen === gameStateProxy.menuState && newScreen !== "SCORE_SCREEN")
     ) {
       return;
     }
@@ -1194,12 +1507,16 @@ if (!gotLock) {
           openWarcraft();
         }
       }
-    } else if (gameState.menuState === "LOADING_SCREEN" && newScreen === "SCORE_SCREEN") {
+    } else if (
+      gameStateProxy.menuState === "LOADING_SCREEN" &&
+      newScreen === "SCORE_SCREEN"
+    ) {
       log.info("Game has finished loading in.");
-      inGame = true;
+      gameStateProxy.inGame = true;
+      gameStateProxy.action = "waitingToLeaveGame";
       if (settings.autoHost.type === "smartHost") {
         log.info("Setting up smart host.");
-        setTimeout(findQuit, 15000);
+        setTimeout(smartQuit, 15000);
       }
       triggerOBS();
       if (
@@ -1246,7 +1563,8 @@ if (!gotLock) {
       }
     } else {
       triggerOBS();
-      inGame = false;
+      gameStateProxy.inGame = false;
+      gameStateProxy.action = "nothing";
       if (settings.elo.handleReplays) {
         let mostModified = { file: "", mtime: 0 };
         fs.readdirSync(replayFolders, { withFileTypes: true })
@@ -1277,18 +1595,24 @@ if (!gotLock) {
           if (settings.elo.type === "wc3stats") {
             let form = new FormData();
             form.append("replay", fs.createReadStream(mostModified.file));
-            fetch("https://api.wc3stats.com/upload?auto=true", {
-              method: "POST",
-              body: form,
-              headers: {
-                ...form.getHeaders(),
-              },
-            }).then(
+            fetch(
+              `https://api.wc3stats.com/upload${
+                settings.elo.privateKey ? "/" + settings.elo.privateKey : ""
+              }?auto=true`,
+              {
+                method: "POST",
+                body: form,
+                headers: {
+                  ...form.getHeaders(),
+                },
+              }
+            ).then(
               function (response) {
                 if (response.status !== 200) {
                   log.info(response.statusText);
                   sendWindow("error", { error: response.statusText });
                 } else {
+                  log.info("Uploaded replay to wc3stats");
                   sendProgress("Uploaded replay", 0);
                 }
               },
@@ -1301,8 +1625,8 @@ if (!gotLock) {
         }
       }
     }
-    gameState.menuState = newScreen;
-    sendWindow("menusChange", { value: gameState.menuState });
+    gameStateProxy.menuState = newScreen;
+    sendWindow("menusChange", { value: gameStateProxy.menuState });
   }
 
   function handleClientMessage(message: { data: string }) {
@@ -1338,7 +1662,7 @@ if (!gotLock) {
               autoHostGame();
               break;
             case "ScreenTransitionInfo":
-              gameState.screenState = data.payload.screen;
+              gameStateProxy.screenState = data.payload.screen;
               break;
             case "SetGlueScreen":
               if (data.payload.screen) {
@@ -1376,15 +1700,15 @@ if (!gotLock) {
               clearLobby();
               break;
             case "MultiplayerGameCreateResult":
-              if (gameState.menuState === "GAME_LOBBY") {
+              if (gameStateProxy.menuState === "GAME_LOBBY") {
                 setTimeout(() => {
                   handleGlueScreen("CUSTOM_LOBBIES");
                 }, 1000);
               }
               break;
             case "UpdateUserInfo":
-              gameState.selfBattleTag = data.payload.user.battleTag;
-              gameState.selfRegion = data.payload.user.userRegion;
+              gameStateProxy.selfBattleTag = data.payload.user.battleTag;
+              gameStateProxy.selfRegion = data.payload.user.userRegion;
               break;
             case "SetOverlayScreen":
               if (data.payload.screen === "AUTHENTICATION_OVERLAY") {
@@ -1487,14 +1811,17 @@ if (!gotLock) {
 
   function clearLobby() {
     // TODO: fix lobby close if game was started
-    if (refreshTimer) clearInterval(refreshTimer);
     sentMessages = [];
-    if (gameState.menuState !== "LOADING_SCREEN" && lobby.lobbyStatic?.lobbyName) {
+    if (
+      gameStateProxy.menuState !== "LOADING_SCREEN" &&
+      lobbyController.lobby?.lobbyStatic.lobbyName
+    ) {
       sendWindow("lobbyUpdate", { lobbyData: { leftLobby: true } });
-      sendToHub("lobbyUpdate", { leftLobby: true });
+      sendToHub("lobbyUpdate", { lobbyUpdates: { leftLobby: true } });
       discClient?.lobbyClosed();
+      gameStateProxy.action = "nothing";
+      lobbyController.clear();
     }
-    lobby?.clear();
   }
 
   async function openParamsJoin() {
@@ -1506,15 +1833,16 @@ if (!gotLock) {
       log.info("Setting autoHost to off to join a lobby link.");
       updateSetting("autoHost", "type", "off");
       if (
-        (openLobbyParams.region && openLobbyParams.region !== gameState.selfRegion) ||
-        gameState.menuState === "LOADING_SCREEN"
+        (openLobbyParams.region &&
+          openLobbyParams.region !== gameStateProxy.selfRegion) ||
+        gameStateProxy.menuState === "LOADING_SCREEN"
       ) {
         log.info(`Changing region to match lobby of region ${openLobbyParams.region}`);
         await exitGame();
         openWarcraft(openLobbyParams.region);
         return;
       }
-      if (inGame || lobby.lookupName) {
+      if (gameStateProxy.inGame || lobbyController.lobby?.lookupName) {
         leaveGame();
         return;
       }
@@ -1536,40 +1864,68 @@ if (!gotLock) {
 
   async function handleChatMessage(payload: GameClientMessage) {
     // TODO: logging
-    if (payload.message && payload.message.source === "gameChat") {
+    if (payload.message?.sender && payload.message.source === "gameChat") {
       if (payload.message.sender.includes("#")) {
         var sender = payload.message.sender;
-      } else {
-        var sender = gameState.selfBattleTag;
-      }
-      if (
-        sender === gameState.selfBattleTag &&
-        sentMessages.includes(payload.message.content)
+      } else if (
+        gameStateProxy.selfBattleTag.toLowerCase().includes(payload.message.sender)
       ) {
-        sentMessages.splice(sentMessages.indexOf(payload.message.content), 1);
+        var sender = gameStateProxy.selfBattleTag;
       } else {
-        if (
-          sender === gameState.selfBattleTag &&
-          payload.message.content.match(/^(executed '!)|(Unknown command ')|(Command ')/i)
-        ) {
+        let possiblePlayers = lobbyController.lobby?.searchPlayer(payload.message.sender);
+        if (possiblePlayers && possiblePlayers.length === 1) {
+          var sender = possiblePlayers[0];
+        } else {
+          log.error(
+            `Unknown sender: ${payload.message.sender} for message: ${payload.message.content}`
+          );
           return;
         }
-        if (!lobby.newChat(payload.message.sender, payload.message.content)) return;
-        if (payload.message.content.match(/^\?votestart$/i)) {
+      }
+      if (sender === gameStateProxy.selfBattleTag) {
+        if (sentMessages.includes(payload.message.content)) {
+          sentMessages.splice(sentMessages.indexOf(payload.message.content), 1);
+          return;
+        } else if (
+          payload.message.content.match(
+            /^((\d{1,2}: (\[Closed]|\[Open]))|(Map Upload (Started|Offset|Complete): \d+)|(Name: ((([A-zÀ-ú][A-zÀ-ú0-9]{2,11})|(^([а-яёА-ЯЁÀ-ú][а-яёА-ЯЁ0-9À-ú]{2,11})))(#[0-9]{4,})|\w{2,11}), Key: (?:[0-9]{1,3}\.){3}[0-9]{1,3}))$/
+          )
+        ) {
+          // Escape debug messages
+          return;
+        } else if (
+          payload.message.content.match(/^(executed '!)|(Unknown command ')|(Command ')/i)
+        ) {
+          // Filter out some command returns from !swap etc
+          return;
+        }
+      }
+      {
+        if (!lobbyController.lobby?.newChat(sender, payload.message.content)) {
+          // Filter out repeated messages sent w/in 1 second
+          // TODO: more spam filters
+          return;
+        }
+        if (
+          sender !== gameStateProxy.selfBattleTag &&
+          payload.message.content.match(/^!debug/)
+        ) {
+          lobbyController.banPlayer(sender);
+        } else if (payload.message.content.match(/^\?votestart$/i)) {
           if (
             settings.autoHost.voteStart &&
-            lobby.voteStartVotes &&
-            lobby.lobbyStatic?.isHost &&
+            lobbyController.voteStartVotes &&
+            lobbyController.lobby.lobbyStatic.isHost &&
             ["rapidHost", "smartHost"].includes(settings.autoHost.type)
           ) {
-            if (!lobby.allPlayers.includes(sender)) {
+            if (!lobbyController.lobby.allPlayers.includes(sender)) {
               sendChatMessage("Only players may vote start.");
               return;
             }
-            if (lobby.voteStartVotes.length === 0) {
+            if (lobbyController.voteStartVotes.length === 0) {
               if (
                 (settings.autoHost.voteStartTeamFill &&
-                  lobby.allPlayerTeamsContainPlayers()) ||
+                  lobbyController.allPlayerTeamsContainPlayers()) ||
                 !settings.autoHost.voteStartTeamFill
               ) {
                 voteTimer = setTimeout(cancelVote, 60000);
@@ -1579,20 +1935,21 @@ if (!gotLock) {
                 return;
               }
             }
-            if (!lobby.voteStartVotes.includes(sender) && voteTimer) {
-              lobby.voteStartVotes.push(sender);
+            if (!lobbyController.voteStartVotes.includes(sender) && voteTimer) {
+              lobbyController.voteStartVotes.push(sender);
               if (
-                lobby.voteStartVotes.length >=
-                lobby.nonSpecPlayers.length * (settings.autoHost.voteStartPercent / 100)
+                lobbyController.voteStartVotes.length >=
+                lobbyController.lobby.nonSpecPlayers.length *
+                  (settings.autoHost.voteStartPercent / 100)
               ) {
                 log.info("Vote start succeeded");
                 startGame();
               } else {
                 sendChatMessage(
                   Math.ceil(
-                    lobby.nonSpecPlayers.length *
+                    lobbyController.lobby.nonSpecPlayers.length *
                       (settings.autoHost.voteStartPercent / 100) -
-                      lobby.voteStartVotes.length
+                      lobbyController.voteStartVotes.length
                   ).toString() + " more vote(s) required."
                 );
               }
@@ -1600,17 +1957,17 @@ if (!gotLock) {
           }
         } else if (payload.message.content.match(/^\?stats/)) {
           if (
-            lobby.lobbyStatic?.isHost &&
+            lobbyController.lobby.lobbyStatic?.isHost &&
             settings.elo.type !== "off" &&
-            lobby.eloAvailable
+            lobbyController.lobby.statsAvailable
           ) {
-            let data: PlayerData;
+            let data: false | PlayerData;
             let playerTarget = payload.message.content.split(" ")[1];
             if (playerTarget) {
-              let targets = lobby.searchPlayer(playerTarget);
+              let targets = lobbyController.lobby.searchPlayer(playerTarget);
               if (targets.length === 1) {
                 sender = targets[0];
-                data = lobby.getPlayerData(sender);
+                data = lobbyController.getPlayerData(sender);
               } else if (targets.length > 1) {
                 sendChatMessage("Multiple players found. Please be more specific.");
                 return;
@@ -1619,26 +1976,26 @@ if (!gotLock) {
                 return;
               }
             } else {
-              data = lobby.getPlayerData(sender);
+              data = lobbyController.getPlayerData(sender);
             }
             if (data) {
-              if (data.rating === -1) {
+              if (!data.extra || data.extra?.rating === -1) {
                 sendChatMessage("Data pending");
               } else {
                 sendChatMessage(
                   sender +
                     " ELO: " +
-                    data.rating +
+                    data.extra.rating +
                     ", Rank: " +
-                    data.rank +
+                    data.extra.rank +
                     ", Played: " +
-                    data.played +
+                    data.extra.played +
                     ", Wins: " +
-                    data.wins +
+                    data.extra.wins +
                     ", Losses: " +
-                    data.losses +
+                    data.extra.losses +
                     ", Last Change: " +
-                    data.lastChange
+                    data.extra.lastChange
                 );
               }
             } else {
@@ -1649,36 +2006,46 @@ if (!gotLock) {
           }
         } else if (payload.message.content.match(/^\?sp$/i)) {
           // TODO: Shuffle players
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
-            let players = lobby.nonSpecPlayers;
-            Object.values(players).forEach((player) => {
-              sendChatMessage(
-                "!swap " +
-                  player +
-                  " " +
-                  players[Math.floor(Math.random() * players.length)]
-              );
-            });
+          if (
+            lobbyController.lobby.lobbyStatic.isHost &&
+            checkRole(sender, "moderator")
+          ) {
+            lobbyController.shufflePlayers();
           }
-        } else if (payload.message.content.match(/^\?sf$/i)) {
+        } else if (payload.message.content.match(/^\?st$/i)) {
           // TODO: Shuffle teams
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
-            let players = lobby.exportTeamStructure();
+          if (
+            lobbyController.lobby.lobbyStatic?.isHost &&
+            checkRole(sender, "moderator")
+          ) {
+            lobbyController.shufflePlayers(false);
           }
         } else if (payload.message.content.match(/^\?start$/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          if (
+            lobbyController.lobby.lobbyStatic.isHost &&
+            checkRole(sender, "moderator")
+          ) {
             startGame();
           }
         } else if (payload.message.content.match(/^\?a$/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          if (
+            lobbyController.lobby.lobbyStatic.isHost &&
+            checkRole(sender, "moderator")
+          ) {
             cancelStart();
           }
         } else if (payload.message.content.match(/^\?closeall$/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          if (
+            lobbyController.lobby.lobbyStatic.isHost &&
+            checkRole(sender, "moderator")
+          ) {
             sendChatMessage("!closeall");
           }
         } else if (payload.message.content.match(/^\?hold$/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          if (
+            lobbyController.lobby.lobbyStatic.isHost &&
+            checkRole(sender, "moderator")
+          ) {
             let targetPlayer = payload.message.content.split(" ")[1];
             if (targetPlayer) {
               sendChatMessage("!hold " + targetPlayer);
@@ -1707,18 +2074,57 @@ if (!gotLock) {
             }
           }
         } else if (payload.message.content.match(/^\?openall$/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          if (
+            lobbyController.lobby.lobbyStatic.isHost &&
+            checkRole(sender, "moderator")
+          ) {
             sendChatMessage("!openall");
           }
         } else if (payload.message.content.match(/^\?swap/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          if (
+            lobbyController.lobby.lobbyStatic.isHost &&
+            checkRole(sender, "baswapper")
+          ) {
             let [command, ...args] = payload.message.content.split(" ");
             if (args.length === 2) {
-              if (
-                (isInt(args[1], 24, 1) || lobby.searchPlayer(args[1]).length === 1) &&
-                (isInt(args[0], 24, 1) || lobby.searchPlayer(args[0]).length === 1)
+              let playerData = lobbyController.lobby.getAllPlayerData();
+              let tenMinutesAgo = Date.now() - 10 * 60 * 1000;
+              if (isInt(args[1], 24, 1) && isInt(args[0], 24, 1)) {
+                if (
+                  checkRole(sender, "swapper") ||
+                  (playerData[lobbyController.lobby.slots[parseInt(args[0]) - 1].name]
+                    .joinedAt > tenMinutesAgo &&
+                    playerData[lobbyController.lobby.slots[parseInt(args[1]) - 1].name]
+                      .joinedAt > tenMinutesAgo)
+                ) {
+                  lobbyController.swapPlayers({
+                    slots: [
+                      ensureInt(args[0]) as SlotNumbers,
+                      ensureInt(args[1]) as SlotNumbers,
+                    ],
+                  });
+                } else {
+                  sendChatMessage(
+                    "You can only swap players who joined within the last 10 minutes."
+                  );
+                }
+              } else if (
+                lobbyController.lobby.searchPlayer(args[1]).length === 1 &&
+                lobbyController.lobby.searchPlayer(args[0]).length === 1
               ) {
-                sendChatMessage("!swap " + args[1] + " " + args[0]);
+                if (
+                  checkRole(sender, "swapper") ||
+                  (playerData[lobbyController.lobby.searchPlayer(args[1])[0]].joinedAt >
+                    tenMinutesAgo &&
+                    playerData[lobbyController.lobby.searchPlayer(args[0])[0]].joinedAt >
+                      tenMinutesAgo)
+                ) {
+                  lobbyController.swapPlayers({ players: [args[0], args[1]] });
+                } else {
+                  sendChatMessage(
+                    "You can only swap players who joined within the last 10 minutes."
+                  );
+                }
               } else {
                 sendChatMessage("All swap players not found, or too many matches.");
               }
@@ -1727,15 +2133,18 @@ if (!gotLock) {
             }
           }
         } else if (payload.message.content.match(/^\?handi/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          if (
+            lobbyController.lobby.lobbyStatic.isHost &&
+            checkRole(sender, "moderator")
+          ) {
             if (payload.message.content.split(" ").length === 3) {
               var target = payload.message.content.split(" ")[1];
               var handicap = parseInt(payload.message.content.split(" ")[2]);
               if (handicap) {
                 if (isInt(target, 24, 1)) {
-                  lobby.setHandicapSlot(parseInt(target) - 1, handicap);
+                  lobbyController.setHandicapSlot(parseInt(target) - 1, handicap);
                 } else {
-                  lobby.setPlayerHandicap(target, handicap);
+                  lobbyController.setPlayerHandicap(target, handicap);
                 }
               } else {
                 sendChatMessage("Invalid handicap");
@@ -1745,15 +2154,18 @@ if (!gotLock) {
             }
           }
         } else if (payload.message.content.match(/^\?close/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          if (
+            lobbyController.lobby.lobbyStatic.isHost &&
+            checkRole(sender, "moderator")
+          ) {
             var target = payload.message.content.split(" ")[1];
             if (target) {
               if (isInt(target, 24, 1)) {
-                lobby.closeSlot(parseInt(target) - 1);
+                lobbyController.closeSlot(parseInt(target) - 1);
               } else {
-                let targets = lobby.searchPlayer(target);
+                let targets = lobbyController.lobby.searchPlayer(target);
                 if (targets.length === 1) {
-                  lobby.closePlayer(targets[0]);
+                  lobbyController.closePlayer(targets[0]);
                 } else if (targets.length > 1) {
                   sendChatMessage("Multiple matches found. Please be more specific.");
                 } else {
@@ -1765,15 +2177,18 @@ if (!gotLock) {
             }
           }
         } else if (payload.message.content.match(/^\?open/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          if (
+            lobbyController.lobby.lobbyStatic.isHost &&
+            checkRole(sender, "moderator")
+          ) {
             var target = payload.message.content.split(" ")[1];
             if (target) {
               if (isInt(target, 24, 1)) {
-                lobby.openSlot(parseInt(target) - 1);
+                lobbyController.openSlot(parseInt(target) - 1);
               } else {
-                let targets = lobby.searchPlayer(target);
+                let targets = lobbyController.lobby.searchPlayer(target);
                 if (targets.length === 1) {
-                  lobby.kickPlayer(targets[0]);
+                  lobbyController.kickPlayer(targets[0]);
                 } else if (targets.length > 1) {
                   sendChatMessage("Multiple matches found. Please be more specific.");
                 } else {
@@ -1785,15 +2200,18 @@ if (!gotLock) {
             }
           }
         } else if (payload.message.content.match(/^\?kick/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          if (
+            lobbyController.lobby.lobbyStatic.isHost &&
+            checkRole(sender, "moderator")
+          ) {
             var target = payload.message.content.split(" ")[1];
             if (target) {
               if (isInt(target, 24, 1)) {
-                lobby.kickSlot(parseInt(target) - 1);
+                lobbyController.kickSlot(parseInt(target) - 1);
               } else {
-                let targets = lobby.searchPlayer(target);
+                let targets = lobbyController.lobby.searchPlayer(target);
                 if (targets.length === 1) {
-                  lobby.kickPlayer(targets[0]);
+                  lobbyController.kickPlayer(targets[0]);
                 } else if (targets.length > 1) {
                   sendChatMessage("Multiple matches found. Please be more specific.");
                 } else {
@@ -1805,21 +2223,29 @@ if (!gotLock) {
             }
           }
         } else if (payload.message.content.match(/^\?ban/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          if (
+            lobbyController.lobby.lobbyStatic.isHost &&
+            checkRole(sender, "moderator")
+          ) {
             var targetPlayer = payload.message.content.split(" ")[1];
             if (targetPlayer) {
               var reason = payload.message.content.split(" ").slice(2).join(" ") || "";
               if (isInt(targetPlayer, 24, 1)) {
-                lobby.banSlot(parseInt(targetPlayer) - 1);
-                banPlayer(lobby.slots[targetPlayer].name, sender, lobby.region, reason);
+                lobbyController.banSlot(parseInt(targetPlayer) - 1);
+                banPlayer(
+                  lobbyController.lobby.slots[targetPlayer].name,
+                  sender,
+                  lobbyController.lobby.region,
+                  reason
+                );
               } else {
                 if (targetPlayer.match(/^\D\S{2,11}#\d{4,8}$/)) {
                   sendChatMessage("Banning out of lobby player.");
-                  banPlayer(targetPlayer, sender, lobby.region, reason);
+                  banPlayer(targetPlayer, sender, lobbyController.lobby.region, reason);
                 } else {
-                  let targets = lobby.searchPlayer(targetPlayer);
+                  let targets = lobbyController.lobby.searchPlayer(targetPlayer);
                   if (targets.length === 1) {
-                    banPlayer(targets[0], sender, lobby.region, reason);
+                    banPlayer(targets[0], sender, lobbyController.lobby.region, reason);
                   } else if (targets.length > 1) {
                     sendChatMessage("Multiple matches found. Please be more specific.");
                   } else {
@@ -1832,7 +2258,10 @@ if (!gotLock) {
             }
           }
         } else if (payload.message.content.match(/^\?unban/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          if (
+            lobbyController.lobby.lobbyStatic.isHost &&
+            checkRole(sender, "moderator")
+          ) {
             var target = payload.message.content.split(" ")[1];
             if (target) {
               if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
@@ -1848,20 +2277,28 @@ if (!gotLock) {
             }
           }
         } else if (payload.message.content.match(/^\?white/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          if (
+            lobbyController.lobby.lobbyStatic?.isHost &&
+            checkRole(sender, "moderator")
+          ) {
             var targetPlayer = payload.message.content.split(" ")[1];
             if (targetPlayer) {
               var reason = payload.message.content.split(" ").slice(2).join(" ") || "";
               if (isInt(targetPlayer, 24, 1)) {
-                whitePlayer(lobby.slots[targetPlayer].name, sender, lobby.region, reason);
+                whitePlayer(
+                  lobbyController.lobby.slots[targetPlayer].name,
+                  sender,
+                  lobbyController.lobby.region,
+                  reason
+                );
               } else {
                 if (targetPlayer.match(/^\D\S{2,11}#\d{4,8}$/)) {
                   sendChatMessage("Whitelisting out of lobby player.");
-                  whitePlayer(targetPlayer, sender, lobby.region, reason);
+                  whitePlayer(targetPlayer, sender, lobbyController.lobby.region, reason);
                 } else {
-                  let targets = lobby.searchPlayer(targetPlayer);
+                  let targets = lobbyController.lobby.searchPlayer(targetPlayer);
                   if (targets.length === 1) {
-                    whitePlayer(targets[0], sender, lobby.region, reason);
+                    whitePlayer(targets[0], sender, lobbyController.lobby.region, reason);
                   } else if (targets.length > 1) {
                     sendChatMessage("Multiple matches found. Please be more specific.");
                   } else {
@@ -1875,7 +2312,10 @@ if (!gotLock) {
           }
         } else if (payload.message.content.match(/^\?unwhite/i)) {
           // TODO: In lobby search and removal
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "moderator")) {
+          if (
+            lobbyController.lobby.lobbyStatic.isHost &&
+            checkRole(sender, "moderator")
+          ) {
             var target = payload.message.content.split(" ")[1];
             if (target) {
               if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
@@ -1891,43 +2331,60 @@ if (!gotLock) {
             }
           }
         } else if (payload.message.content.match(/^\?perm/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "admin")) {
+          if (lobbyController.lobby.lobbyStatic.isHost && checkRole(sender, "admin")) {
             var target = payload.message.content.split(" ")[1];
-            var perm = payload.message.content.split(" ")[2]?.toLowerCase() ?? "mod";
+            var perm: "mod" | "baswapper" | "swapper" | "moderator" | "admin" =
+              (payload.message.content.split(" ")[2]?.toLowerCase() as
+                | null
+                | "baswapper"
+                | "swapper"
+                | "moderator"
+                | "admin") ?? "mod";
             perm = perm === "mod" ? "moderator" : perm;
-            if ((target && perm === "moderator") || perm === "admin") {
-              if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
-                sendChatMessage("Assigning out of lobby player " + perm + ".");
-                addAdmin(target, sender, lobby.region, perm);
-              } else {
-                let targets = lobby.searchPlayer(target);
-                if (targets.length === 1) {
-                  if (addAdmin(targets[0], sender, lobby.region, perm)) {
-                    sendChatMessage(targets[0] + " has been promoted to " + perm + ".");
-                  } else {
-                    sendChatMessage(
-                      "Could not promote " + targets[0] + " to " + perm + "."
-                    );
-                  }
-                } else if (targets.length > 1) {
-                  sendChatMessage("Multiple matches found. Please be more specific.");
+            if (target) {
+              if (["baswapper", "swapper", "moderator", "admin"].includes(perm)) {
+                if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
+                  sendChatMessage("Assigning out of lobby player " + perm + ".");
+                  addAdmin(target, sender, lobbyController.lobby.region, perm);
                 } else {
-                  sendChatMessage("No matches found.");
+                  let targets = lobbyController.lobby.searchPlayer(target);
+                  if (targets.length === 1) {
+                    if (
+                      addAdmin(targets[0], sender, lobbyController.lobby.region, perm)
+                    ) {
+                      sendChatMessage(targets[0] + " has been promoted to " + perm + ".");
+                    } else {
+                      sendChatMessage(
+                        "Could not promote " + targets[0] + " to " + perm + "."
+                      );
+                    }
+                  } else if (targets.length > 1) {
+                    sendChatMessage("Multiple matches found. Please be more specific.");
+                  } else {
+                    sendChatMessage("No matches found.");
+                  }
                 }
+              } else {
+                sendChatMessage("Invalid permission");
               }
             } else {
-              sendChatMessage("Target required, or perm incorrect");
+              sendChatMessage("Target required");
             }
           }
         } else if (payload.message.content.match(/^\?unperm/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "admin")) {
+          if (lobbyController.lobby.lobbyStatic?.isHost && checkRole(sender, "admin")) {
             var target = payload.message.content.split(" ")[1];
             if (target) {
               if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
-                sendChatMessage("Removed perm from out of lobby player: " + target);
-                removeAdmin(target, sender);
+                if (removeAdmin(target, sender)) {
+                  sendChatMessage("Removed perm from out of lobby player: " + target);
+                } else {
+                  sendChatMessage(
+                    "Could not remove perm from out of lobby player: " + target
+                  );
+                }
               } else {
-                let targets = lobby.searchPlayer(target);
+                let targets = lobbyController.lobby.searchPlayer(target);
                 if (targets.length === 1) {
                   if (removeAdmin(targets[0], sender)) {
                     sendChatMessage(targets[0] + " has been demoted.");
@@ -1945,7 +2402,7 @@ if (!gotLock) {
             }
           }
         } else if (payload.message.content.match(/^\?autohost/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "admin")) {
+          if (lobbyController.lobby.lobbyStatic.isHost && checkRole(sender, "admin")) {
             var target = payload.message.content.split(" ")[1];
             if (target) {
               target = target.toLowerCase();
@@ -1965,7 +2422,7 @@ if (!gotLock) {
             sendChatMessage("You do not have permission to use this command.");
           }
         } else if (payload.message.content.match(/^\?autostart/i)) {
-          if (lobby.lobbyStatic?.isHost && checkRole(sender, "admin")) {
+          if (lobbyController.lobby.lobbyStatic.isHost && checkRole(sender, "admin")) {
             var target = payload.message.content.split(" ")[1];
             if (target) {
               if (isInt(target, 24, 0)) {
@@ -1987,8 +2444,8 @@ if (!gotLock) {
             sendChatMessage("You do not have permission to use this command.");
           }
         } else if (payload.message.content.match(/^\?(help)|(commands)/i)) {
-          if (lobby.lobbyStatic?.isHost) {
-            if (lobby.eloAvailable) {
+          if (lobbyController.lobby.lobbyStatic.isHost) {
+            if (lobbyController.lobby.statsAvailable) {
               sendChatMessage(
                 "?stats <?player>: Return back your stats, or target player stats"
               );
@@ -2019,10 +2476,12 @@ if (!gotLock) {
               sendChatMessage("?unwhite <name>: Un-whitelists a player");
               sendChatMessage("?start: Starts game");
               sendChatMessage("?swap <name|slotNumber> <name|slotNumber>: Swaps players");
+              sendChatMessage("?sp: Shuffles players completely randomly");
+              sendChatMessage("?st: Shuffles players randomly between teams");
             }
             if (checkRole(sender, "admin")) {
               sendChatMessage(
-                "?perm <name> <?admin|mod>: Promotes a player to admin or moderator (mod by default)"
+                "?perm <name> <?admin|mod|swapper>: Promotes a player to a role (mod by default)"
               );
               sendChatMessage("?unperm <name>: Demotes player to normal");
               sendChatMessage(
@@ -2034,21 +2493,24 @@ if (!gotLock) {
         }
         var translatedMessage = "";
         if (payload.message.content.length > 4) {
-          var detectedLanguage = detectLang.detect(payload.message.content, 1)[0];
+          var detectLangs = detectLang.detect(payload.message.content, 1);
+          console.log(detectLangs);
           if (
             settings.client.language &&
             !payload.message.content.startsWith("?") &&
-            ![settings.client.language, null, "null"].includes(detectedLanguage[0]) &&
-            detectedLanguage[1] > 0.5
+            (!detectLangs ||
+              detectLangs.length === 0 ||
+              (![settings.client.language, null, "null"].includes(detectLangs[0][0]) &&
+                detectLangs[0][1] > 0.3))
           ) {
-            log.verbose(
-              "Translating '" + payload.message.content + "' from " + detectedLanguage
-            );
+            log.verbose("Translating '" + payload.message.content);
             try {
               translatedMessage = await translate(payload.message.content, {
                 to: settings.client.language,
               });
-              if (translatedMessage === payload.message.content) {
+              if (
+                translatedMessage.toLowerCase() === payload.message.content.toLowerCase()
+              ) {
                 translatedMessage = "";
               }
             } catch (e) {
@@ -2063,12 +2525,14 @@ if (!gotLock) {
 
         if (!settings.autoHost.private || !app.isPackaged) {
           sendToHub("lobbyUpdate", {
-            chatMessage: {
-              name: sender,
-              message:
-                payload.message.content +
-                ": " +
-                (translatedMessage ? translatedMessage : payload.message.content),
+            lobbyUpdates: {
+              chatMessage: {
+                name: sender,
+                message:
+                  payload.message.content +
+                  ": " +
+                  (translatedMessage ? translatedMessage : payload.message.content),
+              },
             },
           });
         }
@@ -2100,8 +2564,8 @@ if (!gotLock) {
         sendWindow("action", {
           value: "Banned " + player + " by " + admin + (reason ? " for " + reason : ""),
         });
-        if (lobby?.allPlayers.includes(player)) {
-          lobby.banPlayer(player);
+        if (lobbyController.lobby?.allPlayers.includes(player)) {
+          lobbyController.banPlayer(player);
           sendChatMessage(player + " banned" + (reason ? " for " + reason : ""));
         }
       } else {
@@ -2128,7 +2592,7 @@ if (!gotLock) {
           value:
             "Whitelisted " + player + " by " + admin + (reason ? " for " + reason : ""),
         });
-        if (lobby?.allPlayers.includes(player)) {
+        if (lobbyController.lobby?.allPlayers.includes(player)) {
           sendChatMessage(player + " whitelisted" + (reason ? " for " + reason : ""));
         }
       } else {
@@ -2157,33 +2621,38 @@ if (!gotLock) {
     player: string,
     admin: string,
     region: Regions | "client",
-    role: "moderator" | "admin" = "moderator"
+    role: "baswapper" | "swapper" | "moderator" | "admin" = "moderator"
   ) {
     if (checkRole(admin, "admin")) {
-      if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
-        if (checkRole(player, "moderator")) {
-          db.prepare("UPDATE adminList SET role = ?, admin = ?WHERE username = ?").run(
-            role,
-            admin,
-            player
-          );
-          log.info("Updated " + player + " to " + role + " by " + admin);
-          sendWindow("action", {
-            value: "Updated " + player + " to " + role + " by " + admin,
-          });
-          return true;
+      if (["baswapper", "swapper", "moderator", "admin"].includes(role)) {
+        if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
+          if (checkRole(player, "moderator")) {
+            db.prepare("UPDATE adminList SET role = ?, admin = ?WHERE username = ?").run(
+              role,
+              admin,
+              player
+            );
+            log.info("Updated " + player + " to " + role + " by " + admin);
+            sendWindow("action", {
+              value: "Updated " + player + " to " + role + " by " + admin,
+            });
+            return true;
+          } else {
+            db.prepare(
+              "INSERT INTO adminList (username, admin, region, role) VALUES (?, ?, ?, ?)"
+            ).run(player, admin, region, role);
+            log.info("Added " + player + " to " + role + " by " + admin);
+            sendWindow("action", {
+              value: "Added " + player + " to " + role + " by " + admin,
+            });
+            return true;
+          }
         } else {
-          db.prepare(
-            "INSERT INTO adminList (username, admin, region, role) VALUES (?, ?, ?, ?)"
-          ).run(player, admin, region, role);
-          log.info("Added " + player + " to " + role + " by " + admin);
-          sendWindow("action", {
-            value: "Added " + player + " to " + role + " by " + admin,
-          });
-          return true;
+          log.info("Failed to add admin, invalid battleTag: " + player);
+          return false;
         }
       } else {
-        log.info("Failed to add admin, invalid battleTag: " + player);
+        log.info("Failed to add admin, invalid role: " + role);
         return false;
       }
     } else {
@@ -2195,7 +2664,7 @@ if (!gotLock) {
   function removeAdmin(player: string, admin: string) {
     if (checkRole(admin, "admin")) {
       if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
-        if (checkRole(player, "moderator")) {
+        if (checkRole(player, "baswapper")) {
           db.prepare("DELETE FROM adminList WHERE username = ?").run(player);
           log.info("Removed permissions from " + player);
           sendWindow("action", { value: "Removed permissions from " + player });
@@ -2211,9 +2680,12 @@ if (!gotLock) {
     }
   }
 
-  function checkRole(player: string, minPerms: "moderator" | "admin") {
+  function checkRole(
+    player: string,
+    minPerms: "baswapper" | "swapper" | "moderator" | "admin"
+  ) {
     if (!player) return false;
-    if (player === gameState.selfBattleTag || player === "client") {
+    if (player === gameStateProxy.selfBattleTag || player === "client") {
       return true;
     }
     const targetRole = db
@@ -2221,11 +2693,20 @@ if (!gotLock) {
       .get(player)?.role;
     if (targetRole) {
       if (
-        minPerms === "moderator" &&
-        (targetRole === "admin" || targetRole === "moderator")
+        minPerms === "baswapper" &&
+        (targetRole === "baswapper" ||
+          targetRole === "swapper" ||
+          targetRole === "moderator")
       ) {
         return true;
-      } else if (minPerms === "admin" && targetRole === "admin") {
+      } else if (
+        minPerms === "swapper" &&
+        (targetRole === "swapper" || targetRole === "moderator")
+      ) {
+        return true;
+      } else if (minPerms === "moderator" && targetRole === "moderator") {
+        return true;
+      } else if (targetRole === "admin") {
         return true;
       }
     }
@@ -2242,14 +2723,14 @@ if (!gotLock) {
       sendChatMessage("Vote timed out.");
       log.info("Vote timed out");
     }
-    if (lobby) {
-      lobby.voteStartVotes = [];
+    if (lobbyController) {
+      lobbyController.voteStartVotes = [];
     }
   }
 
   function handleLobbyUpdate(payload: GameClientLobbyPayload) {
     if (payload.teamData.playableSlots > 1) {
-      lobby.processLobby(payload, gameState.selfRegion as Regions);
+      lobbyController.ingestLobby(payload, gameStateProxy.selfRegion as Regions);
     }
   }
 
@@ -2258,25 +2739,25 @@ if (!gotLock) {
     sendMessage("LobbyCancel", {});
   }
 
-  function startGame() {
-    sendChatMessage("AutoHost functionality provided by WC3 MultiTool.");
-    log.info("Starting game");
-    sendMessage("LobbyStart", {});
+  function startGame(delay: number = 0) {
+    lobbyController.startGame(delay);
   }
 
   async function leaveGame() {
     log.info("Leaving Game");
-    sendMessage("LeaveGame", {});
     if (
-      (inGame || ["GAME_LOBBY", "CUSTOM_GAME_LOBBY"].includes(gameState.menuState)) &&
-      lobby?.lobbyStatic?.lobbyName
+      gameStateProxy.inGame ||
+      ["GAME_LOBBY", "CUSTOM_GAME_LOBBY"].includes(gameStateProxy.menuState)
     ) {
-      let oldLobbyName = lobby.lobbyStatic.lobbyName;
-      await sleep(1000);
-      if (lobby?.lobbyStatic?.lobbyName === oldLobbyName) {
-        log.info("Lobby did not leave, trying again");
-        await exitGame();
-        openWarcraft();
+      sendMessage("LeaveGame", {});
+      if (lobbyController.lobby?.lobbyStatic?.lobbyName) {
+        let oldLobbyName = lobbyController.lobby.lobbyStatic.lobbyName;
+        await sleep(1000);
+        if (lobbyController.lobby.lobbyStatic.lobbyName === oldLobbyName) {
+          log.info("Lobby did not leave, trying again");
+          await exitGame();
+          openWarcraft();
+        }
       }
     }
   }
@@ -2285,7 +2766,7 @@ if (!gotLock) {
     if (await isWarcraftOpen()) {
       if (callCount < 5) {
         return await forceQuitWar();
-      } else if (gameState.menuState === "LOADING_SCREEN") {
+      } else if (gameStateProxy.menuState === "LOADING_SCREEN") {
         log.info("Warcraft is loading game, forcing quit");
         return await forceQuitWar();
       } else {
@@ -2346,9 +2827,9 @@ if (!gotLock) {
 
   function announcement() {
     if (
-      (gameState.menuState === "CUSTOM_GAME_LOBBY" ||
-        gameState.menuState === "GAME_LOBBY") &&
-      lobby.lobbyStatic?.isHost
+      (gameStateProxy.menuState === "CUSTOM_GAME_LOBBY" ||
+        gameStateProxy.menuState === "GAME_LOBBY") &&
+      lobbyController.lobby?.lobbyStatic.isHost
     ) {
       let currentTime = Date.now();
       if (
@@ -2359,11 +2840,17 @@ if (!gotLock) {
         if (["rapidHost", "smartHost"].includes(settings.autoHost.type)) {
           if (settings.autoHost.announceIsBot) {
             let text = "Welcome. I am a bot.";
-            if (lobby.eloAvailable && settings.elo.type !== "off") {
+            if (lobbyController.lobby.statsAvailable && settings.elo.type !== "off") {
               text += " I will fetch ELO from " + settings.elo.type + ".";
               if (settings.elo.balanceTeams) {
                 text += " I will try to balance teams before we start.";
               }
+            }
+            if (
+              (settings.elo.type === "off" || !settings.elo.balanceTeams) &&
+              settings.autoHost.shufflePlayers
+            ) {
+              text += " I will shuffle players before we start.";
             }
             if (["smartHost", "rapidHost".includes(settings.autoHost.type)]) {
               text += " I will start when slots are full.";
@@ -2423,10 +2910,34 @@ if (!gotLock) {
     }
   }
 
+  async function smartQuit() {
+    if (gameStateProxy.inGame || gameStateProxy.menuState === "LOADING_SCREEN") {
+      if (fs.existsSync(wc3mtTargetFile)) {
+        // The library seems to create the file at the start of the game anyways, so if it is going to be written to, don't do ocr.
+        if (
+          fs
+            .readFileSync(wc3mtTargetFile)
+            .toString()
+            .match(/wc3mt-GameEnd/)
+        ) {
+          log.info("Game is over, quitting.");
+          fs.rmSync(wc3mtTargetFile);
+          leaveGame();
+        } else {
+          setTimeout(smartQuit, 1000);
+        }
+      } else {
+        findQuit();
+      }
+    }
+  }
+
   async function findQuit() {
-    if ((inGame || gameState.menuState === "LOADING_SCREEN") && webUISocket?.OPEN) {
-      await activeWindowWar();
-      if (warcraftInFocus) {
+    if (
+      (gameStateProxy.inGame || gameStateProxy.menuState === "LOADING_SCREEN") &&
+      webUISocket?.OPEN
+    ) {
+      if (await activeWindowWar()) {
         let foundTarget = false;
         let searchFiles = ["quitNormal.png", "quitHLW.png"];
         for (const file of searchFiles) {
@@ -2446,7 +2957,9 @@ if (!gotLock) {
           if (settings.autoHost.sounds) {
             playSound("quit.wav");
           }
-        } else if (!lobby.nonSpecPlayers.includes(gameState.selfBattleTag)) {
+        } else if (
+          !lobbyController.lobby?.nonSpecPlayers.includes(gameStateProxy.selfBattleTag)
+        ) {
           if (settings.autoHost.leaveAlternate) {
             foundTarget = false;
             keyboard.type(Key.F12);
@@ -2489,7 +3002,7 @@ if (!gotLock) {
           }
         }
       }
-      setTimeout(findQuit, 5000);
+      setTimeout(smartQuit, 5000);
     }
   }
 
@@ -2556,12 +3069,11 @@ if (!gotLock) {
 
   function sendChatMessage(content: string) {
     if (
-      gameState.menuState === "GAME_LOBBY" ||
-      gameState.menuState === "CUSTOM_GAME_LOBBY"
+      gameStateProxy.menuState === "GAME_LOBBY" ||
+      gameStateProxy.menuState === "CUSTOM_GAME_LOBBY"
     ) {
       if (typeof content === "string" && content.length > 0) {
         let newChatSplit = content.match(/.{1,255}/g);
-        console.log("data", newChatSplit);
         if (!newChatSplit) {
           log.warn("Could not split chat message into 255 character chunks");
           return;
@@ -2577,9 +3089,10 @@ if (!gotLock) {
     }
   }
 
-  async function activeWindowWar() {
+  async function activeWindowWar(): Promise<Window | false> {
     const warcraftOpenCheck = await isWarcraftOpen();
     let height = 1080;
+    let activeWindow: Window | false = false;
     if (warcraftIsOpen && !warcraftOpenCheck) {
       warcraftIsOpen = warcraftOpenCheck;
       new Notification({
@@ -2589,7 +3102,7 @@ if (!gotLock) {
       height = await screen.height();
     } else {
       warcraftIsOpen = warcraftOpenCheck;
-      let activeWindow = await getActiveWindow();
+      activeWindow = await getActiveWindow();
       let title = await activeWindow.title;
       const focused = title === "Warcraft III";
       // Ensure that a notification is only sent the first time, if warcraft was focused before, but is no longer
@@ -2604,9 +3117,9 @@ if (!gotLock) {
         warcraftRegion = await activeWindow.region;
         height = warcraftRegion.height;
       }
-      return activeWindow;
     }
     setResourceDir(height);
+    return activeWindow;
   }
 
   async function isWarcraftOpen() {
@@ -2636,12 +3149,14 @@ if (!gotLock) {
     callCount = 0,
     focusAttempted = false
   ): Promise<boolean> {
+    gameStateProxy.action = "openingWarcraft";
     try {
       if (callCount > 60) {
         log.warn("Failed to open Warcraft after 60 attempts");
       }
       if (await isWarcraftOpen()) {
         log.info("Warcraft is now open");
+        gameStateProxy.action = "nothing";
         return true;
       }
       if (settings.client.alternateLaunch) {
@@ -2668,6 +3183,7 @@ if (!gotLock) {
         }
         if (title === "Blizzard Battle.net Login") {
           log.warn("A login is required to open Warcraft");
+          gameStateProxy.action = "nothing";
           return false;
         }
         if (title === "Battle.net") {
@@ -2703,6 +3219,7 @@ if (!gotLock) {
           return await openWarcraft(region, callCount + 1, true);
         } else {
           log.warn("Failed to focus Battle.net");
+          gameStateProxy.action = "nothing";
           return false;
         }
       }
@@ -2762,9 +3279,9 @@ if (!gotLock) {
           settings.autoHost.regionChangeTimeNA
         );
       }
-      let targetRegion = { asia: 1, eu: 2, us: 3, "": 0 }[region];
+      let targetRegion = { asia: 1, eu: 2, us: 3, usw: 3, "": 0 }[region];
       try {
-        if (targetRegion > 0 && gameState.selfRegion !== region) {
+        if (targetRegion && targetRegion > 0 && gameStateProxy.selfRegion !== region) {
           log.info(`Changing region to ${region}`);
           let changeRegionPosition = await screen.waitFor(
             imageResource("changeRegion.png"),
@@ -2800,6 +3317,7 @@ if (!gotLock) {
         for (let i = 0; i < 10; i++) {
           if (await isWarcraftOpen()) {
             log.info("Warcraft is now open.");
+            gameStateProxy.action = "nothing";
             return true;
           }
           await sleep(100);
@@ -2810,9 +3328,11 @@ if (!gotLock) {
         return await openWarcraft(region, callCount + 15);
       }
       log.warn("Failed to open Warcraft.");
+      gameStateProxy.action = "nothing";
       return false;
     } catch (e) {
       log.warn(e);
+      gameStateProxy.action = "nothing";
       return false;
     }
   }
@@ -2850,11 +3370,11 @@ if (!gotLock) {
     }
     await activeWindowWar();
     try {
-      if (inGame && warcraftInFocus) {
+      if (gameStateProxy.inGame && warcraftInFocus) {
         sendingInGameChat.active = true;
         let nextMessage = sendingInGameChat.queue.shift();
         while (nextMessage) {
-          if (inGame && warcraftInFocus) {
+          if (gameStateProxy.inGame && warcraftInFocus) {
             log.info("Sending chat: " + nextMessage);
             clipboard.writeText(nextMessage);
             await mouse.leftClick();
@@ -2865,7 +3385,7 @@ if (!gotLock) {
           } else {
             log.info(
               "Forced to stop sending messages. In Game: " +
-                inGame +
+                gameStateProxy.inGame +
                 " Warcraft in focus: " +
                 warcraftInFocus
             );
@@ -2895,38 +3415,47 @@ if (!gotLock) {
     }
   }
 
-  function commSend(messageType: string, payload?: string | Object) {
+  function commSend(
+    messageType: HubReceive["messageType"] | WindowReceive["messageType"] | "gameState",
+    data?: string | Object
+  ) {
     if (settings.client.commAddress) {
       if (commSocket) {
         if (commSocket.readyState === commSocket.OPEN) {
-          commSocket.send(JSON.stringify({ messageType, payload }));
+          commSocket.send(JSON.stringify({ messageType, data }));
         } else if (commSocket.readyState === commSocket.CONNECTING) {
           setTimeout(() => {
-            commSend(messageType, payload);
+            commSend(messageType, data);
           }, 250);
         }
       } else {
-        log.warn("Comm socket not connected.");
+        //log.warn("Comm socket not connected.");
       }
     }
   }
 
   function commSetup() {
-    if (settings.client.commAddress) {
-      log.info("Connecting to comm socket: " + settings.client.commAddress);
+    if (settings.client.commAddress && isValidUrl(settings.client.commAddress)) {
+      log.info(
+        "Connecting to comm socket: " + settings.client.commAddress + "/" + identifier
+      );
       if (commSocket) {
         log.info("Comm socket already connected. Disconnecting old socket.");
         commSocket.close();
         commSocket = null;
       }
-      commSocket = new WebSocket(settings.client.commAddress);
+      commSocket = new WebSocket(settings.client.commAddress + "/" + identifier);
       commSocket.on("open", () => {
         log.info("Connected to comm");
-        commSend("settings", settings);
+        commSend("settings", { settings });
+        commSend("gameState", { gameState: gameState });
       });
       commSocket.on("close", () => {
         log.info("Disconnected from comm");
         commSocket = null;
+        setTimeout(() => {
+          commSetup();
+        }, 1000);
       });
       commSocket.on("error", (error) => {
         log.warn("Error in comm: " + error);
@@ -2975,6 +3504,11 @@ if (!gotLock) {
         break;
       case "init":
         sendWindow("updateSettings", { settings: settings });
+        if (lobbyController.lobby) {
+          sendWindow("lobbyUpdate", {
+            lobbyData: { newLobby: lobbyController.lobby.exportMin() },
+          });
+        }
         break;
       case "openLogs":
         shell.openPath(log.transports.file.getFile().path);
@@ -3050,10 +3584,14 @@ if (!gotLock) {
           });
         break;
       case "updateSettingSingle":
-        let update = args.data?.update;
+        let update = args.update;
         if (update) {
           updateSetting(update.setting, update.key, update.value);
         }
+        break;
+      case "autoHostLobby":
+        log.info("Comm AutoHost lobby");
+        autoHostGame(true);
         break;
       default:
         log.info("Unknown client command:", args);
