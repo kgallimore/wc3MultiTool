@@ -896,7 +896,8 @@
                       game after specified timer(minutes). (-1 will force quit at loading
                       screen)<br />
                       <strong>Smart Host:</strong> Hosts lobbies, auto starts, quits the
-                      game if this end screen pops up:
+                      game if you use the wc3mt lib (see discord), with a fallback to
+                      attempting to see if this screen opens(OCR, unreliable):
                       <img class="img-fluid" src="quitNormal.png" alt="Quit Normal" />
                       Intrusive Check will check the chat menu to see if anyone else is left.
                     </details>
