@@ -2083,22 +2083,48 @@ if (!gotLock) {
         } else if (payload.message.content.match(/^\?swap/i)) {
           if (
             lobbyController.lobby.lobbyStatic.isHost &&
-            checkRole(sender, "moderator")
+            checkRole(sender, "baswapper")
           ) {
             let [command, ...args] = payload.message.content.split(" ");
             if (args.length === 2) {
+              let playerData = lobbyController.lobby.getAllPlayerData();
+              let tenMinutesAgo = Date.now() - 10 * 60 * 1000;
               if (isInt(args[1], 24, 1) && isInt(args[0], 24, 1)) {
-                lobbyController.swapPlayers({
-                  slots: [
-                    ensureInt(args[0]) as SlotNumbers,
-                    ensureInt(args[1]) as SlotNumbers,
-                  ],
-                });
+                if (
+                  checkRole(sender, "swapper") ||
+                  (playerData[lobbyController.lobby.slots[parseInt(args[0]) - 1].name]
+                    .joinedAt > tenMinutesAgo &&
+                    playerData[lobbyController.lobby.slots[parseInt(args[1]) - 1].name]
+                      .joinedAt > tenMinutesAgo)
+                ) {
+                  lobbyController.swapPlayers({
+                    slots: [
+                      ensureInt(args[0]) as SlotNumbers,
+                      ensureInt(args[1]) as SlotNumbers,
+                    ],
+                  });
+                } else {
+                  sendChatMessage(
+                    "You can only swap players who joined within the last 10 minutes."
+                  );
+                }
               } else if (
                 lobbyController.lobby.searchPlayer(args[1]).length === 1 &&
                 lobbyController.lobby.searchPlayer(args[0]).length === 1
               ) {
-                lobbyController.swapPlayers({ players: [args[0], args[1]] });
+                if (
+                  checkRole(sender, "swapper") ||
+                  (playerData[lobbyController.lobby.searchPlayer(args[1])[0]].joinedAt >
+                    tenMinutesAgo &&
+                    playerData[lobbyController.lobby.searchPlayer(args[0])[0]].joinedAt >
+                      tenMinutesAgo)
+                ) {
+                  lobbyController.swapPlayers({ players: [args[0], args[1]] });
+                } else {
+                  sendChatMessage(
+                    "You can only swap players who joined within the last 10 minutes."
+                  );
+                }
               } else {
                 sendChatMessage("All swap players not found, or too many matches.");
               }
@@ -2307,30 +2333,42 @@ if (!gotLock) {
         } else if (payload.message.content.match(/^\?perm/i)) {
           if (lobbyController.lobby.lobbyStatic.isHost && checkRole(sender, "admin")) {
             var target = payload.message.content.split(" ")[1];
-            var perm = payload.message.content.split(" ")[2]?.toLowerCase() ?? "mod";
+            var perm: "mod" | "baswapper" | "swapper" | "moderator" | "admin" =
+              (payload.message.content.split(" ")[2]?.toLowerCase() as
+                | null
+                | "baswapper"
+                | "swapper"
+                | "moderator"
+                | "admin") ?? "mod";
             perm = perm === "mod" ? "moderator" : perm;
-            if ((target && perm === "moderator") || perm === "admin") {
-              if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
-                sendChatMessage("Assigning out of lobby player " + perm + ".");
-                addAdmin(target, sender, lobbyController.lobby.region, perm);
-              } else {
-                let targets = lobbyController.lobby.searchPlayer(target);
-                if (targets.length === 1) {
-                  if (addAdmin(targets[0], sender, lobbyController.lobby.region, perm)) {
-                    sendChatMessage(targets[0] + " has been promoted to " + perm + ".");
-                  } else {
-                    sendChatMessage(
-                      "Could not promote " + targets[0] + " to " + perm + "."
-                    );
-                  }
-                } else if (targets.length > 1) {
-                  sendChatMessage("Multiple matches found. Please be more specific.");
+            if (target) {
+              if (["baswapper", "swapper", "moderator", "admin"].includes(perm)) {
+                if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
+                  sendChatMessage("Assigning out of lobby player " + perm + ".");
+                  addAdmin(target, sender, lobbyController.lobby.region, perm);
                 } else {
-                  sendChatMessage("No matches found.");
+                  let targets = lobbyController.lobby.searchPlayer(target);
+                  if (targets.length === 1) {
+                    if (
+                      addAdmin(targets[0], sender, lobbyController.lobby.region, perm)
+                    ) {
+                      sendChatMessage(targets[0] + " has been promoted to " + perm + ".");
+                    } else {
+                      sendChatMessage(
+                        "Could not promote " + targets[0] + " to " + perm + "."
+                      );
+                    }
+                  } else if (targets.length > 1) {
+                    sendChatMessage("Multiple matches found. Please be more specific.");
+                  } else {
+                    sendChatMessage("No matches found.");
+                  }
                 }
+              } else {
+                sendChatMessage("Invalid permission");
               }
             } else {
-              sendChatMessage("Target required, or perm incorrect");
+              sendChatMessage("Target required");
             }
           }
         } else if (payload.message.content.match(/^\?unperm/i)) {
@@ -2338,8 +2376,13 @@ if (!gotLock) {
             var target = payload.message.content.split(" ")[1];
             if (target) {
               if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
-                sendChatMessage("Removed perm from out of lobby player: " + target);
-                removeAdmin(target, sender);
+                if (removeAdmin(target, sender)) {
+                  sendChatMessage("Removed perm from out of lobby player: " + target);
+                } else {
+                  sendChatMessage(
+                    "Could not remove perm from out of lobby player: " + target
+                  );
+                }
               } else {
                 let targets = lobbyController.lobby.searchPlayer(target);
                 if (targets.length === 1) {
@@ -2438,7 +2481,7 @@ if (!gotLock) {
             }
             if (checkRole(sender, "admin")) {
               sendChatMessage(
-                "?perm <name> <?admin|mod>: Promotes a player to admin or moderator (mod by default)"
+                "?perm <name> <?admin|mod|swapper>: Promotes a player to a role (mod by default)"
               );
               sendChatMessage("?unperm <name>: Demotes player to normal");
               sendChatMessage(
@@ -2578,33 +2621,38 @@ if (!gotLock) {
     player: string,
     admin: string,
     region: Regions | "client",
-    role: "moderator" | "admin" = "moderator"
+    role: "baswapper" | "swapper" | "moderator" | "admin" = "moderator"
   ) {
     if (checkRole(admin, "admin")) {
-      if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
-        if (checkRole(player, "moderator")) {
-          db.prepare("UPDATE adminList SET role = ?, admin = ?WHERE username = ?").run(
-            role,
-            admin,
-            player
-          );
-          log.info("Updated " + player + " to " + role + " by " + admin);
-          sendWindow("action", {
-            value: "Updated " + player + " to " + role + " by " + admin,
-          });
-          return true;
+      if (["baswapper", "swapper", "moderator", "admin"].includes(role)) {
+        if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
+          if (checkRole(player, "moderator")) {
+            db.prepare("UPDATE adminList SET role = ?, admin = ?WHERE username = ?").run(
+              role,
+              admin,
+              player
+            );
+            log.info("Updated " + player + " to " + role + " by " + admin);
+            sendWindow("action", {
+              value: "Updated " + player + " to " + role + " by " + admin,
+            });
+            return true;
+          } else {
+            db.prepare(
+              "INSERT INTO adminList (username, admin, region, role) VALUES (?, ?, ?, ?)"
+            ).run(player, admin, region, role);
+            log.info("Added " + player + " to " + role + " by " + admin);
+            sendWindow("action", {
+              value: "Added " + player + " to " + role + " by " + admin,
+            });
+            return true;
+          }
         } else {
-          db.prepare(
-            "INSERT INTO adminList (username, admin, region, role) VALUES (?, ?, ?, ?)"
-          ).run(player, admin, region, role);
-          log.info("Added " + player + " to " + role + " by " + admin);
-          sendWindow("action", {
-            value: "Added " + player + " to " + role + " by " + admin,
-          });
-          return true;
+          log.info("Failed to add admin, invalid battleTag: " + player);
+          return false;
         }
       } else {
-        log.info("Failed to add admin, invalid battleTag: " + player);
+        log.info("Failed to add admin, invalid role: " + role);
         return false;
       }
     } else {
@@ -2616,7 +2664,7 @@ if (!gotLock) {
   function removeAdmin(player: string, admin: string) {
     if (checkRole(admin, "admin")) {
       if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
-        if (checkRole(player, "moderator")) {
+        if (checkRole(player, "baswapper")) {
           db.prepare("DELETE FROM adminList WHERE username = ?").run(player);
           log.info("Removed permissions from " + player);
           sendWindow("action", { value: "Removed permissions from " + player });
@@ -2632,7 +2680,10 @@ if (!gotLock) {
     }
   }
 
-  function checkRole(player: string, minPerms: "moderator" | "admin") {
+  function checkRole(
+    player: string,
+    minPerms: "baswapper" | "swapper" | "moderator" | "admin"
+  ) {
     if (!player) return false;
     if (player === gameStateProxy.selfBattleTag || player === "client") {
       return true;
@@ -2642,11 +2693,20 @@ if (!gotLock) {
       .get(player)?.role;
     if (targetRole) {
       if (
-        minPerms === "moderator" &&
-        (targetRole === "admin" || targetRole === "moderator")
+        minPerms === "baswapper" &&
+        (targetRole === "baswapper" ||
+          targetRole === "swapper" ||
+          targetRole === "moderator")
       ) {
         return true;
-      } else if (minPerms === "admin" && targetRole === "admin") {
+      } else if (
+        minPerms === "swapper" &&
+        (targetRole === "swapper" || targetRole === "moderator")
+      ) {
+        return true;
+      } else if (minPerms === "moderator" && targetRole === "moderator") {
+        return true;
+      } else if (targetRole === "admin") {
         return true;
       }
     }

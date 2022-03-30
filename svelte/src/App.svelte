@@ -2171,6 +2171,7 @@
           <li>Filter out !debug messages from sending to discord/hub</li>
           <li>Private key for wc3stats uploads</li>
           <li>Choose observer type</li>
+          <li>Swapper role</li>
         </ul>
         <strong>Fixes:</strong>
         <ul>
@@ -2395,8 +2396,8 @@
             ?sp: Shuffles players completely randomly ?st: Shuffles players randomly between
             teams<br />
             <strong>Admin:</strong><br />
-            ?perm (name) (?admin|mod): Promotes a player to admin or moderator (mod by default).<br
-            />
+            ?perm (name) (?admin|mod|swapper): Promotes a player to a specified role (mod by
+            default).<br />
             ?unperm (name): Demotes player to normal<br />
             ?autohost (?off|rapid|lobby|smart): Gets/?Sets autohost type
           </details>
