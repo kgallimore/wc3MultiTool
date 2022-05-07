@@ -331,7 +331,16 @@ export function getTargetRegion(
 
 export interface GameState {
   selfRegion: Regions | "";
-  menuState: "OUT_OF_MENUS" | "MAIN_MENU" | "CUSTOM_LOBBIES" | "GAME_LOBBY" | string;
+  menuState:
+    | "OUT_OF_MENUS"
+    | "MAIN_MENU"
+    | "CUSTOM_LOBBIES"
+    | "GAME_LOBBY"
+    | "LOADING_SCREEN"
+    | "SCORE_SCREEN"
+    | "LOGIN_DOORS"
+    | "CUSTOM_GAME_LOBBY"
+    | "null";
   screenState: string;
   selfBattleTag: string;
   inGame: boolean;
