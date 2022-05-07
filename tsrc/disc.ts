@@ -153,11 +153,6 @@ export class DisClient extends EventEmitter {
       );
       this.#embed?.addFields([{ name: teamName, value: combinedData.join("\n") ?? "" }]);
     });
-    /*this.client?.user?.setActivity("Warcraft III", {
-      name: lobbyData.lobbyStatic.lobbyName,
-      type: "PLAYING",
-      url: "https://war.trenchguns.com",
-    });*/
     this.client?.user?.setActivity({
       name: "Warcraft III - " + lobbyData.lobbyStatic.lobbyName,
       type: "PLAYING",

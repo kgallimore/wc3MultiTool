@@ -12,6 +12,7 @@
   import { MicroLobby, PlayerData } from "wc3mt-lobby-container";
   import CloseSlot from "./components/CloseSlot.svelte";
   import SettingsCheckbox from "./components/SettingsCheckbox.svelte";
+  import WhiteBanList from "./components/WhiteBanList.svelte";
   let settings: AppSettings = {
     autoHost: {
       type: "off",
@@ -127,21 +128,11 @@
   let banReason = "";
   let lastAction = "";
   let banList: {
-    data: Array<
-      BanWhiteList & {
-        ban_date: string;
-        unban_date: string;
-      }
-    >;
+    data: Array<BanWhiteList>;
     page: number;
   } = { data: [], page: 0 };
   let whiteList: {
-    data: Array<
-      BanWhiteList & {
-        white_date: string;
-        unwhite_date: string;
-      }
-    >;
+    data: Array<BanWhiteList>;
     page: number;
   } = { data: [], page: 0 };
   $: region = getTargetRegion(
@@ -304,11 +295,14 @@
       case "gotMapPath":
         settings.autoHost.mapPath = newData.value;
         break;
-      case "banList":
-        banList = { data: newData.banList, page: newData.page };
-        break;
-      case "whiteList":
-        whiteList = { data: newData.whiteList, page: newData.page };
+      case "fetchedWhiteBanList":
+        if (newData.fetched) {
+          if (newData.fetched.type === "banList") {
+            banList = { data: newData.fetched.list, page: newData.fetched.page };
+          } else if (newData.fetched.type === "whiteList") {
+            whiteList = { data: newData.fetched.list, page: newData.fetched.page };
+          }
+        }
         break;
       default:
         console.log("Unknown:", data);
@@ -1999,134 +1993,8 @@
       </div>
     </div>
   </div>
-  <div class="modal fade" id="banListModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">BanList</h5>
-          <button
-            type="button"
-            class="btn-close"
-            data-bs-dismiss="modal"
-            aria-label="Close"
-          />
-        </div>
-        <div class="modal-body">
-          <div class="w-full text-center">
-            <button
-              class="btn btn-primary"
-              disabled={banList.page === 0}
-              on:click={() => {
-                toMain({
-                  messageType: "fetchBanList",
-                  page: banList.page - 1,
-                });
-              }}
-            >
-              Previous Page
-            </button>
-            Page: {banList.page}
-            <button
-              class="btn btn-primary"
-              disabled={banList.data.length !== 10}
-              on:click={() => {
-                toMain({
-                  messageType: "fetchBanList",
-                  page: banList.page + 1,
-                });
-              }}
-            >
-              Next Page
-            </button>
-          </div>
-          <table class="table table-sm table-striped table-hover">
-            <tr>
-              <th>Username</th>
-              <th>Date Added</th>
-              <th>Admin</th>
-              <th>Reason</th>
-              <th>Removal</th>
-            </tr>
-            <tbody>
-              {#each banList.data as player}
-                <tr>
-                  <td>{player.username}</td>
-                  <td>{player.ban_date}</td>
-                  <td>{player.admin}</td>
-                  <td>{player.reason}</td>
-                  <td>{player.unban_date}</td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class="modal fade" id="whiteListModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">WhiteList</h5>
-          <button
-            type="button"
-            class="btn-close"
-            data-bs-dismiss="modal"
-            aria-label="Close"
-          />
-        </div>
-        <div class="modal-body">
-          <div class="w-full text-center">
-            <button
-              class="btn btn-primary"
-              disabled={whiteList.page === 0}
-              on:click={() => {
-                toMain({
-                  messageType: "fetchWhiteList",
-                  page: whiteList.page - 1,
-                });
-              }}
-            >
-              Previous Page
-            </button>
-            Page: {whiteList.page}
-            <button
-              class="btn btn-primary"
-              disabled={whiteList.data.length !== 10}
-              on:click={() => {
-                toMain({
-                  messageType: "fetchWhiteList",
-                  page: whiteList.page + 1,
-                });
-              }}
-            >
-              Next Page
-            </button>
-          </div>
-          <table class="table table-sm table-striped table-hover">
-            <tr>
-              <th>Username</th>
-              <th>Date Added</th>
-              <th>Admin</th>
-              <th>Reason</th>
-              <th>Removal</th>
-            </tr>
-            <tbody>
-              {#each whiteList.data as player}
-                <tr>
-                  <td>{player.username}</td>
-                  <td>{player.white_date}</td>
-                  <td>{player.admin}</td>
-                  <td>{player.reason}</td>
-                  <td>{player.unwhite_date}</td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
+  <WhiteBanList type="whiteList" list={whiteList} {toMain} />
+  <WhiteBanList type="banList" list={banList} {toMain} />
 
   <div class="container-lg">
     <div class="d-flex justify-content-center p-2">
@@ -2263,8 +2131,8 @@
               type="submit"
               on:click={() =>
                 toMain({
-                  messageType: "banPlayer",
-                  ban: { player: battleTag, reason: banReason },
+                  messageType: "addWhiteBan",
+                  addWhiteBan: { type: "banList", player: battleTag, reason: banReason },
                 })}
             >
               Ban
@@ -2274,8 +2142,8 @@
               type="submit"
               on:click={() =>
                 toMain({
-                  messageType: "unbanPlayer",
-                  ban: { player: battleTag },
+                  messageType: "removeWhiteBan",
+                  removeWhiteBan: { type: "banList", player: battleTag },
                 })}
             >
               UnBan
@@ -2287,8 +2155,12 @@
               type="submit"
               on:click={() =>
                 toMain({
-                  messageType: "whitePlayer",
-                  white: { player: battleTag, reason: banReason },
+                  messageType: "addWhiteBan",
+                  addWhiteBan: {
+                    type: "whiteList",
+                    player: battleTag,
+                    reason: banReason,
+                  },
                 })}
             >
               WhiteList
@@ -2298,8 +2170,8 @@
               type="submit"
               on:click={() =>
                 toMain({
-                  messageType: "unwhitePlayer",
-                  white: { player: battleTag },
+                  messageType: "removeWhiteBan",
+                  removeWhiteBan: { type: "whiteList", player: battleTag },
                 })}
             >
               UnWhiteList
@@ -2353,7 +2225,8 @@
               on:click={() => {
                 if (banList.data.length === 0) {
                   toMain({
-                    messageType: "fetchBanList",
+                    messageType: "fetchWhiteBanList",
+                    fetch: { type: "banList", page: 0 },
                   });
                 }
               }}
@@ -2368,7 +2241,8 @@
               on:click={() => {
                 if (whiteList.data.length === 0) {
                   toMain({
-                    messageType: "fetchWhiteList",
+                    messageType: "fetchWhiteBanList",
+                    fetch: { type: "whiteList", page: 0 },
                   });
                 }
               }}
@@ -2451,8 +2325,12 @@
                         class="btn btn-danger"
                         on:click={() =>
                           toMain({
-                            messageType: "banPlayer",
-                            ban: { player: player.name, reason: banReason },
+                            messageType: "addWhiteBan",
+                            addWhiteBan: {
+                              type: "banList",
+                              player: player.name,
+                              reason: banReason,
+                            },
                           })}>Ban</button
                       >
                     {/if}</td

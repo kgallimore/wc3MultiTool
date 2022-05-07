@@ -129,8 +129,7 @@ export interface WindowReceive {
     | "gotMapPath"
     | "updateSettings"
     | "updater"
-    | "whiteList"
-    | "banList";
+    | "fetchedWhiteBanList";
   data: {
     update?: { setting: keyof AppSettings; key: SettingsKeys; value: any };
     settings?: AppSettings;
@@ -139,19 +138,11 @@ export interface WindowReceive {
     error?: string;
     value?: string;
     lobbyData?: LobbyUpdates;
-    page?: number;
-    banList?: Array<
-      BanWhiteList & {
-        ban_date: string;
-        unban_date: string;
-      }
-    >;
-    whiteList?: Array<
-      BanWhiteList & {
-        white_date: string;
-        unwhite_date: string;
-      }
-    >;
+    fetched?: {
+      type: "banList" | "whiteList";
+      page: number;
+      list?: Array<BanWhiteList>;
+    };
   };
 }
 
@@ -159,8 +150,10 @@ export interface BanWhiteList {
   id: number;
   username: string;
   admin: string;
-  region: string;
+  region: Regions;
   reason: string;
+  add_date: string;
+  removal_date: string;
 }
 
 export interface ClientCommands {
@@ -199,34 +192,50 @@ export interface WindowSend {
     | "getMapPath"
     | "updateSettingSingle"
     | "init"
-    | "banPlayer"
-    | "unbanPlayer"
-    | "whitePlayer"
-    | "unwhitePlayer"
+    | "addWhiteBan"
+    | "removeWhiteBan"
     | "changePerm"
-    | "fetchBanList"
-    | "fetchWhiteList"
+    | "fetchWhiteBanList"
     | "createLobby"
     | "autoHostLobby"
     | "joinLobby"
     | "leaveLobby"
-    | "startLobby";
+    | "startLobby"
+    | "exportWhitesBans"
+    | "importWhitesBans";
   update?: { setting: keyof AppSettings; key: SettingsKeys; value: any };
-  ban?: {
+  addWhiteBan?: {
+    type: "banList" | "whiteList";
     player: string;
     reason?: string;
   };
-  white?: {
+  removeWhiteBan?: {
     player: string;
-    reason?: string;
+    type: "banList" | "whiteList";
   };
-  page?: number;
+  fetch?: {
+    page: number;
+    type: "whiteList" | "banList";
+    sort?: FetchWhiteBanListSortOptions;
+    sortOrder?: "ASC" | "DESC";
+    activeOnly?: boolean;
+  };
+  exportImport?: {
+    type: "banList" | "whiteList";
+  };
   perm?: {
     player: string;
     role: "admin" | "moderator" | "";
   };
   lobbyOptions?: {};
 }
+
+export type FetchWhiteBanListSortOptions =
+  | "id"
+  | "username"
+  | "admin"
+  | "region"
+  | "reason";
 
 export interface TeamData {
   data: { [key: string]: number };

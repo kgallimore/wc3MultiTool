@@ -72,6 +72,7 @@ import {
   isValidUrl,
   ensureInt,
   GameState,
+  BanWhiteList,
 } from "./utility";
 
 import {
@@ -854,10 +855,10 @@ if (!gotLock) {
     }
     log.info("App ready");
     db.exec(
-      "CREATE TABLE IF NOT EXISTS banList(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, ban_date DATETIME default current_timestamp NOT NULL, admin TEXT NOT NULL, region TEXT NOT NULL, reason TEXT, unban_date DATETIME)"
+      "CREATE TABLE IF NOT EXISTS banList(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, add_date DATETIME default current_timestamp NOT NULL, admin TEXT NOT NULL, region TEXT NOT NULL, reason TEXT, removal_date DATETIME)"
     );
     db.exec(
-      "CREATE TABLE IF NOT EXISTS whiteList(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, white_date DATETIME default current_timestamp NOT NULL, admin TEXT NOT NULL, region TEXT NOT NULL, reason TEXT, unwhite_date DATETIME)"
+      "CREATE TABLE IF NOT EXISTS whiteList(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, add_date DATETIME default current_timestamp NOT NULL, admin TEXT NOT NULL, region TEXT NOT NULL, reason TEXT, removal_date DATETIME)"
     );
     db.exec(
       "CREATE TABLE IF NOT EXISTS lobbyEvents(id INTEGER PRIMARY KEY AUTOINCREMENT, event TEXT NOT NULL, time DATETIME default current_timestamp NOT NULL, data TEXT, username TEXT)"
@@ -869,12 +870,22 @@ if (!gotLock) {
       log.info("Updating tables");
       db.exec("ALTER TABLE banList rename to banListBackup");
       db.exec(
-        "CREATE TABLE banList(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, ban_date DATETIME default current_timestamp NOT NULL, admin TEXT NOT NULL, region TEXT NOT NULL, reason TEXT, unban_date DATETIME)"
+        "CREATE TABLE banList(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, add_date DATETIME default current_timestamp NOT NULL, admin TEXT NOT NULL, region TEXT NOT NULL, reason TEXT, removal_date DATETIME)"
       );
       db.exec("INSERT INTO banList SELECT * FROM banListBackup;");
       store.set("tableVersion", 1);
       clientState.tableVersion = 1;
     }
+    if (clientState.tableVersion < 2) {
+      log.info("Updating tables");
+      db.exec("ALTER TABLE whiteList RENAME COLUMN white_date TO add_date");
+      db.exec("ALTER TABLE whiteList RENAME COLUMN unwhite_date TO removal_date");
+      db.exec("ALTER TABLE banList RENAME COLUMN ban_date TO add_date");
+      db.exec("ALTER TABLE banList RENAME COLUMN unban_date TO removal_date");
+      store.set("tableVersion", 2);
+      clientState.tableVersion = 2;
+    }
+
     discordSetup();
     seSetup();
     commSetup();
@@ -1136,7 +1147,9 @@ if (!gotLock) {
           if (update.playerJoined.name) {
             db.open;
             const row = db
-              .prepare("SELECT * FROM banList WHERE username = ? AND unban_date IS NULL")
+              .prepare(
+                "SELECT * FROM banList WHERE username = ? AND removal_date IS NULL"
+              )
               .get(update.playerJoined.name);
             if (row) {
               lobbyController.banSlot(update.playerJoined.slot);
@@ -1157,7 +1170,7 @@ if (!gotLock) {
               if (update.playerJoined.name !== gameStateProxy.selfBattleTag) {
                 const row = db
                   .prepare(
-                    "SELECT * FROM whiteList WHERE username = ? AND unwhite_date IS NULL"
+                    "SELECT * FROM whiteList WHERE username = ? AND removal_date IS NULL"
                   )
                   .get(update.playerJoined.name);
                 if (!row) {
@@ -2618,7 +2631,7 @@ if (!gotLock) {
 
   function unWhitePlayer(player: string, admin: string) {
     db.prepare(
-      "UPDATE whiteList SET unwhite_date = DateTime('now') WHERE username = ? AND unwhite_date IS NULL"
+      "UPDATE whiteList SET removal_date = DateTime('now') WHERE username = ? AND removal_date IS NULL"
     ).run(player);
     log.info("Unwhitelisted " + player + " by " + admin);
     sendWindow("action", { value: "Unwhitelisted " + player + " by " + admin });
@@ -2626,7 +2639,7 @@ if (!gotLock) {
 
   function unBanPlayer(player: string, admin: string) {
     db.prepare(
-      "UPDATE banList SET unban_date = DateTime('now') WHERE username = ? AND unban_date IS NULL"
+      "UPDATE banList SET removal_date = DateTime('now') WHERE username = ? AND removal_date IS NULL"
     ).run(player);
     log.info("Unbanned " + player + " by " + admin);
     sendWindow("action", { value: "Unbanned " + player + " by " + admin });
@@ -3497,24 +3510,32 @@ if (!gotLock) {
           log.info("No player in perm");
         }
         break;
-      case "unbanPlayer":
-        if (args.ban?.player) {
-          unBanPlayer(args.ban.player, "client");
+      case "addWhiteBan":
+        if (args.addWhiteBan) {
+          if (args.addWhiteBan.type === "banList") {
+            banPlayer(
+              args.addWhiteBan.player,
+              "client",
+              "client",
+              args.addWhiteBan.reason
+            );
+          } else if (args.addWhiteBan.type === "whiteList") {
+            whitePlayer(
+              args.addWhiteBan.player,
+              "client",
+              "client",
+              args.addWhiteBan.reason
+            );
+          }
         }
         break;
-      case "banPlayer":
-        if (args.ban?.player) {
-          banPlayer(args.ban.player, "client", "client", args.ban.reason);
-        }
-        break;
-      case "whitePlayer":
-        if (args.white?.player) {
-          whitePlayer(args.white.player, "client", "client", args.white.reason);
-        }
-        break;
-      case "unwhitePlayer":
-        if (args.white?.player) {
-          unWhitePlayer(args.white.player, "client");
+      case "removeWhiteBan":
+        if (args.removeWhiteBan) {
+          if (args.removeWhiteBan.type === "banList") {
+            unBanPlayer(args.removeWhiteBan.player, "client");
+          } else if (args.removeWhiteBan.type === "whiteList") {
+            unWhitePlayer(args.removeWhiteBan.player, "client");
+          }
         }
         break;
       case "init":
@@ -3531,17 +3552,28 @@ if (!gotLock) {
       case "openWar":
         openWarcraft();
         break;
-      case "fetchBanList":
-        const banList = db
-          .prepare("SELECT * FROM banList LIMIT 10 OFFSET ?")
-          .all((args.page ?? 0) * 10);
-        sendWindow("banList", { banList, page: args.page ?? 0 });
-        break;
-      case "fetchWhiteList":
-        const whiteList = db
-          .prepare("SELECT * FROM whiteList LIMIT 10 OFFSET ?")
-          .all((args.page ?? 0) * 10);
-        sendWindow("whiteList", { whiteList, page: args.page ?? 0 });
+      case "fetchWhiteBanList":
+        if (args.fetch) {
+          console.log(args.fetch);
+          const whiteBanList = db
+            .prepare(
+              `SELECT * FROM ${args.fetch.type} ${
+                args.fetch.activeOnly ? "WHERE removal_date IS NULL" : ""
+              } ORDER BY ${args.fetch.sort ?? "id"} ${
+                args.fetch?.sortOrder ?? "ASC"
+              } LIMIT 10 OFFSET ?`
+            )
+            .all((args.fetch.page ?? 0) * 10);
+          console.log(whiteBanList);
+
+          sendWindow("fetchedWhiteBanList", {
+            fetched: {
+              type: args.fetch.type,
+              list: whiteBanList,
+              page: args.fetch.page ?? 0,
+            },
+          });
+        }
         break;
       case "getMapPath":
         dialog
@@ -3607,6 +3639,53 @@ if (!gotLock) {
       case "autoHostLobby":
         log.info("Comm AutoHost lobby");
         autoHostGame(true);
+        break;
+      case "exportWhitesBans":
+        if (args.exportImport) {
+          let list = db
+            .prepare(`SELECT * FROM ${args.exportImport.type} WHERE removal_date IS NULL`)
+            .all();
+          if (args.exportImport.type === "banList") {
+            let path = app.getPath("documents") + "\\bans.json";
+            fs.writeFileSync(path, JSON.stringify(list));
+            console.log(path);
+            shell.showItemInFolder(path);
+          } else if (args.exportImport.type === "whiteList") {
+            let path = app.getPath("documents") + "\\whiteList.json";
+            fs.writeFileSync(path, JSON.stringify(list));
+            console.log(path);
+            shell.showItemInFolder(path);
+          }
+        }
+        break;
+      case "importWhitesBans":
+        if (args.exportImport) {
+          dialog
+            .showOpenDialog(win, {
+              title: "Choose List",
+              defaultPath: `${app.getPath("downloads")}`,
+              properties: ["multiSelections"],
+              filters: [{ name: "Ban List", extensions: ["json"] }],
+            })
+            .then((result) => {
+              result.filePaths.forEach((file) => {
+                let bans = JSON.parse(fs.readFileSync(file).toString());
+                bans.forEach((ban: BanWhiteList) => {
+                  if (args.exportImport?.type === "banList") {
+                    banPlayer(ban.username, "client", ban.region || "client", ban.reason);
+                  } else if (args.exportImport?.type === "whiteList") {
+                    whitePlayer(
+                      ban.username,
+                      "client",
+                      ban.region || "client",
+                      ban.reason
+                    );
+                  }
+                });
+              });
+            });
+        }
+
         break;
       default:
         log.info("Unknown client command:", args);
