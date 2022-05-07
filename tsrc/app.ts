@@ -40,14 +40,16 @@ import fs from "fs";
 import WebSocket from "ws";
 import { play } from "sound-play";
 import sqlite3 from "better-sqlite3";
-// @ts-ignore
-//import translate from "translate";
 import { DisClient } from "./disc";
 import { SEClient, SEEvent } from "./stream";
 import { LobbyControl } from "./lobbyControl";
+import { DiscordRPC } from "./discordRpc";
 import { OBSSocket } from "./obs";
 import parser from "w3gjs";
 import LanguageDetect from "languagedetect";
+import { firebaseConfig } from "./firebase";
+import { initializeApp } from "firebase/app";
+
 const FormData = require("form-data");
 const translate = require("translate-google");
 if (!app.isPackaged) {
@@ -86,6 +88,8 @@ if (!gotLock) {
   app.quit();
 } else {
   const db = new sqlite3(app.getPath("userData") + "/wc3mt.db");
+  const firebaseApp = initializeApp(firebaseConfig);
+  const discRPC = new DiscordRPC();
 
   autoUpdater.logger = log;
   log.catchErrors();
@@ -102,8 +106,6 @@ if (!gotLock) {
     screen.config.highlightOpacity = 0.75;
   }
 
-  //translate.engine = "libre";
-  //translate.key = "YOUR-KEY-HERE";
   let detectLang = new LanguageDetect();
   detectLang.setLanguageType("iso2");
 
@@ -145,7 +147,6 @@ if (!gotLock) {
   var gameStateProxy = new Proxy(gameState, {
     set: function (target, prop, value: any) {
       prop = String(prop);
-      //console.log(`Setting ${prop} to ${value} on ${target}`);
       if (prop in target) {
         if (
           prop === "inGame" &&
@@ -173,7 +174,7 @@ if (!gotLock) {
           typeof value === "string" &&
           target[prop] !== value
         ) {
-          target[prop] = value;
+          target[prop] = value as GameState["menuState"];
         } else if (
           prop === "screenState" &&
           typeof value === "string" &&
@@ -199,6 +200,13 @@ if (!gotLock) {
           }
           return true;
         }
+        discRPC.setActivity({
+          state: gameState.menuState,
+          details: lobbyController.lobby?.lobbyStatic.lobbyName,
+          region: gameState.selfRegion,
+          inGame: gameState.inGame,
+          currentPlayers: lobbyController.lobby?.nonSpecPlayers.length,
+        });
         sendToHub("gameState", { gameState: target });
       }
       return true;
@@ -1060,6 +1068,13 @@ if (!gotLock) {
     );
     lobbyController.testMode = !app.isPackaged;
     lobbyController.on("update", (update: LobbyUpdates) => {
+      discRPC.setActivity({
+        state: gameState.menuState,
+        details: lobbyController.lobby?.lobbyStatic.lobbyName,
+        region: gameState.selfRegion,
+        inGame: gameState.inGame,
+        currentPlayers: lobbyController.lobby?.nonSpecPlayers.length,
+      });
       if (lobbyController.lobby) {
         if (
           update.playerPayload ||
@@ -1478,7 +1493,7 @@ if (!gotLock) {
     }
   }
 
-  async function handleGlueScreen(newScreen: string) {
+  async function handleGlueScreen(newScreen: GameState["menuState"]) {
     // Create a new game at menu or if previously in game(score screen loads twice)
     if (
       !newScreen ||
