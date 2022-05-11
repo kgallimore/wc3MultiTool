@@ -1062,6 +1062,7 @@ if (!gotLock) {
   }
 
   function lobbySetup() {
+    // TODO: This is ugly and unnecessary, just pass autoHost and ELO?
     lobbyController = new LobbyControl(
       settings.elo.type,
       settings.elo.wc3StatsVariant,
