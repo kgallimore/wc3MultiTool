@@ -1,14 +1,18 @@
 # WC3 Multi-Tool <!-- omit in toc -->
 
-- [What this tool does](#what-this-tool-does)
+- [Features](#features)
 - [Limitations](#limitations)
 - [What this tool is NOT](#what-this-tool-is-not)
 - [What this tool modifies](#what-this-tool-modifies)
+- [Installing](#installing)
+- [Setup](#setup)
+  - [OBS Integration](#obs-integration)
+  - [Discord Integration](#discord-integration)
 - [Development](#development)
   - [Contributing](#contributing)
   - [TODO](#todo)
 
-## What this tool does
+## Features
 
 1. Auto Host​
     - Instantly host a lobby with desired settings
@@ -48,6 +52,8 @@
 7. White List/ Black List
      - You can actually permanently ban now instead of per lobby.
      - Alternatively you can create a white list only allowing specified players to join.
+8. Auto-update
+    - Automatically update the app
 
 ## Limitations
 
@@ -63,6 +69,38 @@
 ## What this tool modifies
 
 This tool adds a registry key to AllowLocalFiles and then modifies both the index.html page and the GlueManager.js file. It creates a websocket connection from the client to the app, and hooks into the underlying game client websocket connection.
+
+## Installing
+
+You can grab a download for the tool at either [Hive](https://www.hiveworkshop.com/threads/wc3-multi-tool.335492/) or [the hub site](https://war.trenchguns.com/) (You may need to Ctrl + Shift + R to initiate the download until the revamp hub is finished). The tool will automatically update itself as needed.
+
+## Setup
+
+### OBS Integration
+
+OBS Websockets (Recommended)
+
+- [Download and intstall the latest full release from the Github repo](https://github.com/obsproject/obs-websocket/releases)
+- If OBS is running locally and the port is unchanged leave the OBS address blank and use the default address.
+- Input the password if you specified any
+- Input the desired scene names (Case sensitive)
+
+Simulate Hotkeys
+
+- Set up the hotkeys for each desired scene within OBS and the App
+
+Text Source
+
+- `wc3mt.txt` will be placed within your documents folder containing the team structure in plaintext. You can import that into OBS
+
+### Discord Integration
+
+1. Sign into the [Discord Developer page](https://discord.com/developers/applications)
+2. Create a new application
+3. Create a new bot
+4. Copy over the token into the app
+5. Set the name of the lobby announce channel, or the chat channel. They are both optional. You may use the exact name of the channel or the channel ID.
+6. Restart the app.
 
 ## Development
 
