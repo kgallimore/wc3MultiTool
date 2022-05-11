@@ -2032,21 +2032,15 @@
         <summary>Updates this version (click to expand)</summary>
         <strong>New:</strong>
         <ul>
-          <li>
-            New option for smart host to watch for files to leave, bypassing ocr
-            requirements. Check out the discord
-          </li>
-          <li>Filter out !debug messages from sending to discord/hub</li>
-          <li>Private key for wc3stats uploads</li>
-          <li>Choose observer type</li>
-          <li>Swapper role</li>
+          <li>Sort white and ban list</li>
+          <li>Export and import white and ban list</li>
+          <li>Remove whitelisted and banned players from within list</li>
+          <li>Discord rich presence integration</li>
+          <li>Join others through Discord</li>
         </ul>
         <strong>Fixes:</strong>
         <ul>
-          <li>Fixes to lobby container</li>
-          <li>Announce player shuffle</li>
-          <li>Fixed issue where sometimes senders wouldn't be recognized</li>
-          <li>Fix double start issue</li>
+          <li>N/A</li>
         </ul>
       </details>
     </div>

@@ -30,8 +30,8 @@ import {
 } from "electron";
 import { autoUpdater } from "electron-updater";
 import { nanoid } from "nanoid";
-import util from "util";
-const exec = util.promisify(require("child_process").exec);
+import { promisify } from "util";
+const exec = promisify(require("child_process").exec);
 import fetch from "cross-fetch";
 import * as log from "electron-log";
 import * as path from "path";
@@ -47,8 +47,8 @@ import { DiscordRPC } from "./discordRpc";
 import { OBSSocket } from "./obs";
 import parser from "w3gjs";
 import LanguageDetect from "languagedetect";
-import { firebaseConfig } from "./firebase";
-import { initializeApp } from "firebase/app";
+/*import { firebaseConfig } from "./firebase";
+import { initializeApp } from "firebase/app";*/
 
 const FormData = require("form-data");
 const translate = require("translate-google");
@@ -89,7 +89,7 @@ if (!gotLock) {
   app.quit();
 } else {
   const db = new sqlite3(app.getPath("userData") + "/wc3mt.db");
-  const firebaseApp = initializeApp(firebaseConfig);
+  //const firebaseApp = initializeApp(firebaseConfig);
   const discRPC = new DiscordRPC();
 
   autoUpdater.logger = log;
