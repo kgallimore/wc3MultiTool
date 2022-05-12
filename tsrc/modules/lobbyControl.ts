@@ -1,23 +1,24 @@
+import { Module } from "../moduleBase";
+import type { GameState, AppSettings } from "../utility";
+
 import fetch from "cross-fetch";
 import {
   MicroLobby,
   PlayerData,
   PlayerPayload,
-  LobbyUpdates,
   PlayerTeamsData,
   GameClientLobbyPayload,
   Regions,
   SlotNumbers,
   TeamTypes,
 } from "wc3mt-lobby-container";
-import type { LobbyAppSettings } from "./utility";
-import { ensureInt } from "./utility";
-import EventEmitter from "events";
+import type { LobbyAppSettings } from "../utility";
+import { ensureInt } from "../utility";
 
 require = require("esm")(module);
 var { Combination, Permutation } = require("js-combinatorics");
 
-export class LobbyControl extends EventEmitter {
+export class LobbyControl extends Module {
   #appSettings: LobbyAppSettings;
   #refreshing: boolean = false;
   #staleTimer: NodeJS.Timeout | null = null;
@@ -34,6 +35,8 @@ export class LobbyControl extends EventEmitter {
   #expectedSwaps: Array<[string, string]> = [];
 
   constructor(
+    settings: AppSettings,
+    gameState: GameState,
     eloType: "wc3stats" | "pyroTD" | "off",
     wc3StatsVariant: string,
     balanceTeams: boolean,
@@ -48,7 +51,7 @@ export class LobbyControl extends EventEmitter {
     minGames: number = 0,
     minRating: number = 0
   ) {
-    super();
+    super(settings, gameState);
     this.#appSettings = {
       eloType,
       moveToSpec,
@@ -125,13 +128,13 @@ export class LobbyControl extends EventEmitter {
             if (this.lobby?.nonSpecPlayers.includes(event.playerJoined.name)) {
             }
             if (this.#startTimer) {
-              this.emitChat(`Lobby start was cancelled`);
+              this.sendGameChat(`Lobby start was cancelled`);
               clearTimeout(this.#startTimer);
               this.#startTimer = null;
             }
           } else if (event.playerLeft) {
             if (this.#startTimer) {
-              this.emitChat(`Lobby start was cancelled`);
+              this.sendGameChat(`Lobby start was cancelled`);
               clearTimeout(this.#startTimer);
               this.#startTimer = null;
             }
@@ -249,33 +252,6 @@ export class LobbyControl extends EventEmitter {
     } else {
       console.log(`Lobby update failed. Unrecognized setting: ${setting}`);
     }
-  }
-
-  emitUpdate(update: LobbyUpdates) {
-    this.emit("update", update);
-  }
-
-  emitError(error: string) {
-    this.emit("error", error);
-  }
-
-  emitInfo(message: string) {
-    this.emit("info", message);
-  }
-
-  emitChat(message: string) {
-    this.emit("sendChat", message);
-  }
-
-  emitProgress(step: string, progress: number) {
-    this.emit("progress", { step, progress });
-  }
-
-  emitMessage(type: string, payload: any) {
-    this.emit("sendMessage", {
-      type,
-      payload,
-    });
   }
 
   clear() {
@@ -458,9 +434,9 @@ export class LobbyControl extends EventEmitter {
   startGame(delay: number = 0) {
     if (delay > 0) {
       if (this.#startTimer) {
-        this.emitChat("Lobby changed. Starting game in " + delay + " second(s)!");
+        this.sendGameChat("Lobby changed. Starting game in " + delay + " second(s)!");
       } else {
-        this.emitChat("Starting game in " + delay + " second(s)!");
+        this.sendGameChat("Starting game in " + delay + " second(s)!");
       }
     }
     if (this.#startTimer) {
@@ -470,7 +446,7 @@ export class LobbyControl extends EventEmitter {
       this.#startTimer = null;
       if (this.lobby?.lobbyStatic?.isHost) {
         this.emitInfo("Starting game");
-        this.emitChat("AutoHost functionality provided by WC3 MultiTool.");
+        this.sendGameChat("AutoHost functionality provided by WC3 MultiTool.");
         this.emitMessage("LobbyStart", {});
       }
     }, delay * 1000 + 250);
@@ -629,7 +605,7 @@ export class LobbyControl extends EventEmitter {
           }
           swaps = [swapsFromTeam1, swapsFromTeam2];
           if (!lobbyCopy.lobbyStatic.isHost) {
-            this.emitChat(leastSwapTeam + " should be: " + this.bestCombo.join(", "));
+            this.sendGameChat(leastSwapTeam + " should be: " + this.bestCombo.join(", "));
           } else {
             for (let i = 0; i < swaps[0].length; i++) {
               if (!this.isLobbyReady()) {
@@ -697,7 +673,7 @@ export class LobbyControl extends EventEmitter {
               (team) => team.type === "playerTeams"
             );
             for (let i = 0; i < playerTeamNames.length; i++) {
-              this.emitChat(
+              this.sendGameChat(
                 playerTeamNames[i] + " should be " + this.bestCombo[i].join(", ")
               );
             }
@@ -705,7 +681,7 @@ export class LobbyControl extends EventEmitter {
         }
         this.emitInfo("Players should now be balanced.");
         this.emitUpdate({ lobbyReady: true });
-        this.emitChat("ELO data provided by: " + this.#appSettings.eloType);
+        this.sendGameChat("ELO data provided by: " + this.#appSettings.eloType);
       }
     } else {
       this.emitUpdate({ lobbyReady: true });
@@ -751,7 +727,7 @@ export class LobbyControl extends EventEmitter {
 
   shufflePlayers(shuffleTeams: boolean = true) {
     if (this.lobby?.lobbyStatic.isHost) {
-      this.emitChat("Shuffling players...");
+      this.sendGameChat("Shuffling players...");
       let players = this.lobby.nonSpecPlayers;
       let swappedPlayers: Array<string> = [];
       Object.values(players).forEach((player) => {
@@ -790,7 +766,7 @@ export class LobbyControl extends EventEmitter {
     if (targetSlot) {
       this.banSlot(targetSlot.slot);
     } else {
-      this.emitChat("Player not found");
+      this.sendGameChat("Player not found");
     }
   }
 
@@ -805,7 +781,7 @@ export class LobbyControl extends EventEmitter {
     if (targetSlot) {
       this.closeSlot(targetSlot.slot);
     } else {
-      this.emitChat("Player not found");
+      this.sendGameChat("Player not found");
     }
   }
 
@@ -827,13 +803,13 @@ export class LobbyControl extends EventEmitter {
         let target2 = this.lobby.searchPlayer(data.players[1])[0];
         if (target1 && target2 && target1 !== target2) {
           this.#expectedSwaps.push([target1, target2].sort() as [string, string]);
-          this.emitChat("!swap " + target1 + " " + target2);
+          this.sendGameChat("!swap " + target1 + " " + target2);
         } else {
-          this.emitChat("Possible invalid swap targets");
+          this.sendGameChat("Possible invalid swap targets");
           this.emitError("Possible invalid swap targets: " + target1 + " and " + target2);
         }
       } else {
-        this.emitChat("Possible invalid swap targets");
+        this.sendGameChat("Possible invalid swap targets");
         this.emitError("Possible invalid swap targets: " + JSON.stringify(data.players));
       }
     }
@@ -850,7 +826,7 @@ export class LobbyControl extends EventEmitter {
     if (targetSlot) {
       this.kickSlot(targetSlot.slot);
     } else {
-      this.emitChat("Player not found");
+      this.sendGameChat("Player not found");
     }
   }
 
@@ -865,7 +841,7 @@ export class LobbyControl extends EventEmitter {
     if (targetSlot) {
       this.closeSlot(targetSlot.slot);
     } else {
-      this.emitChat("Player not found");
+      this.sendGameChat("Player not found");
     }
   }
 
@@ -878,7 +854,7 @@ export class LobbyControl extends EventEmitter {
     if (targetSlot) {
       this.setHandicapSlot(targetSlot.slot, handicap);
     } else {
-      this.emitChat("Player not found");
+      this.sendGameChat("Player not found");
     }
   }
 

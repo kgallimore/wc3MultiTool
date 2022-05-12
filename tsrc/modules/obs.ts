@@ -1,11 +1,17 @@
-import OBSWebSocket from "obs-websocket-js";
-import EventEmitter from "events";
+import { Module } from "../moduleBase";
+import type { GameState, AppSettings } from "../utility";
 
-export class OBSSocket extends EventEmitter {
+import OBSWebSocket from "obs-websocket-js";
+
+export class OBSSocket extends Module {
   socket: OBSWebSocket;
 
-  constructor(options?: { address?: string; password?: string }) {
-    super();
+  constructor(
+    settings: AppSettings,
+    gameState: GameState,
+    options?: { address?: string; password?: string }
+  ) {
+    super(settings, gameState);
     this.socket = new OBSWebSocket();
     this.socket
       .connect(options)

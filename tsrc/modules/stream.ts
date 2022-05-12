@@ -1,4 +1,6 @@
-import EventEmitter from "events";
+import { Module } from "../moduleBase";
+import type { GameState, AppSettings } from "../utility";
+
 const io = require("socket.io-client");
 
 export interface TipData {
@@ -32,12 +34,12 @@ export interface SEEventEvent {
   message?: string;
 }
 
-export class SEClient extends EventEmitter {
+export class SEClient extends Module {
   jwt: string;
   socket: any;
 
-  constructor(jwt: string) {
-    super();
+  constructor(settings: AppSettings, gameState: GameState, jwt: string) {
+    super(settings, gameState);
     this.jwt = jwt;
     this.socket = io("https://realtime.streamelements.com", {
       transports: ["websocket"],
@@ -64,7 +66,7 @@ export class SEClient extends EventEmitter {
 
   handleEvent(data: SEEvent) {
     if (data.listener === "tip-latest") {
-      this.emit("tip", data.event);
+      this.emitNewTip(data.event);
     }
   }
 
@@ -85,13 +87,5 @@ export class SEClient extends EventEmitter {
     message: string;
   }) {
     this.emitInfo(`Successfully connected to StreamElements channel ${data.channelId}`);
-  }
-
-  emitError(message: string) {
-    this.emit("error", message);
-  }
-
-  emitInfo(message: string) {
-    this.emit("info", message);
   }
 }

@@ -1,9 +1,12 @@
+import { Module } from "../moduleBase";
+import type { GameState, AppSettings } from "../utility";
+
 import Discord from "discord.js";
-import EventEmitter from "events";
-import type { mmdResults } from "./utility";
+import type { mmdResults } from "../utility";
 import type { PlayerTeamsData, MicroLobbyData } from "wc3mt-lobby-container";
-import { DeColorName } from "./utility";
-export class DisClient extends EventEmitter {
+import { DeColorName } from "../utility";
+
+export class DisClient extends Module {
   client: Discord.Client;
   announceChannel: Discord.TextChannel | null = null;
   chatChannel: Discord.TextChannel | null = null;
@@ -22,13 +25,15 @@ export class DisClient extends EventEmitter {
   bidirectionalChat: boolean;
   _events: { [key: string]: any } = {};
   constructor(
+    settings: AppSettings,
+    gameState: GameState,
     token: string,
     announceChannel: string,
     chatChannel: string,
     bidirectionalChat = true,
     dev = false
   ) {
-    super();
+    super(settings, gameState);
     this.dev = dev;
     this.bidirectionalChat = bidirectionalChat;
     if (!token) {
@@ -78,7 +83,7 @@ export class DisClient extends EventEmitter {
     this.client.on("message", (msg) => {
       if (msg.channel === this.chatChannel && !msg.author.bot) {
         if (this.bidirectionalChat) {
-          this.emit("chatMessage", msg.author.username, msg.content);
+          this.sendGameChat("(DC)" + msg.author.username + ": " + msg.content);
         }
       }
     });

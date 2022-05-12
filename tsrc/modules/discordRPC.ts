@@ -1,6 +1,8 @@
+import { Module } from "../moduleBase";
+import type { GameState, AppSettings } from "../utility";
+
 import { Client, register, Presence } from "discord-rpc";
 import type { Regions } from "wc3mt-lobby-container";
-import type { GameState } from "./utility";
 
 export interface NewActivity {
   details?: string;
@@ -11,14 +13,15 @@ export interface NewActivity {
   inGame: boolean;
 }
 
-export class DiscordRPC {
+export class DiscordRPC extends Module {
   private clientId = "876866700644073533";
   private client: Client;
   private ready: boolean = false;
   private startTimestamp: number = 0;
   private previousActivity: NewActivity = { state: "OUT_OF_MENUS", inGame: false };
 
-  constructor() {
+  constructor(settings: AppSettings, gameState: GameState) {
+    super(settings, gameState);
     this.client = new Client({ transport: "ipc" });
     register(this.clientId);
     this.client.on("ready", () => {

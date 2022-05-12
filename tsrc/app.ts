@@ -1,19 +1,12 @@
 import {
-  Window,
   screen,
-  getActiveWindow,
   mouse,
-  getWindows,
   centerOf,
   imageResource,
   Point,
-  left,
-  right,
-  up,
   Key,
   keyboard,
   straightTo,
-  Region,
 } from "@nut-tree/nut-js";
 require("@nut-tree/nl-matcher");
 import {
@@ -30,8 +23,6 @@ import {
 } from "electron";
 import { autoUpdater } from "electron-updater";
 import { nanoid } from "nanoid";
-import { promisify } from "util";
-const exec = promisify(require("child_process").exec);
 import fetch from "cross-fetch";
 import * as log from "electron-log";
 import * as path from "path";
@@ -40,11 +31,13 @@ import fs from "fs";
 import WebSocket from "ws";
 import { play } from "sound-play";
 import sqlite3 from "better-sqlite3";
-import { DisClient } from "./disc";
-import { SEClient, SEEvent } from "./stream";
-import { LobbyControl } from "./lobbyControl";
-import { DiscordRPC } from "./discordRpc";
-import { OBSSocket } from "./obs";
+import { DisClient } from "./modules/disc";
+import { SEClient } from "./modules/stream";
+import { LobbyControl } from "./modules/lobbyControl";
+import { DiscordRPC } from "./modules/discordRPC";
+import { OBSSocket } from "./modules/obs";
+import { WarControl } from "./modules/warControl";
+import type { EmitEvents } from "./moduleBase";
 import parser from "w3gjs";
 import LanguageDetect from "languagedetect";
 /*import { firebaseConfig } from "./firebase";
@@ -77,7 +70,6 @@ import {
 
 import {
   GameClientLobbyPayload,
-  LobbyUpdates,
   PlayerData,
   Regions,
   SlotNumbers,
@@ -90,16 +82,12 @@ if (!gotLock) {
 } else {
   const db = new sqlite3(app.getPath("userData") + "/wc3mt.db");
   //const firebaseApp = initializeApp(firebaseConfig);
-  const discRPC = new DiscordRPC();
 
   autoUpdater.logger = log;
   log.catchErrors();
 
   screen.config.confidence = 0.8;
   keyboard.config.autoDelayMs = 25;
-  screen.height().then((height) => {
-    setResourceDir(height);
-  });
 
   if (!app.isPackaged) {
     screen.config.autoHighlight = true;
@@ -132,9 +120,6 @@ if (!gotLock) {
   var clientWebSocket: WebSocket;
   var commSocket: WebSocket | null = null;
   var hubWebSocket: WebSocket | null;
-  var warcraftInFocus = false;
-  var warcraftIsOpen = false;
-  var warcraftRegion: Region;
   var voteTimer: NodeJS.Timeout | null;
   var openLobbyParams: OpenLobbyParams | null;
   var gameState: GameState = {
@@ -565,6 +550,13 @@ if (!gotLock) {
     });
   }
 
+  const discRPC = new DiscordRPC(settings, gameStateProxy);
+  const warControl = new WarControl(settings, gameStateProxy, warInstallLoc);
+
+  screen.height().then((height) => {
+    warControl.setResourceDir(height);
+  });
+
   var lastAnnounceTime = 0;
   var sentMessages: Array<String> = [];
 
@@ -596,14 +588,14 @@ if (!gotLock) {
       openLobbyParams = getQueryVariables(url.split("?", 2)[1]);
       if (openLobbyParams.lobbyName || openLobbyParams.gameId) {
         log.info(openLobbyParams);
-        if (await isWarcraftOpen()) {
+        if (await warControl.isWarcraftOpen()) {
           if (
             openLobbyParams?.region &&
             openLobbyParams?.region !== gameStateProxy.selfRegion
           ) {
             log.info(`Changing region to ${openLobbyParams.region}`);
             await exitGame();
-            openWarcraft(openLobbyParams?.region);
+            warControl.openWarcraft(openLobbyParams?.region);
           } else {
             openParamsJoin();
           }
@@ -614,7 +606,7 @@ if (!gotLock) {
               : ""
           );
           try {
-            openWarcraft(openLobbyParams?.region);
+            warControl.openWarcraft(openLobbyParams?.region);
           } catch (e) {
             log.warn(e);
           }
@@ -751,7 +743,7 @@ if (!gotLock) {
   }
   autoUpdater.on("checking-for-update", () => {
     // Do nothing for now
-    log.info("checking-for-update");
+    //log.info("checking-for-update");
   });
   autoUpdater.on("update-available", (info) => {
     // Do nothing for now since update is immediately downloaded
@@ -935,7 +927,7 @@ if (!gotLock) {
         protocolHandler(process.argv[1]);
       }, 3000);
     } else if (settings.client.openWarcraftOnStart) {
-      setTimeout(openWarcraft, 3000);
+      setTimeout(warControl.openWarcraft, 3000);
     }
   });
 
@@ -996,38 +988,9 @@ if (!gotLock) {
   function seSetup() {
     if (settings.streaming.enabled) {
       if (settings.streaming.seToken.length > 20) {
-        seClient = new SEClient(settings.streaming.seToken);
-        seClient.on("tip", (data: SEEvent["event"]) => {
-          if (!Array.isArray(data)) {
-            let tipMessage = `${data.name} tipped $${data.amount}${
-              data.message ? ": " + data.message : ""
-            }`;
-            log.info(tipMessage);
-            if (data.amount >= settings.streaming.minInGameTip) {
-              if (settings.streaming.sendTipsInDiscord && discClient?.chatChannel) {
-                discClient.sendMessage(tipMessage);
-              }
-              if (gameStateProxy.inGame) {
-                if (settings.streaming.sendTipsInGame) {
-                  sendInGameChat(tipMessage);
-                } else {
-                  log.info("Tip sent while in game, which is not currently permitted.");
-                }
-              } else if (settings.streaming.sendTipsInLobby) {
-                sendChatMessage(tipMessage);
-              }
-            } else {
-              log.info("Tip doesn't meet minimum threshold.");
-            }
-          } else {
-            log.warn("Unknown tip data");
-          }
-        });
-        seClient.on("error", (data: string) => {
-          log.warn(data);
-        });
-        seClient.on("info", (data: string) => {
-          log.info(data);
+        seClient = new SEClient(settings, gameStateProxy, settings.streaming.seToken);
+        seClient.on("event", (data: EmitEvents) => {
+          moduleHandler(data);
         });
       } else {
         seClient = null;
@@ -1044,17 +1007,16 @@ if (!gotLock) {
       (settings.discord.announceChannel || settings.discord.chatChannel)
     ) {
       discClient = new DisClient(
+        settings,
+        gameStateProxy,
         settings.discord.token,
         settings.discord.announceChannel,
         settings.discord.chatChannel,
         settings.discord.bidirectionalChat,
         !app.isPackaged
       );
-      discClient.on("chatMessage", (author, message) => {
-        sendChatMessage("(DC)" + author + ": " + message);
-        if (settings.discord.sendInGameChat) {
-          sendInGameChat("(DC)" + author + ": " + message);
-        }
+      discClient.on("event", (data: EmitEvents) => {
+        moduleHandler(data);
       });
     } else {
       discClient = null;
@@ -1064,6 +1026,8 @@ if (!gotLock) {
   function lobbySetup() {
     // TODO: This is ugly and unnecessary, just pass autoHost and ELO?
     lobbyController = new LobbyControl(
+      settings,
+      gameStateProxy,
       settings.elo.type,
       settings.elo.wc3StatsVariant,
       settings.elo.balanceTeams,
@@ -1079,164 +1043,8 @@ if (!gotLock) {
       settings.elo.minRating
     );
     lobbyController.testMode = !app.isPackaged;
-    lobbyController.on("update", (update: LobbyUpdates) => {
-      discRPC.setActivity({
-        state: gameState.menuState,
-        details: lobbyController.lobby?.lobbyStatic.lobbyName,
-        region: gameState.selfRegion,
-        inGame: gameState.inGame,
-        currentPlayers: lobbyController.lobby?.nonSpecPlayers.length,
-      });
-      if (lobbyController.lobby) {
-        if (
-          update.playerPayload ||
-          update.playerData ||
-          update.newLobby ||
-          update.leftLobby
-        ) {
-          if (update.leftLobby) {
-            clearLobby();
-          } else {
-            gameStateProxy.action = "waitingInLobby";
-          }
-          sendWindow("lobbyUpdate", { lobbyData: update });
-          sendToHub("lobbyUpdate", { lobbyUpdates: update });
-          if (discClient) {
-            if (update.newLobby) {
-              discClient.sendNewLobby(
-                update.newLobby,
-                lobbyController.lobby.exportTeamStructure()
-              );
-            } else {
-              discClient.updateLobby(lobbyController.lobby.exportTeamStructure());
-            }
-          }
-          if (settings.obs.textSource) {
-            fs.writeFileSync(
-              path.join(app.getPath("documents"), "wc3mt.txt"),
-              lobbyController.exportTeamStructureString()
-            );
-          }
-          if (update.playerData) {
-            if (update.playerData.extraData) {
-              if (settings.elo.announce) {
-                sendChatMessage(
-                  update.playerData.name +
-                    " ELO: " +
-                    update.playerData.extraData.rating +
-                    ", Rank: " +
-                    update.playerData.extraData.rank +
-                    ", Played: " +
-                    update.playerData.extraData.played +
-                    ", Wins: " +
-                    update.playerData.extraData.wins +
-                    ", Losses: " +
-                    update.playerData.extraData.losses +
-                    ", Last Change: " +
-                    update.playerData.extraData.lastChange
-                );
-              }
-            } else {
-              log.error("Player data update missing data");
-            }
-          }
-        } else if (update.stale) {
-          leaveGame();
-        } else if (update.playerLeft) {
-          log.info("Player left: " + update.playerLeft);
-        } else if (update.playerJoined) {
-          if (update.playerJoined.name) {
-            db.open;
-            const row = db
-              .prepare(
-                "SELECT * FROM banList WHERE username = ? AND removal_date IS NULL"
-              )
-              .get(update.playerJoined.name);
-            if (row) {
-              lobbyController.banSlot(update.playerJoined.slot);
-              sendChatMessage(
-                update.playerJoined.name +
-                  " is permanently banned" +
-                  (row.reason ? ": " + row.reason : "")
-              );
-              log.info(
-                "Kicked " +
-                  update.playerJoined.name +
-                  " for being banned" +
-                  (row.reason ? " for: " + row.reason : "")
-              );
-              return;
-            }
-            if (settings.autoHost.whitelist) {
-              if (update.playerJoined.name !== gameStateProxy.selfBattleTag) {
-                const row = db
-                  .prepare(
-                    "SELECT * FROM whiteList WHERE username = ? AND removal_date IS NULL"
-                  )
-                  .get(update.playerJoined.name);
-                if (!row) {
-                  lobbyController.banSlot(update.playerJoined.slot);
-                  sendChatMessage(update.playerJoined.name + " is not whitelisted");
-                  log.info(
-                    "Kicked " + update.playerJoined.name + " for not being whitelisted"
-                  );
-                  return;
-                }
-              }
-            }
-            log.info("Player joined: " + update.playerJoined.name);
-            announcement();
-            if (
-              settings.autoHost.minPlayers !== 0 &&
-              lobbyController.lobby.nonSpecPlayers.length >= settings.autoHost.minPlayers
-            ) {
-              startGame(settings.autoHost.delayStart);
-            }
-          } else {
-            log.warn("Nameless player joined");
-          }
-        } else if (update.lobbyReady) {
-          if (lobbyController.lobby.lobbyStatic.isHost) {
-            if (settings.autoHost.sounds) {
-              playSound("ready.wav");
-            }
-            if (
-              settings.autoHost.type === "smartHost" ||
-              settings.autoHost.type === "rapidHost"
-            ) {
-              sendProgress("Starting Game", 100);
-              if (
-                (settings.elo.type == "off" || !settings.elo.balanceTeams) &&
-                settings.autoHost.shufflePlayers
-              ) {
-                lobbyController.shufflePlayers();
-              }
-              // Wait a quarter second to make sure shuffles are done
-              setTimeout(() => {
-                if (lobbyController.isLobbyReady()) {
-                  startGame(settings.autoHost.delayStart);
-                }
-              }, 250);
-            }
-          }
-        }
-      }
-    });
-    lobbyController.on("sendChat", (data: string) => {
-      sendChatMessage(data);
-    });
-    lobbyController.on("sendMessage", (data: { type: string; payload: any }) => {
-      sendMessage(data.type, data.payload);
-    });
-    lobbyController.on("error", (data: string) => {
-      log.warn(data);
-    });
-    lobbyController.on("info", (data: string) => {
-      log.info(data);
-    });
-    lobbyController.on("progress", (data: { step: string; progress: number }) => {
-      log.info(data);
-      sendWindow("progress", { progress: data });
+    lobbyController.on("event", (data: EmitEvents) => {
+      moduleHandler(data);
     });
   }
 
@@ -1401,7 +1209,7 @@ if (!gotLock) {
       ) {
         log.info(`Changing autohost region to ${targetRegion}`);
         await exitGame();
-        openWarcraft(targetRegion);
+        warControl.openWarcraft(targetRegion);
         return true;
       } else {
         if (settings.autoHost.increment) {
@@ -1433,8 +1241,8 @@ if (!gotLock) {
     callCount: number = 0,
     lobbyName: string = ""
   ): Promise<boolean> {
-    if (!(await isWarcraftOpen())) {
-      await openWarcraft();
+    if (!(await warControl.isWarcraftOpen())) {
+      await warControl.openWarcraft();
     }
     if (
       !lobbyController.lobby?.lobbyStatic.lobbyName &&
@@ -1532,8 +1340,8 @@ if (!gotLock) {
           leaveGame();
         } else if (settings.autoHost.rapidHostTimer === -1) {
           log.info("Rapid Host exit game immediately");
-          await forceQuitWar();
-          openWarcraft();
+          await warControl.forceQuitWar();
+          warControl.openWarcraft();
         }
       }
     } else if (
@@ -1787,10 +1595,10 @@ if (!gotLock) {
         log.warn("Game client connection closed!");
         if (settings.client.antiCrash) {
           setTimeout(async () => {
-            if (await checkProcess("BlizzardError.exe")) {
+            if (await warControl.checkProcess("BlizzardError.exe")) {
               log.warn("Crash detected: BlizzardError.exe is running, restarting.");
-              await forceQuitProcess("BlizzardError.exe");
-              openWarcraft();
+              await warControl.forceQuitProcess("BlizzardError.exe");
+              warControl.openWarcraft();
             }
           }, 1000);
         }
@@ -1868,7 +1676,7 @@ if (!gotLock) {
       ) {
         log.info(`Changing region to match lobby of region ${openLobbyParams.region}`);
         await exitGame();
-        openWarcraft(openLobbyParams.region);
+        warControl.openWarcraft(openLobbyParams.region);
         return;
       }
       if (gameStateProxy.inGame || lobbyController.lobby?.lookupName) {
@@ -2034,7 +1842,6 @@ if (!gotLock) {
             sendChatMessage("Data not available");
           }
         } else if (payload.message.content.match(/^\?sp$/i)) {
-          // TODO: Shuffle players
           if (
             lobbyController.lobby.lobbyStatic.isHost &&
             checkRole(sender, "moderator")
@@ -2042,7 +1849,6 @@ if (!gotLock) {
             lobbyController.shufflePlayers();
           }
         } else if (payload.message.content.match(/^\?st$/i)) {
-          // TODO: Shuffle teams
           if (
             lobbyController.lobby.lobbyStatic?.isHost &&
             checkRole(sender, "moderator")
@@ -2348,15 +2154,15 @@ if (!gotLock) {
             var target = payload.message.content.split(" ")[1];
             if (target) {
               if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
-                sendChatMessage("Unwhitelisting out of lobby player.");
+                sendChatMessage("Un-whitelisting out of lobby player.");
                 unWhitePlayer(target, sender);
               } else {
                 sendChatMessage("Full battleTag required");
                 log.info("Full battleTag required");
               }
             } else {
-              sendChatMessage("Unwhitelist target required");
-              log.info("Unwhitelist target required");
+              sendChatMessage("Un-whitelist target required");
+              log.info("Un-whitelist target required");
             }
           }
         } else if (payload.message.content.match(/^\?perm/i)) {
@@ -2496,7 +2302,7 @@ if (!gotLock) {
               );
               sendChatMessage("?hold <name>: Holds a slot");
               sendChatMessage("?kick <name|slotNumber> <?reason>: Kicks a slot/player");
-              sendChatMessage("?<un>mute <player>: Mutes/unmutes a player");
+              sendChatMessage("?<un>mute <player>: Mutes/un-mutes a player");
               sendChatMessage(
                 "?open<?all> <name|slotNumber> <?reason>: Opens all / a slot/player"
               );
@@ -2634,8 +2440,8 @@ if (!gotLock) {
     db.prepare(
       "UPDATE whiteList SET removal_date = DateTime('now') WHERE username = ? AND removal_date IS NULL"
     ).run(player);
-    log.info("Unwhitelisted " + player + " by " + admin);
-    sendWindow("action", { value: "Unwhitelisted " + player + " by " + admin });
+    log.info("Un-whitelisted " + player + " by " + admin);
+    sendWindow("action", { value: "Un-whitelisted " + player + " by " + admin });
   }
 
   function unBanPlayer(player: string, admin: string) {
@@ -2785,19 +2591,19 @@ if (!gotLock) {
         if (lobbyController.lobby.lobbyStatic.lobbyName === oldLobbyName) {
           log.info("Lobby did not leave, trying again");
           await exitGame();
-          openWarcraft();
+          warControl.openWarcraft();
         }
       }
     }
   }
 
   async function exitGame(callCount: number = 0): Promise<boolean> {
-    if (await isWarcraftOpen()) {
+    if (await warControl.isWarcraftOpen()) {
       if (callCount < 5) {
-        return await forceQuitWar();
+        return await warControl.forceQuitWar();
       } else if (gameStateProxy.menuState === "LOADING_SCREEN") {
         log.info("Warcraft is loading game, forcing quit");
-        return await forceQuitWar();
+        return await warControl.forceQuitWar();
       } else {
         log.info("Sending Exit Game");
         sendMessage("ExitGame", {});
@@ -2806,31 +2612,6 @@ if (!gotLock) {
       }
     } else {
       log.info("Warcraft is no longer open.");
-      return true;
-    }
-  }
-
-  async function forceQuitWar(): Promise<boolean> {
-    return await forceQuitProcess("Warcraft III.exe");
-  }
-
-  async function forceQuitProcess(processName: string): Promise<boolean> {
-    if (await checkProcess(processName)) {
-      log.info(processName + " is still running, forcing quit");
-      try {
-        let { stdout, stderr } = await exec(`taskkill /F /IM "${processName}"`);
-        if (stderr) {
-          log.warn(stderr);
-          return true;
-        }
-      } catch (e) {
-        await sleep(200);
-        return await forceQuitWar();
-      }
-      await sleep(200);
-      return await forceQuitWar();
-    } else {
-      log.info(processName + " force quit.");
       return true;
     }
   }
@@ -2966,7 +2747,7 @@ if (!gotLock) {
       (gameStateProxy.inGame || gameStateProxy.menuState === "LOADING_SCREEN") &&
       webUISocket?.OPEN
     ) {
-      if (await activeWindowWar()) {
+      if (await warControl.activeWindowWar()) {
         let foundTarget = false;
         let searchFiles = ["quitNormal.png", "quitHLW.png"];
         for (const file of searchFiles) {
@@ -3118,272 +2899,6 @@ if (!gotLock) {
     }
   }
 
-  async function activeWindowWar(): Promise<Window | false> {
-    const warcraftOpenCheck = await isWarcraftOpen();
-    let height = 1080;
-    let activeWindow: Window | false = false;
-    if (warcraftIsOpen && !warcraftOpenCheck) {
-      warcraftIsOpen = warcraftOpenCheck;
-      new Notification({
-        title: "Warcraft is not open",
-        body: "An action was attempted but Warcraft was not open",
-      }).show();
-      height = await screen.height();
-    } else {
-      warcraftIsOpen = warcraftOpenCheck;
-      activeWindow = await getActiveWindow();
-      let title = await activeWindow.title;
-      const focused = title === "Warcraft III";
-      // Ensure that a notification is only sent the first time, if warcraft was focused before, but is no longer
-      if (!focused && warcraftInFocus) {
-        new Notification({
-          title: "Warcraft is not in focus",
-          body: "An action was attempted but Warcraft was not in focus",
-        }).show();
-      }
-      warcraftInFocus = focused;
-      if (warcraftInFocus) {
-        warcraftRegion = await activeWindow.region;
-        height = warcraftRegion.height;
-      }
-    }
-    setResourceDir(height);
-    return activeWindow;
-  }
-
-  async function isWarcraftOpen() {
-    return await checkProcess("Warcraft III.exe");
-  }
-
-  async function checkProcess(processName: string) {
-    let { stdout, stderr } = await exec(
-      `tasklist /NH /FI "STATUS eq RUNNING" /FI "USERNAME ne N/A" /FI "IMAGENAME eq ${processName}"`
-    );
-    if (stderr) {
-      log.warn(stderr);
-      return false;
-    } else {
-      if (stdout.includes(processName)) {
-        console.log(`${processName} is running`);
-        return true;
-      } else {
-        console.log(`${processName} is not running`);
-        return false;
-      }
-    }
-  }
-
-  async function openWarcraft(
-    region: Regions | "" = "",
-    callCount = 0,
-    focusAttempted = false
-  ): Promise<boolean> {
-    gameStateProxy.action = "openingWarcraft";
-    try {
-      if (callCount > 60) {
-        log.warn("Failed to open Warcraft after 60 attempts");
-      }
-      if (await isWarcraftOpen()) {
-        log.info("Warcraft is now open");
-        gameStateProxy.action = "nothing";
-        return true;
-      }
-      if (settings.client.alternateLaunch) {
-        //shell.openPath(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe -launch");
-        if (callCount === 0 || callCount % 15 === 0) {
-          exec(`"${warInstallLoc}\\_retail_\\x86_64\\Warcraft III.exe" -launch -uid w3`);
-        }
-        await sleep(1000);
-        return await openWarcraft(region, callCount + 1);
-      }
-      let battleNetOpen = await checkProcess("Battle.net.exe");
-      if (battleNetOpen !== true) {
-        shell.openPath(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe");
-        await sleep(1000);
-        return await openWarcraft(region, callCount + 1);
-      }
-      let battleNetWindow;
-      let windows = await getWindows();
-      for (let window of windows) {
-        let title = await window.title;
-        if (title === "Battle.net Login") {
-          await sleep(1000);
-          return await openWarcraft(region, callCount + 1);
-        }
-        if (title === "Blizzard Battle.net Login") {
-          log.warn("A login is required to open Warcraft");
-          gameStateProxy.action = "nothing";
-          return false;
-        }
-        if (title === "Battle.net") {
-          battleNetWindow = window;
-        }
-      }
-      if (!battleNetWindow) {
-        if (callCount % 2 == 0) {
-          shell.openPath(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe");
-        }
-        await sleep(3000);
-        return await openWarcraft(region, callCount + 3);
-      }
-      let activeWindow = await getActiveWindow();
-      let activeWindowTitle = await activeWindow.title;
-      let screenSize = { width: await screen.width(), height: await screen.height() };
-      if (activeWindowTitle !== "Battle.net") {
-        let bnetRegion = await battleNetWindow.region;
-        if (bnetRegion.left < -bnetRegion.width || bnetRegion.top < -bnetRegion.height) {
-          log.info("Battle.net window minimized. Attempting to open the window");
-          shell.openPath(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe");
-          await sleep(1000);
-          return await openWarcraft(region, callCount + 1, false);
-        }
-        if (!focusAttempted) {
-          log.info("Attempting to focus Battle.net");
-          if (app.isPackaged) {
-            shell.openPath(path.join(app.getAppPath(), "../../focusWar.js"));
-          } else {
-            shell.openPath(path.join(__dirname, "../focusWar.js"));
-          }
-          await sleep(1000);
-          return await openWarcraft(region, callCount + 1, true);
-        } else {
-          log.warn("Failed to focus Battle.net");
-          gameStateProxy.action = "nothing";
-          return false;
-        }
-      }
-      let searchRegion = await activeWindow.region;
-      searchRegion.width = searchRegion.width * 0.4;
-      if (searchRegion.left < 0) {
-        //Battle.net window left of screen
-        log.info("Move Battle.net window right");
-        let targetPosition = new Point(
-          searchRegion.left + searchRegion.width - searchRegion.width * 0.12,
-          searchRegion.top + 10
-        );
-        await mouse.setPosition(targetPosition);
-        await mouse.pressButton(0);
-        await mouse.move(right(searchRegion.left * -1 + 10));
-        await mouse.releaseButton(0);
-        searchRegion = await activeWindow.region;
-      }
-      if (searchRegion.left + searchRegion.width > screenSize.width) {
-        //Battle.net window right of screen
-        log.info("Move Battle.net window left");
-        let targetPosition = new Point(searchRegion.left + 10, searchRegion.top + 10);
-        await mouse.setPosition(targetPosition);
-        await mouse.pressButton(0);
-        await mouse.move(
-          left(searchRegion.left - (screenSize.width - searchRegion.width) + 10)
-        );
-        await mouse.releaseButton(0);
-      }
-      if (searchRegion.top + searchRegion.height > screenSize.height) {
-        //Battle.net window bottom of screen
-        log.info("Move Battle.net window up");
-        let targetPosition = new Point(
-          searchRegion.left + searchRegion.width / 2,
-          searchRegion.top + 10
-        );
-        await mouse.setPosition(targetPosition);
-        await mouse.pressButton(0);
-        await mouse.move(
-          up(searchRegion.top - (screenSize.height - searchRegion.height) + 10)
-        );
-        await mouse.releaseButton(0);
-      }
-      if (searchRegion.top < 0) {
-        // Battle.net window top of screen
-        log.warn("Battle.net window in inaccessible region.");
-        await forceQuitProcess("Battle.net.exe");
-        return await openWarcraft(region, callCount + 1);
-      }
-      searchRegion = await activeWindow.region;
-      searchRegion.height = searchRegion.height * 0.5;
-      searchRegion.width = searchRegion.width * 0.4;
-      searchRegion.top = searchRegion.top + searchRegion.height;
-      if (!region && settings.autoHost.regionChange) {
-        region = getTargetRegion(
-          settings.autoHost.regionChangeTimeEU,
-          settings.autoHost.regionChangeTimeNA
-        );
-      }
-      let targetRegion = { asia: 1, eu: 2, us: 3, usw: 3, "": 0 }[region];
-      try {
-        if (targetRegion && targetRegion > 0 && gameStateProxy.selfRegion !== region) {
-          log.info(`Changing region to ${region}`);
-          let changeRegionPosition = await screen.waitFor(
-            imageResource("changeRegion.png"),
-            30000,
-            100,
-            {
-              searchRegion,
-              confidence: 0.85,
-            }
-          );
-          let changeRegionPositionCenter = await centerOf(changeRegionPosition);
-          await mouse.setPosition(changeRegionPositionCenter);
-          await mouse.leftClick();
-          let newRegionPosition = new Point(
-            changeRegionPositionCenter.x,
-            changeRegionPositionCenter.y -
-              changeRegionPosition.height * targetRegion -
-              changeRegionPosition.height / 2
-          );
-          await mouse.setPosition(newRegionPosition);
-          await mouse.leftClick();
-          log.info(`Changed region to ${region}`);
-        }
-        let playRegionCenter = await centerOf(
-          screen.waitFor(imageResource("play.png"), 30000, 100, {
-            searchRegion,
-            confidence: 0.87,
-          })
-        );
-        await mouse.setPosition(playRegionCenter);
-        await mouse.leftClick();
-        log.info("Found and clicked play");
-        for (let i = 0; i < 10; i++) {
-          if (await isWarcraftOpen()) {
-            log.info("Warcraft is now open.");
-            gameStateProxy.action = "nothing";
-            return true;
-          }
-          await sleep(100);
-        }
-      } catch (e) {
-        log.warn("Failed image recognition: ", e);
-        // Add 5 to call count since OCR takes longer
-        return await openWarcraft(region, callCount + 15);
-      }
-      log.warn("Failed to open Warcraft.");
-      gameStateProxy.action = "nothing";
-      return false;
-    } catch (e) {
-      log.warn(e);
-      gameStateProxy.action = "nothing";
-      return false;
-    }
-  }
-
-  function setResourceDir(height: number) {
-    let targetRes = "1080/";
-    if (height > 1440) {
-      targetRes = "2160/";
-    } else if (height < 900) {
-      targetRes = "720/";
-    }
-    mouse.config.mouseSpeed = parseInt(targetRes) * 2;
-    if (!app.isPackaged) {
-      screen.config.resourceDirectory = path.join(__dirname, "images", targetRes);
-    } else {
-      screen.config.resourceDirectory = path.join(
-        app.getAppPath(),
-        "\\..\\..\\images",
-        targetRes
-      );
-    }
-  }
   async function sleep(milliseconds: number) {
     return new Promise((resolve) => setTimeout(resolve, milliseconds));
   }
@@ -3397,13 +2912,13 @@ if (!gotLock) {
     if (sendingInGameChat.active) {
       return;
     }
-    await activeWindowWar();
+    await warControl.activeWindowWar();
     try {
-      if (gameStateProxy.inGame && warcraftInFocus) {
+      if (gameStateProxy.inGame && warControl.inFocus) {
         sendingInGameChat.active = true;
         let nextMessage = sendingInGameChat.queue.shift();
         while (nextMessage) {
-          if (gameStateProxy.inGame && warcraftInFocus) {
+          if (gameStateProxy.inGame && warControl.inFocus) {
             log.info("Sending chat: " + nextMessage);
             clipboard.writeText(nextMessage);
             await mouse.leftClick();
@@ -3416,7 +2931,7 @@ if (!gotLock) {
               "Forced to stop sending messages. In Game: " +
                 gameStateProxy.inGame +
                 " Warcraft in focus: " +
-                warcraftInFocus
+                warControl.inFocus
             );
             sendingInGameChat.queue.unshift(nextMessage);
             nextMessage = undefined;
@@ -3432,15 +2947,6 @@ if (!gotLock) {
       log.warn(e);
       sendingInGameChat.active = false;
       return false;
-    }
-  }
-
-  function obsSetup() {
-    if (settings.obs.enabled && settings.obs.sceneSwitchType === "websockets") {
-      obsSocket = new OBSSocket({
-        address: settings.obs.address,
-        password: settings.obs.token,
-      });
     }
   }
 
@@ -3498,6 +3004,15 @@ if (!gotLock) {
     }
   }
 
+  function obsSetup() {
+    if (settings.obs.enabled && settings.obs.sceneSwitchType === "websockets") {
+      obsSocket = new OBSSocket(settings, gameStateProxy, {
+        address: settings.obs.address,
+        password: settings.obs.token,
+      });
+    }
+  }
+
   function commandClient(args: WindowSend) {
     switch (args.messageType) {
       case "changePerm":
@@ -3551,7 +3066,7 @@ if (!gotLock) {
         shell.openPath(log.transports.file.getFile().path);
         break;
       case "openWar":
-        openWarcraft();
+        warControl.openWarcraft();
         break;
       case "fetchWhiteBanList":
         if (args.fetch) {
@@ -3565,8 +3080,6 @@ if (!gotLock) {
               } LIMIT 10 OFFSET ?`
             )
             .all((args.fetch.page ?? 0) * 10);
-          console.log(whiteBanList);
-
           sendWindow("fetchedWhiteBanList", {
             fetched: {
               type: args.fetch.type,
@@ -3691,6 +3204,176 @@ if (!gotLock) {
       default:
         log.info("Unknown client command:", args);
         break;
+    }
+  }
+
+  function moduleHandler(command: EmitEvents) {
+    if (command.error) {
+      log.warn(command.error);
+    }
+    if (command.info) {
+      log.info(command.info);
+    }
+    if (command.newProgress) {
+      log.info(command.newProgress);
+      sendWindow("progress", { progress: command.newProgress });
+    }
+    if (command.sendGameChat) {
+      sendChatMessage(command.sendGameChat);
+    }
+    if (command.sendGameMessage) {
+      sendMessage(command.sendGameMessage.type, command.sendGameMessage.payload);
+    }
+    if (command.notification) {
+      new Notification(command.notification).show();
+    }
+    if (command.newGameState) {
+      // @ts-expect-error Not sure why this is 'never'
+      gameStateProxy[command.newGameState.key] = command.newGameState.value;
+    }
+    if (command.lobbyUpdate) {
+      let update = command.lobbyUpdate;
+      discRPC.setActivity({
+        state: gameState.menuState,
+        details: lobbyController.lobby?.lobbyStatic.lobbyName,
+        region: gameState.selfRegion,
+        inGame: gameState.inGame,
+        currentPlayers: lobbyController.lobby?.nonSpecPlayers.length,
+      });
+      if (lobbyController.lobby) {
+        if (
+          update.playerPayload ||
+          update.playerData ||
+          update.newLobby ||
+          update.leftLobby
+        ) {
+          if (update.leftLobby) {
+            clearLobby();
+          } else {
+            gameStateProxy.action = "waitingInLobby";
+          }
+          sendWindow("lobbyUpdate", { lobbyData: update });
+          sendToHub("lobbyUpdate", { lobbyUpdates: update });
+          if (discClient) {
+            if (update.newLobby) {
+              discClient.sendNewLobby(
+                update.newLobby,
+                lobbyController.lobby.exportTeamStructure()
+              );
+            } else {
+              discClient.updateLobby(lobbyController.lobby.exportTeamStructure());
+            }
+          }
+          if (settings.obs.textSource) {
+            fs.writeFileSync(
+              path.join(app.getPath("documents"), "wc3mt.txt"),
+              lobbyController.exportTeamStructureString()
+            );
+          }
+          if (update.playerData) {
+            if (update.playerData.extraData) {
+              if (settings.elo.announce) {
+                sendChatMessage(
+                  update.playerData.name +
+                    " ELO: " +
+                    update.playerData.extraData.rating +
+                    ", Rank: " +
+                    update.playerData.extraData.rank +
+                    ", Played: " +
+                    update.playerData.extraData.played +
+                    ", Wins: " +
+                    update.playerData.extraData.wins +
+                    ", Losses: " +
+                    update.playerData.extraData.losses +
+                    ", Last Change: " +
+                    update.playerData.extraData.lastChange
+                );
+              }
+            } else {
+              log.error("Player data update missing data");
+            }
+          }
+        } else if (update.stale) {
+          leaveGame();
+        } else if (update.playerLeft) {
+          log.info("Player left: " + update.playerLeft);
+        } else if (update.playerJoined) {
+          if (update.playerJoined.name) {
+            db.open;
+            const row = db
+              .prepare(
+                "SELECT * FROM banList WHERE username = ? AND removal_date IS NULL"
+              )
+              .get(update.playerJoined.name);
+            if (row) {
+              lobbyController.banSlot(update.playerJoined.slot);
+              sendChatMessage(
+                update.playerJoined.name +
+                  " is permanently banned" +
+                  (row.reason ? ": " + row.reason : "")
+              );
+              log.info(
+                "Kicked " +
+                  update.playerJoined.name +
+                  " for being banned" +
+                  (row.reason ? " for: " + row.reason : "")
+              );
+              return;
+            }
+            if (settings.autoHost.whitelist) {
+              if (update.playerJoined.name !== gameStateProxy.selfBattleTag) {
+                const row = db
+                  .prepare(
+                    "SELECT * FROM whiteList WHERE username = ? AND removal_date IS NULL"
+                  )
+                  .get(update.playerJoined.name);
+                if (!row) {
+                  lobbyController.banSlot(update.playerJoined.slot);
+                  sendChatMessage(update.playerJoined.name + " is not whitelisted");
+                  log.info(
+                    "Kicked " + update.playerJoined.name + " for not being whitelisted"
+                  );
+                  return;
+                }
+              }
+            }
+            log.info("Player joined: " + update.playerJoined.name);
+            announcement();
+            if (
+              settings.autoHost.minPlayers !== 0 &&
+              lobbyController.lobby.nonSpecPlayers.length >= settings.autoHost.minPlayers
+            ) {
+              startGame(settings.autoHost.delayStart);
+            }
+          } else {
+            log.warn("Nameless player joined");
+          }
+        } else if (update.lobbyReady) {
+          if (lobbyController.lobby.lobbyStatic.isHost) {
+            if (settings.autoHost.sounds) {
+              playSound("ready.wav");
+            }
+            if (
+              settings.autoHost.type === "smartHost" ||
+              settings.autoHost.type === "rapidHost"
+            ) {
+              sendProgress("Starting Game", 100);
+              if (
+                (settings.elo.type == "off" || !settings.elo.balanceTeams) &&
+                settings.autoHost.shufflePlayers
+              ) {
+                lobbyController.shufflePlayers();
+              }
+              // Wait a quarter second to make sure shuffles are done
+              setTimeout(() => {
+                if (lobbyController.isLobbyReady()) {
+                  startGame(settings.autoHost.delayStart);
+                }
+              }, 250);
+            }
+          }
+        }
+      }
     }
   }
 }
