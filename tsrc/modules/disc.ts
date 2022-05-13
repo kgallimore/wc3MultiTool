@@ -24,19 +24,11 @@ export class DisClient extends Module {
   };
   bidirectionalChat: boolean;
   _events: { [key: string]: any } = {};
-  constructor(
-    settings: AppSettings,
-    gameState: GameState,
-    token: string,
-    announceChannel: string,
-    chatChannel: string,
-    bidirectionalChat = true,
-    dev = false
-  ) {
+  constructor(settings: AppSettings, gameState: GameState, dev = false) {
     super(settings, gameState);
     this.dev = dev;
-    this.bidirectionalChat = bidirectionalChat;
-    if (!token) {
+    this.bidirectionalChat = settings.discord.bidirectionalChat;
+    if (!settings.discord.token) {
       throw new Error("Token is empty");
     }
     this.client = new Discord.Client({
@@ -54,22 +46,24 @@ export class DisClient extends Module {
           name: "war.trenchguns.com",
           type: "WATCHING",
         });
-        if (chatChannel || announceChannel) {
+        if (settings.discord.chatChannel || settings.discord.announceChannel) {
           this.client.channels.cache
             .filter((channel) => channel.isText())
             .forEach((channel) => {
               if (
-                (announceChannel &&
-                  (channel as Discord.TextChannel).name === announceChannel) ||
-                channel.id === announceChannel
+                (settings.discord.announceChannel &&
+                  (channel as Discord.TextChannel).name ===
+                    settings.discord.announceChannel) ||
+                channel.id === settings.discord.announceChannel
               ) {
                 this.announceChannel = channel as Discord.TextChannel;
               }
               if (
-                (chatChannel &&
-                  chatChannel &&
-                  (channel as Discord.TextChannel).name === chatChannel) ||
-                channel.id === chatChannel
+                (settings.discord.chatChannel &&
+                  settings.discord.chatChannel &&
+                  (channel as Discord.TextChannel).name ===
+                    settings.discord.chatChannel) ||
+                channel.id === settings.discord.chatChannel
               ) {
                 this.chatChannel = channel as Discord.TextChannel;
               }
@@ -88,7 +82,7 @@ export class DisClient extends Module {
       }
     });
 
-    this.client.login(token);
+    this.client.login(settings.discord.token);
   }
 
   updateChannel(channelName: string, channelType: "announceChannel" | "chatChannel") {

@@ -30,12 +30,7 @@ export class WarControl extends Module {
   windowRegion: Region | null = null;
   warInstallLoc: string;
 
-  constructor(
-    settings: AppSettings,
-    gameState: GameState,
-    warInstallLoc: string,
-    alternateLaunch: boolean = false
-  ) {
+  constructor(settings: AppSettings, gameState: GameState, warInstallLoc: string) {
     super(settings, gameState);
     this.warInstallLoc = warInstallLoc;
   }

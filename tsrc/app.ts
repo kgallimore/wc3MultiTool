@@ -633,6 +633,7 @@ if (!gotLock) {
 
   function updateSetting(setting: keyof AppSettings, key: SettingsKeys, value: any) {
     // TODO Replace with proxy
+    // TODO Update all modules
     if (
       // @ts-ignore
       settings[setting]?.[key] !== undefined &&
@@ -662,15 +663,6 @@ if (!gotLock) {
         obsSetup();
       } else if (key === "commAddress") {
         commSetup();
-      }
-      if (lobbyController) {
-        let updateKey: keyof LobbyAppSettings;
-        if (setting === "elo" && key === "type") {
-          updateKey = "eloType";
-        } else {
-          updateKey = key as keyof LobbyAppSettings;
-        }
-        lobbyController.updateSetting(updateKey, value);
       }
       if (key === "performanceMode") {
         togglePerformanceMode(value);
@@ -1006,15 +998,7 @@ if (!gotLock) {
       settings.discord.token.length > 20 &&
       (settings.discord.announceChannel || settings.discord.chatChannel)
     ) {
-      discClient = new DisClient(
-        settings,
-        gameStateProxy,
-        settings.discord.token,
-        settings.discord.announceChannel,
-        settings.discord.chatChannel,
-        settings.discord.bidirectionalChat,
-        !app.isPackaged
-      );
+      discClient = new DisClient(settings, gameStateProxy, !app.isPackaged);
       discClient.on("event", (data: EmitEvents) => {
         moduleHandler(data);
       });
@@ -1025,23 +1009,7 @@ if (!gotLock) {
 
   function lobbySetup() {
     // TODO: This is ugly and unnecessary, just pass autoHost and ELO?
-    lobbyController = new LobbyControl(
-      settings,
-      gameStateProxy,
-      settings.elo.type,
-      settings.elo.wc3StatsVariant,
-      settings.elo.balanceTeams,
-      settings.elo.excludeHostFromSwap,
-      settings.autoHost.moveToSpec,
-      settings.autoHost.moveToTeam,
-      settings.autoHost.closeSlots,
-      settings.autoHost.mapPath,
-      settings.elo.requireStats,
-      settings.elo.minRank,
-      settings.elo.minWins,
-      settings.elo.minGames,
-      settings.elo.minRating
-    );
+    lobbyController = new LobbyControl(settings, gameStateProxy);
     lobbyController.testMode = !app.isPackaged;
     lobbyController.on("event", (data: EmitEvents) => {
       moduleHandler(data);
