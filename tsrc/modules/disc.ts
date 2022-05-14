@@ -1,9 +1,10 @@
 import { Module } from "../moduleBase";
 import type { GameState, AppSettings } from "../utility";
+import type { MicroLobbyData } from "wc3mt-lobby-container";
 
 import Discord from "discord.js";
 import type { mmdResults } from "../utility";
-import type { PlayerTeamsData, MicroLobbyData } from "wc3mt-lobby-container";
+import type { PlayerTeamsData } from "wc3mt-lobby-container";
 import { DeColorName } from "../utility";
 
 export class DisClient extends Module {
@@ -24,11 +25,19 @@ export class DisClient extends Module {
   };
   bidirectionalChat: boolean;
   _events: { [key: string]: any } = {};
-  constructor(settings: AppSettings, gameState: GameState, dev = false) {
-    super(settings, gameState);
+  constructor(
+    baseModule: {
+      settings: AppSettings;
+      gameState: GameState;
+      identifier: string;
+      lobby?: MicroLobbyData;
+    },
+    dev = false
+  ) {
+    super(baseModule);
     this.dev = dev;
-    this.bidirectionalChat = settings.discord.bidirectionalChat;
-    if (!settings.discord.token) {
+    this.bidirectionalChat = this.settings.discord.bidirectionalChat;
+    if (!this.settings.discord.token) {
       throw new Error("Token is empty");
     }
     this.client = new Discord.Client({
@@ -46,24 +55,24 @@ export class DisClient extends Module {
           name: "war.trenchguns.com",
           type: "WATCHING",
         });
-        if (settings.discord.chatChannel || settings.discord.announceChannel) {
+        if (this.settings.discord.chatChannel || this.settings.discord.announceChannel) {
           this.client.channels.cache
             .filter((channel) => channel.isText())
             .forEach((channel) => {
               if (
-                (settings.discord.announceChannel &&
+                (this.settings.discord.announceChannel &&
                   (channel as Discord.TextChannel).name ===
-                    settings.discord.announceChannel) ||
-                channel.id === settings.discord.announceChannel
+                    this.settings.discord.announceChannel) ||
+                channel.id === this.settings.discord.announceChannel
               ) {
                 this.announceChannel = channel as Discord.TextChannel;
               }
               if (
-                (settings.discord.chatChannel &&
-                  settings.discord.chatChannel &&
+                (this.settings.discord.chatChannel &&
+                  this.settings.discord.chatChannel &&
                   (channel as Discord.TextChannel).name ===
-                    settings.discord.chatChannel) ||
-                channel.id === settings.discord.chatChannel
+                    this.settings.discord.chatChannel) ||
+                channel.id === this.settings.discord.chatChannel
               ) {
                 this.chatChannel = channel as Discord.TextChannel;
               }
@@ -82,7 +91,7 @@ export class DisClient extends Module {
       }
     });
 
-    this.client.login(settings.discord.token);
+    this.client.login(this.settings.discord.token);
   }
 
   updateChannel(channelName: string, channelType: "announceChannel" | "chatChannel") {
@@ -236,7 +245,7 @@ export class DisClient extends Module {
     }
   }
 
-  async updateLobby(data: PlayerTeamsData | false) {
+  async updateDiscordLobby(data: PlayerTeamsData | false) {
     if (this.#embed && this.#sentEmbed && this.#lobbyState.status === "active") {
       if (data === this.#sentEmbedData) {
         return;
@@ -279,7 +288,7 @@ export class DisClient extends Module {
           this.#lobbyUpdates.update = data;
         }
         setTimeout(() => {
-          this.updateLobby(false);
+          this.updateDiscordLobby(false);
         }, now - this.#lobbyUpdates.lastUpdate);
       }
     }

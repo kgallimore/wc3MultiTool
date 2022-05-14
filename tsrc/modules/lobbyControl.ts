@@ -1,5 +1,6 @@
 import { Module } from "../moduleBase";
 import type { GameState, AppSettings } from "../utility";
+import { MicroLobbyData } from "wc3mt-lobby-container";
 
 import fetch from "cross-fetch";
 import {
@@ -12,7 +13,6 @@ import {
   SlotNumbers,
   TeamTypes,
 } from "wc3mt-lobby-container";
-import type { LobbyAppSettings } from "../utility";
 import { ensureInt } from "../utility";
 
 require = require("esm")(module);
@@ -33,8 +33,13 @@ export class LobbyControl extends Module {
 
   #expectedSwaps: Array<[string, string]> = [];
 
-  constructor(settings: AppSettings, gameState: GameState) {
-    super(settings, gameState);
+  constructor(baseModule: {
+    settings: AppSettings;
+    gameState: GameState;
+    identifier: string;
+    lobby?: MicroLobbyData;
+  }) {
+    super(baseModule);
   }
 
   ingestLobby(payload: GameClientLobbyPayload, region: Regions) {

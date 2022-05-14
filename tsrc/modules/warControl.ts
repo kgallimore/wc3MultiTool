@@ -1,5 +1,6 @@
 import { Module } from "../moduleBase";
 import { GameState, AppSettings, getTargetRegion } from "../utility";
+import { MicroLobbyData } from "wc3mt-lobby-container";
 
 import {
   Window,
@@ -30,8 +31,16 @@ export class WarControl extends Module {
   windowRegion: Region | null = null;
   warInstallLoc: string;
 
-  constructor(settings: AppSettings, gameState: GameState, warInstallLoc: string) {
-    super(settings, gameState);
+  constructor(
+    baseModule: {
+      settings: AppSettings;
+      gameState: GameState;
+      identifier: string;
+      lobby?: MicroLobbyData;
+    },
+    warInstallLoc: string
+  ) {
+    super(baseModule);
     this.warInstallLoc = warInstallLoc;
   }
   async openWarcraft(

@@ -10,6 +10,9 @@
   - [Discord Integration](#discord-integration)
 - [Development](#development)
   - [Contributing](#contributing)
+    - [License](#license)
+    - [Bad News](#bad-news)
+    - [Additional Modules](#additional-modules)
   - [TODO](#todo)
 
 ## Features
@@ -59,6 +62,7 @@
 
 - Smart host currently requires the game to be in focus unless the map uses the included vJass lib.
 - You have to manually edit index.html to alow both WC3 Multi-Tool and W3C Champions.
+- There is extremely limited in game interaction.
 
 ## What this tool is NOT
 
@@ -80,7 +84,7 @@ You can grab a download for the tool at either [Hive](https://www.hiveworkshop.c
 
 OBS Websockets (Recommended)
 
-- [Download and intstall the latest full release from the Github repo](https://github.com/obsproject/obs-websocket/releases)
+- [Download and install the latest full release from the Github repo](https://github.com/obsproject/obs-websocket/releases)
 - If OBS is running locally and the port is unchanged leave the OBS address blank and use the default address.
 - Input the password if you specified any
 - Input the desired scene names (Case sensitive)
@@ -106,7 +110,18 @@ Text Source
 
 ### Contributing
 
+#### License
+
+As of right now there is no license to the project. The below notes are for when the project eventually gets a license.
+
+#### Bad News
+
 Unfortunately, due to the way WC3 is forced to launch through the BNET launcher (as well as to enable smart host on maps not including the vJass library), some OCR is required to enable launching. To accomplish this, [Nut.js](https://github.com/nut-tree/nut.js) is used. To be able to use a version of electron that is compatible with the current version of [Discord.js,](https://github.com/discordjs/discord.js#installation) the [custom built (and non public) image matcher package Nut.js provides is used.](https://nutjs.dev/blog/new-years-news) It costs 40$ a month, meaning that you most likely may not feel like forking up the cash to be able to build and test on your own. Feel free to make any pull requests and I'll do my best to build it and test it out.
+
+#### Additional Modules
+
+Each add-on is a designed as a separate "module" under `./tsrc/modules`.
+[View the README here](tsrc/modules/README.md)
 
 ### TODO
 

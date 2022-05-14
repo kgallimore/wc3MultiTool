@@ -1,5 +1,5 @@
 import EventEmitter from "events";
-import type { LobbyUpdates } from "wc3mt-lobby-container";
+import { LobbyUpdates, MicroLobby, MicroLobbyData } from "wc3mt-lobby-container";
 
 import type { SEEventEvent } from "./modules/stream";
 
@@ -20,48 +20,114 @@ export interface EmitEvents {
 export class Module extends EventEmitter {
   settings: AppSettings;
   gameState: GameState;
+  identifier: string;
+  lobby: MicroLobby | null = null;
 
-  constructor(settings: AppSettings, gameState: GameState) {
+  constructor(baseModule: {
+    settings: AppSettings;
+    gameState: GameState;
+    identifier: string;
+    lobby?: MicroLobbyData;
+  }) {
     super();
-    this.settings = settings;
-    this.gameState = gameState;
+    this.settings = baseModule.settings;
+    this.gameState = baseModule.gameState;
+    this.identifier = baseModule.identifier;
+    if (baseModule.lobby) {
+      this.lobby = new MicroLobby({ fullData: baseModule.lobby });
+    }
   }
 
   updateGameState(key: keyof GameState, value: string | boolean) {
-    // @ts-expect-error
-    this.gameState[key] = value;
+    (this.gameState[key] as any) = value;
   }
 
-  updateSettings(settings: AppSettings) {
-    this.settings = settings;
+  updateSettings(key: {
+    autoHost?: { [key in keyof AppSettings["autoHost"]]: any };
+    obs?: { [key in keyof AppSettings["obs"]]: any };
+    discord?: { [key in keyof AppSettings["discord"]]: any };
+    elo?: { [key in keyof AppSettings["elo"]]: any };
+    client?: { [key in keyof AppSettings["client"]]: any };
+    streaming?: { [key in keyof AppSettings["streaming"]]: any };
+  }) {
+    if (key.autoHost) {
+      (
+        Object.entries(key.autoHost) as Array<[keyof AppSettings["autoHost"], any]>
+      ).forEach(([key, newValue]) => {
+        (this.settings.autoHost[key] as any) = newValue;
+      });
+    }
+    if (key.obs) {
+      (Object.entries(key.obs) as Array<[keyof AppSettings["obs"], any]>).forEach(
+        ([key, newValue]) => {
+          (this.settings.obs[key] as any) = newValue;
+        }
+      );
+    }
+    if (key.discord) {
+      (Object.entries(key.discord) as Array<[keyof AppSettings["discord"], any]>).forEach(
+        ([key, newValue]) => {
+          (this.settings.discord[key] as any) = newValue;
+        }
+      );
+    }
+    if (key.elo) {
+      (Object.entries(key.elo) as Array<[keyof AppSettings["elo"], any]>).forEach(
+        ([key, newValue]) => {
+          (this.settings.elo[key] as any) = newValue;
+        }
+      );
+    }
+    if (key.client) {
+      (Object.entries(key.client) as Array<[keyof AppSettings["client"], any]>).forEach(
+        ([key, newValue]) => {
+          (this.settings.client[key] as any) = newValue;
+        }
+      );
+    }
+    if (key.streaming) {
+      (
+        Object.entries(key.streaming) as Array<[keyof AppSettings["streaming"], any]>
+      ).forEach(([key, newValue]) => {
+        (this.settings.streaming[key] as any) = newValue;
+      });
+    }
   }
 
-  event(data: EmitEvents) {
+  updateLobby(update: LobbyUpdates) {
+    if (this.lobby) {
+      this.lobby.ingestUpdate(update);
+    } else if (update.newLobby) {
+      this.lobby = new MicroLobby({ fullData: update.newLobby });
+    }
+  }
+
+  emitEvent(data: EmitEvents) {
     this.emit("event", data);
   }
 
   emitError(error: string) {
-    this.event({ error });
+    this.emitEvent({ error });
   }
 
   emitInfo(info: string) {
-    this.event({ info });
+    this.emitEvent({ info });
   }
 
   emitUpdate(lobbyUpdate: LobbyUpdates) {
-    this.event({ lobbyUpdate });
+    this.emitEvent({ lobbyUpdate });
   }
 
   sendGameChat(sendGameChat: string) {
-    this.event({ sendGameChat });
+    this.emitEvent({ sendGameChat });
   }
 
   emitProgress(step: string, progress: number) {
-    this.event({ newProgress: { step, progress } });
+    this.emitEvent({ newProgress: { step, progress } });
   }
 
   emitMessage(type: string, payload: any) {
-    this.event({
+    this.emitEvent({
       sendGameMessage: {
         type,
         payload,
@@ -70,14 +136,14 @@ export class Module extends EventEmitter {
   }
 
   emitNewTip(newTip: SEEventEvent | SEEventEvent[]) {
-    this.event({ newTip });
+    this.emitEvent({ newTip });
   }
 
   emitNotification(title: string, body: string) {
-    this.event({ notification: { title, body } });
+    this.emitEvent({ notification: { title, body } });
   }
 
   emitUpdateGameState(key: keyof GameState, value: string | boolean) {
-    this.event({ newGameState: { key, value } });
+    this.emitEvent({ newGameState: { key, value } });
   }
 }

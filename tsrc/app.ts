@@ -37,6 +37,7 @@ import { LobbyControl } from "./modules/lobbyControl";
 import { DiscordRPC } from "./modules/discordRPC";
 import { OBSSocket } from "./modules/obs";
 import { WarControl } from "./modules/warControl";
+import { HubControl } from "./modules/hub";
 import type { EmitEvents } from "./moduleBase";
 import parser from "w3gjs";
 import LanguageDetect from "languagedetect";
@@ -119,7 +120,6 @@ if (!gotLock) {
   var webUISocket: WebSocket | null = null;
   var clientWebSocket: WebSocket;
   var commSocket: WebSocket | null = null;
-  var hubWebSocket: WebSocket | null;
   var voteTimer: NodeJS.Timeout | null;
   var openLobbyParams: OpenLobbyParams | null;
   var gameState: GameState = {
@@ -193,7 +193,7 @@ if (!gotLock) {
           inGame: gameState.inGame,
           currentPlayers: lobbyController.lobby?.nonSpecPlayers.length,
         });
-        sendToHub("gameState", { gameState: target });
+        hubConnection.sendToHub("gameState", { gameState: target });
       }
       return true;
     },
@@ -202,10 +202,6 @@ if (!gotLock) {
     tableVersion: (store.get("tableVersion") as number) ?? 0,
     latestUploadedReplay: (store.get("latestUploadedReplay") as number) ?? 0,
   };
-  var appVersion: string;
-  var discClient: DisClient | null = null;
-  var obsSocket: OBSSocket | null = null;
-  var seClient: SEClient | null = null;
   var sendingInGameChat: { active: boolean; queue: Array<string> } = {
     active: false,
     queue: [],
@@ -504,8 +500,6 @@ if (!gotLock) {
     },
   };
 
-  let lobbyController: LobbyControl;
-
   var identifier: string = store.get("anonymousIdentifier") as string;
   if (!identifier || identifier.length !== 21) {
     identifier = nanoid();
@@ -550,8 +544,26 @@ if (!gotLock) {
     });
   }
 
-  const discRPC = new DiscordRPC(settings, gameStateProxy);
-  const warControl = new WarControl(settings, gameStateProxy, warInstallLoc);
+  let moduleInitialData = {
+    settings,
+    gameState,
+    identifier,
+  };
+
+  const lobbyController = new LobbyControl(moduleInitialData);
+  const discRPC = new DiscordRPC(moduleInitialData);
+  const warControl = new WarControl(moduleInitialData, warInstallLoc);
+  const discClient = new DisClient(moduleInitialData);
+  const seClient = new SEClient(moduleInitialData);
+  const hubConnection = new HubControl(
+    moduleInitialData,
+    app.isPackaged,
+    app.getVersion()
+  );
+  const obsSocket = new OBSSocket(moduleInitialData, {
+    address: settings.obs.address,
+    password: settings.obs.token,
+  });
 
   screen.height().then((height) => {
     warControl.setResourceDir(height);
@@ -578,7 +590,7 @@ if (!gotLock) {
   });
 
   app.on("before-quit", () => {
-    sendToHub("lobbyUpdate", { lobbyUpdates: { leftLobby: true } });
+    hubConnection.sendToHub("lobbyUpdate", { lobbyUpdates: { leftLobby: true } });
     discClient?.lobbyClosed();
     lobbyController?.clear();
   });
@@ -716,6 +728,7 @@ if (!gotLock) {
       }
     }
   }
+
   function togglePerformanceMode(enabled: boolean) {
     if (enabled) {
       if (fs.existsSync(warInstallLoc + "\\_retail_\\webui\\GlueManagerAltered.js")) {
@@ -733,6 +746,7 @@ if (!gotLock) {
       }
     }
   }
+
   autoUpdater.on("checking-for-update", () => {
     // Do nothing for now
     //log.info("checking-for-update");
@@ -869,12 +883,7 @@ if (!gotLock) {
       store.set("tableVersion", 2);
       clientState.tableVersion = 2;
     }
-
-    discordSetup();
-    seSetup();
     commSetup();
-    obsSetup();
-    appVersion = app.getVersion();
     wss = new WebSocket.Server({ port: 8888 });
     wss.on("connection", function connection(ws) {
       log.info("Connection");
@@ -913,7 +922,6 @@ if (!gotLock) {
     if (settings.client.checkForUpdates) {
       autoUpdater.checkForUpdatesAndNotify();
     }
-    connectToHub();
     if (process.argv[1] && process.argv[1] !== ".") {
       setTimeout(() => {
         protocolHandler(process.argv[1]);
@@ -924,7 +932,7 @@ if (!gotLock) {
   });
 
   app.on("window-all-closed", () => {
-    sendToHub("lobbyUpdate", { lobbyUpdates: { leftLobby: true } });
+    hubConnection.sendToHub("lobbyUpdate", { lobbyUpdates: { leftLobby: true } });
     discClient?.lobbyClosed();
     lobbyController?.clear();
     if (process.platform !== "darwin") {
@@ -938,90 +946,12 @@ if (!gotLock) {
     }
   });
 
-  function connectToHub() {
-    if (app.isPackaged) {
-      hubWebSocket = new WebSocket("wss://ws.trenchguns.com/" + identifier);
-    } else {
-      hubWebSocket = new WebSocket("wss://wsdev.trenchguns.com/" + identifier);
-    }
-    hubWebSocket.onerror = function (error) {
-      if (app.isPackaged) log.warn("Failed hub connection", error);
-    };
-    hubWebSocket.onopen = (ev) => {
-      if (ev.target.readyState !== WebSocket.OPEN) return;
-      log.info("Connected to hub");
-      if (
-        lobbyController.lobby?.lobbyStatic &&
-        (!settings.autoHost.private || !app.isPackaged)
-      ) {
-        sendToHub("lobbyUpdate", {
-          lobbyUpdates: { newLobby: lobbyController.lobby.exportMin() },
-        });
-      }
-      setTimeout(hubHeartbeat, 30000);
-    };
-    hubWebSocket.onmessage = function incoming(data) {
-      log.info("Received message from hub: " + data);
-    };
-    hubWebSocket.onclose = function close() {
-      if (app.isPackaged) log.warn("Disconnected from hub");
-      setTimeout(connectToHub, Math.random() * 5000 + 3000);
-      hubWebSocket = null;
-    };
-  }
-
-  function hubHeartbeat() {
-    if (hubWebSocket?.OPEN) {
-      sendToHub("heartbeat");
-      setTimeout(hubHeartbeat, 30000);
-    }
-  }
-
-  function seSetup() {
-    if (settings.streaming.enabled) {
-      if (settings.streaming.seToken.length > 20) {
-        seClient = new SEClient(settings, gameStateProxy, settings.streaming.seToken);
-        seClient.on("event", (data: EmitEvents) => {
-          moduleHandler(data);
-        });
-      } else {
-        seClient = null;
-      }
-    } else {
-      seClient = null;
-    }
-  }
-
-  function discordSetup() {
-    if (
-      settings.discord.enabled &&
-      settings.discord.token.length > 20 &&
-      (settings.discord.announceChannel || settings.discord.chatChannel)
-    ) {
-      discClient = new DisClient(settings, gameStateProxy, !app.isPackaged);
-      discClient.on("event", (data: EmitEvents) => {
-        moduleHandler(data);
-      });
-    } else {
-      discClient = null;
-    }
-  }
-
   function lobbySetup() {
     // TODO: This is ugly and unnecessary, just pass autoHost and ELO?
-    lobbyController = new LobbyControl(settings, gameStateProxy);
     lobbyController.testMode = !app.isPackaged;
     lobbyController.on("event", (data: EmitEvents) => {
       moduleHandler(data);
     });
-  }
-
-  function sendToHub(messageType: HubReceive["messageType"], data?: HubReceive["data"]) {
-    let buildMessage: HubReceive = { messageType, data, appVersion };
-    if (hubWebSocket && hubWebSocket.readyState === WebSocket.OPEN) {
-      hubWebSocket.send(JSON.stringify(buildMessage));
-    }
-    commSend(messageType, data);
   }
 
   async function triggerOBS() {
@@ -2327,7 +2257,7 @@ if (!gotLock) {
         }
 
         if (!settings.autoHost.private || !app.isPackaged) {
-          sendToHub("lobbyUpdate", {
+          hubConnection.sendToHub("lobbyUpdate", {
             lobbyUpdates: {
               chatMessage: {
                 name: sender,
@@ -2972,15 +2902,6 @@ if (!gotLock) {
     }
   }
 
-  function obsSetup() {
-    if (settings.obs.enabled && settings.obs.sceneSwitchType === "websockets") {
-      obsSocket = new OBSSocket(settings, gameStateProxy, {
-        address: settings.obs.address,
-        password: settings.obs.token,
-      });
-    }
-  }
-
   function commandClient(args: WindowSend) {
     switch (args.messageType) {
       case "changePerm":
@@ -3221,7 +3142,7 @@ if (!gotLock) {
             gameStateProxy.action = "waitingInLobby";
           }
           sendWindow("lobbyUpdate", { lobbyData: update });
-          sendToHub("lobbyUpdate", { lobbyUpdates: update });
+          hubConnection.sendToHub("lobbyUpdate", { lobbyUpdates: update });
           if (discClient) {
             if (update.newLobby) {
               discClient.sendNewLobby(
@@ -3229,7 +3150,7 @@ if (!gotLock) {
                 lobbyController.lobby.exportTeamStructure()
               );
             } else {
-              discClient.updateLobby(lobbyController.lobby.exportTeamStructure());
+              discClient.updateDiscordLobby(lobbyController.lobby.exportTeamStructure());
             }
           }
           if (settings.obs.textSource) {

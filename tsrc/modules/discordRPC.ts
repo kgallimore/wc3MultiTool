@@ -1,5 +1,6 @@
 import { Module } from "../moduleBase";
 import type { GameState, AppSettings } from "../utility";
+import type { MicroLobbyData } from "wc3mt-lobby-container";
 
 import { Client, register, Presence } from "discord-rpc";
 import type { Regions } from "wc3mt-lobby-container";
@@ -20,8 +21,13 @@ export class DiscordRPC extends Module {
   private startTimestamp: number = 0;
   private previousActivity: NewActivity = { state: "OUT_OF_MENUS", inGame: false };
 
-  constructor(settings: AppSettings, gameState: GameState) {
-    super(settings, gameState);
+  constructor(baseModule: {
+    settings: AppSettings;
+    gameState: GameState;
+    identifier: string;
+    lobby?: MicroLobbyData;
+  }) {
+    super(baseModule);
     this.client = new Client({ transport: "ipc" });
     register(this.clientId);
     this.client.on("ready", () => {

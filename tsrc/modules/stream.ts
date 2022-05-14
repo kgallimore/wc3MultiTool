@@ -1,5 +1,6 @@
 import { Module } from "../moduleBase";
 import type { GameState, AppSettings } from "../utility";
+import { MicroLobbyData } from "wc3mt-lobby-container";
 
 const io = require("socket.io-client");
 
@@ -35,12 +36,15 @@ export interface SEEventEvent {
 }
 
 export class SEClient extends Module {
-  jwt: string;
   socket: any;
 
-  constructor(settings: AppSettings, gameState: GameState, jwt: string) {
-    super(settings, gameState);
-    this.jwt = jwt;
+  constructor(baseModule: {
+    settings: AppSettings;
+    gameState: GameState;
+    identifier: string;
+    lobby?: MicroLobbyData;
+  }) {
+    super(baseModule);
     this.socket = io("https://realtime.streamelements.com", {
       transports: ["websocket"],
     });
@@ -72,7 +76,10 @@ export class SEClient extends Module {
 
   onConnect() {
     this.emitInfo("Successfully connected to StreamElements websocket");
-    this.socket.emit("authenticate", { method: "jwt", token: this.jwt });
+    this.socket.emit("authenticate", {
+      method: "jwt",
+      token: this.settings.streaming.seToken,
+    });
   }
 
   onDisconnect() {

@@ -1,5 +1,6 @@
 import { Module } from "../moduleBase";
 import type { GameState, AppSettings } from "../utility";
+import type { MicroLobbyData } from "wc3mt-lobby-container";
 
 import OBSWebSocket from "obs-websocket-js";
 
@@ -7,11 +8,15 @@ export class OBSSocket extends Module {
   socket: OBSWebSocket;
 
   constructor(
-    settings: AppSettings,
-    gameState: GameState,
+    baseModule: {
+      settings: AppSettings;
+      gameState: GameState;
+      identifier: string;
+      lobby?: MicroLobbyData;
+    },
     options?: { address?: string; password?: string }
   ) {
-    super(settings, gameState);
+    super(baseModule);
     this.socket = new OBSWebSocket();
     this.socket
       .connect(options)
