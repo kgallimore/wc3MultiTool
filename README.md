@@ -118,7 +118,7 @@ As of right now there is no license to the project. The below notes are for when
 
 #### Bad News
 
-Unfortunately, due to the way WC3 is forced to launch through the BNET launcher (as well as to enable smart host on maps not including the vJass library), some OCR is required to enable launching. To accomplish this, [Nut.js](https://github.com/nut-tree/nut.js) is used. To be able to use a version of electron that is compatible with the current version of [Discord.js,](https://github.com/discordjs/discord.js#installation) the [custom built (and non public) image matcher package Nut.js provides is used.](https://nutjs.dev/blog/new-years-news) It costs 40$ a month, meaning that you most likely may not feel like forking up the cash to be able to build and test on your own. Feel free to make any pull requests and I'll do my best to build it and test it out.
+Unfortunately, due to the way WC3 is forced to launch through the BNET launcher (as well as to enable smart host on maps not including the vJass library), some image matching is required to enable launching. To accomplish this, [Nut.js](https://github.com/nut-tree/nut.js) is used. To be able to use a version of electron that is compatible with the current version of [Discord.js,](https://github.com/discordjs/discord.js#installation) the [custom built (and non public) image matcher package Nut.js provides is used.](https://nutjs.dev/blog/new-years-news) It costs 40$ a month, meaning that you most likely may not feel like forking up the cash to be able to build and test on your own. Feel free to make any pull requests and I'll do my best to build it and test it out.
 
 #### Additional Modules
 
