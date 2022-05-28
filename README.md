@@ -8,6 +8,7 @@
 - [Setup](#setup)
   - [OBS Integration](#obs-integration)
   - [Discord Integration](#discord-integration)
+  - [Using the External Lobby](#using-the-external-lobby)
 - [Development](#development)
   - [Contributing](#contributing)
     - [License](#license)
@@ -106,7 +107,9 @@ Text Source
 3. Create a new bot
 4. Copy over the token into the app
 5. Set the name of the lobby announce channel, or the chat channel. They are both optional. You may use the exact name of the channel or the channel ID.
-6. Restart the app.
+6. Restart the app. ()
+
+### Using the External Lobby
 
 ## Development
 

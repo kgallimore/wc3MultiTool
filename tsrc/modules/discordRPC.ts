@@ -1,9 +1,12 @@
 import { Module } from "../moduleBase";
-import type { GameState, AppSettings } from "../utility";
+import type { GameState } from "../utility";
 import type { MicroLobbyData } from "wc3mt-lobby-container";
 
 import { Client, register, Presence } from "discord-rpc";
 import type { Regions } from "wc3mt-lobby-container";
+import { GameStateUpdate } from "../utility";
+
+import { settings } from "./../globals/settings";
 
 export interface NewActivity {
   details?: string;
@@ -22,7 +25,6 @@ export class DiscordRPC extends Module {
   private previousActivity: NewActivity = { state: "OUT_OF_MENUS", inGame: false };
 
   constructor(baseModule: {
-    settings: AppSettings;
     gameState: GameState;
     identifier: string;
     lobby?: MicroLobbyData;
@@ -37,7 +39,21 @@ export class DiscordRPC extends Module {
     this.client.login({ clientId: this.clientId }).catch(console.error);
   }
 
-  public setActivity(activity: NewActivity) {
+  updateGameState(updates: GameStateUpdate): boolean {
+    let updated = super.updateGameState(updates);
+    if (updated) {
+      this.setActivity({
+        state: this.gameState.menuState,
+        details: this.lobby?.lobbyStatic.lobbyName,
+        region: this.gameState.selfRegion,
+        inGame: this.gameState.inGame,
+        //currentPlayers: this.lobby?.nonSpecPlayers.length,
+      });
+    }
+    return updated;
+  }
+
+  private setActivity(activity: NewActivity) {
     if (this.ready) {
       if (
         activity.state !== this.previousActivity.state ||

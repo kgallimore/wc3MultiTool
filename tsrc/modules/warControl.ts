@@ -1,6 +1,9 @@
 import { Module } from "../moduleBase";
-import { GameState, AppSettings, getTargetRegion } from "../utility";
-import { MicroLobbyData } from "wc3mt-lobby-container";
+import type { GameState } from "../utility";
+import type { MicroLobbyData } from "wc3mt-lobby-container";
+
+import { getTargetRegion } from "../utility";
+import { shell } from "electron";
 
 import {
   Window,
@@ -25,23 +28,30 @@ const exec = promisify(require("child_process").exec);
 
 import type { Regions } from "wc3mt-lobby-container";
 
+import { settings } from "./../globals/settings";
+
 export class WarControl extends Module {
   inFocus: boolean = false;
   isOpen: boolean = false;
   windowRegion: Region | null = null;
   warInstallLoc: string;
+  isPackaged: boolean = false;
+  appPath: string;
 
   constructor(
     baseModule: {
-      settings: AppSettings;
       gameState: GameState;
       identifier: string;
       lobby?: MicroLobbyData;
     },
-    warInstallLoc: string
+    warInstallLoc: string,
+    appPath: string,
+    isPackaged: boolean = false
   ) {
     super(baseModule);
     this.warInstallLoc = warInstallLoc;
+    this.appPath = appPath;
+    this.isPackaged = isPackaged;
   }
   async openWarcraft(
     region: Regions | "" = "",
@@ -58,7 +68,7 @@ export class WarControl extends Module {
         this.emitUpdateGameState("action", "nothing");
         return true;
       }
-      if (this.settings.client.alternateLaunch) {
+      if (settings.client.alternateLaunch) {
         //shell.openPath(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe -launch");
         if (callCount === 0 || callCount % 15 === 0) {
           exec(
@@ -111,8 +121,8 @@ export class WarControl extends Module {
         }
         if (!focusAttempted) {
           this.emitInfo("Attempting to focus Battle.net");
-          if (app.isPackaged) {
-            shell.openPath(join(app.getAppPath(), "../../focusWar.js"));
+          if (this.isPackaged) {
+            shell.openPath(join(this.appPath, "../../focusWar.js"));
           } else {
             shell.openPath(join(__dirname, "../focusWar.js"));
           }
@@ -174,10 +184,10 @@ export class WarControl extends Module {
       searchRegion.height = searchRegion.height * 0.5;
       searchRegion.width = searchRegion.width * 0.4;
       searchRegion.top = searchRegion.top + searchRegion.height;
-      if (!region && this.settings.autoHost.regionChange) {
+      if (!region && settings.autoHost.regionChange) {
         region = getTargetRegion(
-          this.settings.autoHost.regionChangeTimeEU,
-          this.settings.autoHost.regionChangeTimeNA
+          settings.autoHost.regionChangeTimeEU,
+          settings.autoHost.regionChangeTimeNA
         );
       }
       let targetRegion = { asia: 1, eu: 2, us: 3, usw: 3, "": 0 }[region];
@@ -326,14 +336,10 @@ export class WarControl extends Module {
       targetRes = "720/";
     }
     mouse.config.mouseSpeed = parseInt(targetRes) * 2;
-    if (!app.isPackaged) {
+    if (!this.isPackaged) {
       screen.config.resourceDirectory = join(__dirname, "images", targetRes);
     } else {
-      screen.config.resourceDirectory = join(
-        app.getAppPath(),
-        "\\..\\..\\images",
-        targetRes
-      );
+      screen.config.resourceDirectory = join(this.appPath, "\\..\\..\\images", targetRes);
     }
   }
 }
