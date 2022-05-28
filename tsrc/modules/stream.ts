@@ -1,8 +1,10 @@
 import { Module } from "../moduleBase";
-import type { GameState, AppSettings } from "../utility";
+import type { GameState } from "../utility";
 import { MicroLobbyData } from "wc3mt-lobby-container";
 
 const io = require("socket.io-client");
+
+import { settings } from "./../globals/settings";
 
 export interface TipData {
   amount: number;
@@ -39,7 +41,6 @@ export class SEClient extends Module {
   socket: any;
 
   constructor(baseModule: {
-    settings: AppSettings;
     gameState: GameState;
     identifier: string;
     lobby?: MicroLobbyData;
@@ -78,7 +79,7 @@ export class SEClient extends Module {
     this.emitInfo("Successfully connected to StreamElements websocket");
     this.socket.emit("authenticate", {
       method: "jwt",
-      token: this.settings.streaming.seToken,
+      token: settings.streaming.seToken,
     });
   }
 

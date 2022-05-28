@@ -1,121 +1,5 @@
 import type { LobbyUpdates, Regions, MicroLobbyData } from "wc3mt-lobby-container";
-
-export interface AppSettings {
-  autoHost: AutoHostSettings;
-  obs: ObsSettings;
-  discord: DiscordSettings;
-  elo: EloSettings;
-  client: ClientSettings;
-  streaming: StreamingSettings;
-}
-export interface StreamingSettings {
-  enabled: boolean;
-  seToken: string;
-  sendTipsInGame: boolean;
-  sendTipsInLobby: boolean;
-  sendTipsInDiscord: boolean;
-  minInGameTip: number;
-}
-export interface ClientSettings {
-  restartOnUpdate: boolean;
-  checkForUpdates: boolean;
-  performanceMode: boolean;
-  openWarcraftOnStart: boolean;
-  startOnLogin: boolean;
-  commAddress: string;
-  language: "en" | "es" | "fr" | "de" | "it" | "ja" | "ko" | "pt" | "ru" | "zh";
-  translateToLobby: boolean;
-  antiCrash: boolean;
-  alternateLaunch: boolean;
-  bnetUsername: string;
-  bnetPassword: string;
-}
-export interface AutoHostSettings {
-  type: "off" | "lobbyHost" | "rapidHost" | "smartHost";
-  private: boolean;
-  sounds: boolean;
-  increment: boolean;
-  mapName: string;
-  gameName: string;
-  mapPath: string;
-  announceIsBot: boolean;
-  announceCustom: boolean;
-  announceRestingInterval: number;
-  moveToSpec: boolean;
-  moveToTeam: string;
-  rapidHostTimer: number;
-  smartHostTimeout: number;
-  voteStart: boolean;
-  voteStartPercent: number;
-  voteStartTeamFill: boolean;
-  closeSlots: Array<number>;
-  customAnnouncement: string;
-  observers: "0" | "1" | "2" | "3";
-  advancedMapOptions: boolean;
-  flagLockTeams: boolean;
-  flagPlaceTeamsTogether: boolean;
-  flagFullSharedUnitControl: boolean;
-  flagRandomRaces: boolean;
-  flagRandomHero: boolean;
-  settingVisibility: "0" | "1" | "2" | "3";
-  leaveAlternate: boolean;
-  regionChange: boolean;
-  regionChangeTimeEU: string;
-  regionChangeTimeNA: string;
-  shufflePlayers: boolean;
-  whitelist: boolean;
-  minPlayers: number;
-  delayStart: number;
-}
-export interface ObsSettings {
-  enabled: boolean;
-  sceneSwitchType: "off" | "hotkeys" | "websockets";
-  inGameHotkey: ObsHotkeys | false;
-  outOfGameHotkey: ObsHotkeys | false;
-  inGameWSScene: string;
-  outOfGameWSScene: string;
-  address: string;
-  token: string;
-  autoStream: boolean;
-  textSource: boolean;
-}
-export type SettingsKeys =
-  | keyof ObsSettings
-  | keyof AutoHostSettings
-  | keyof EloSettings
-  | keyof DiscordSettings
-  | keyof ClientSettings
-  | keyof StreamingSettings;
-export interface ObsHotkeys {
-  key: string;
-  altKey: boolean;
-  ctrlKey: boolean;
-  shiftKey: boolean;
-}
-export interface DiscordSettings {
-  enabled: boolean;
-  token: string;
-  announceChannel: string;
-  chatChannel: string;
-  bidirectionalChat: boolean;
-  sendInGameChat: boolean;
-}
-export interface EloSettings {
-  type: "off" | "wc3stats" | "pyroTD";
-  balanceTeams: boolean;
-  announce: boolean;
-  excludeHostFromSwap: boolean;
-  lookupName: string;
-  privateKey: string;
-  available: boolean;
-  wc3StatsVariant: string;
-  handleReplays: boolean;
-  requireStats: boolean;
-  minRank: number;
-  minRating: number;
-  minGames: number;
-  minWins: number;
-}
+import type { AppSettings, SettingsKeys } from "./globals/settings";
 
 export interface WindowReceive {
   messageType:
@@ -256,9 +140,29 @@ export interface mmdResults {
   lookup: { [key: string]: string };
 }
 
+export interface SettingsUpdate {
+  autoHost?: { [key in keyof AppSettings["autoHost"]]: any };
+  obs?: { [key in keyof AppSettings["obs"]]: any };
+  discord?: { [key in keyof AppSettings["discord"]]: any };
+  elo?: { [key in keyof AppSettings["elo"]]: any };
+  client?: { [key in keyof AppSettings["client"]]: any };
+  streaming?: { [key in keyof AppSettings["streaming"]]: any };
+}
+
+export interface GameStateUpdate {
+  key: keyof GameState;
+  value: string | boolean;
+}
+
 export interface HubReceive {
-  messageType: "lobbyUpdate" | "lobbyStarted" | "heartbeat" | "settings" | "gameState";
-  data?: { lobbyUpdates?: LobbyUpdates; settings?: AppSettings; gameState?: GameState };
+  data: {
+    lobbyUpdates?: LobbyUpdates;
+    settings?: AppSettings;
+    gameState?: GameState;
+    settingsUpdate?: SettingsUpdate;
+    gameStateUpdate?: GameStateUpdate;
+    heartbeat?: true;
+  };
   appVersion: string;
 }
 export interface HubSend {

@@ -22,7 +22,6 @@ import {
   clipboard,
 } from "electron";
 import { autoUpdater } from "electron-updater";
-import { nanoid } from "nanoid";
 import fetch from "cross-fetch";
 import * as log from "electron-log";
 import * as path from "path";
@@ -41,8 +40,6 @@ import { HubControl } from "./modules/hub";
 import type { EmitEvents } from "./moduleBase";
 import parser from "w3gjs";
 import LanguageDetect from "languagedetect";
-/*import { firebaseConfig } from "./firebase";
-import { initializeApp } from "firebase/app";*/
 
 const FormData = require("form-data");
 const translate = require("translate-google");
@@ -53,21 +50,19 @@ if (!app.isPackaged) {
   });
 }
 import {
-  AppSettings,
   WindowSend,
   GameClientMessage,
   WindowReceive,
-  SettingsKeys,
   mmdResults,
-  HubReceive,
-  LobbyAppSettings,
   getTargetRegion,
   OpenLobbyParams,
-  isValidUrl,
   ensureInt,
   GameState,
   BanWhiteList,
 } from "./utility";
+
+import { settings, AppSettings, SettingsKeys } from "./globals/settings";
+import { identifier } from "./globals/identifier";
 
 import {
   GameClientLobbyPayload,
@@ -76,13 +71,13 @@ import {
   SlotNumbers,
   BattleTagRegex,
 } from "wc3mt-lobby-container";
+import { Comm } from "./modules/comm";
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
   const db = new sqlite3(app.getPath("userData") + "/wc3mt.db");
-  //const firebaseApp = initializeApp(firebaseConfig);
 
   autoUpdater.logger = log;
   log.catchErrors();
@@ -119,7 +114,6 @@ if (!gotLock) {
   var wss: WebSocket.Server | null = null;
   var webUISocket: WebSocket | null = null;
   var clientWebSocket: WebSocket;
-  var commSocket: WebSocket | null = null;
   var voteTimer: NodeJS.Timeout | null;
   var openLobbyParams: OpenLobbyParams | null;
   var gameState: GameState = {
@@ -131,8 +125,7 @@ if (!gotLock) {
     action: "nothing",
   };
   var gameStateProxy = new Proxy(gameState, {
-    set: function (target, prop, value: any) {
-      prop = String(prop);
+    set: function (target, prop: keyof GameState, value: any) {
       if (prop in target) {
         if (
           prop === "inGame" &&
@@ -180,26 +173,26 @@ if (!gotLock) {
         ) {
           target[prop] = value;
         } else {
-          if (target[prop as keyof GameState] !== value) {
-            // There was some sort of error
+          if (target[prop] !== value) {
             log.info(`Invalid value for ${prop}`);
           }
           return true;
         }
-        discRPC.setActivity({
-          state: gameState.menuState,
-          details: lobbyController.lobby?.lobbyStatic.lobbyName,
-          region: gameState.selfRegion,
-          inGame: gameState.inGame,
-          currentPlayers: lobbyController.lobby?.nonSpecPlayers.length,
+        modules.forEach((module) => {
+          module.updateGameState({ key: prop, value });
         });
-        hubConnection.sendToHub("gameState", { gameState: target });
       }
       return true;
     },
   });
+  // Get the tableVersion, if it's not set then we are going to create the most up to date table, so we set it to the most recent version.
+  let tableVersion: number = store.get("tableVersion") as number;
+  if (!tableVersion) {
+    tableVersion = 2;
+    store.set("tableVersion", 2);
+  }
   var clientState: { tableVersion: number; latestUploadedReplay: number } = {
-    tableVersion: (store.get("tableVersion") as number) ?? 0,
+    tableVersion,
     latestUploadedReplay: (store.get("latestUploadedReplay") as number) ?? 0,
   };
   var sendingInGameChat: { active: boolean; queue: Array<string> } = {
@@ -207,48 +200,7 @@ if (!gotLock) {
     queue: [],
   };
 
-  var autoHostSettings = <AppSettings["autoHost"]>{
-    type: store.get("autoHost.type") ?? "off",
-    private: store.get("autoHost.private") ?? false,
-    sounds: store.get("autoHost.sounds") ?? false,
-    increment: store.get("autoHost.increment") ?? true,
-    mapName: store.get("autoHost.mapName") ?? "",
-    gameName: store.get("autoHost.gameName") ?? "",
-    mapPath: store.get("autoHost.mapPath") ?? "N/A",
-    announceIsBot: store.get("autoHost.announceIsBot") ?? false,
-    announceCustom: store.get("autoHost.announceCustom") ?? false,
-    announceRestingInterval: store.get("autoHost.announceRestingInterval") ?? 30,
-    moveToSpec: store.get("autoHost.moveToSpec") ?? false,
-    moveToTeam: store.get("autoHost.moveToTeam") ?? "",
-    rapidHostTimer: store.get("autoHost.rapidHostTimer") ?? 0,
-    smartHostTimeout: store.get("autoHost.smartHostTimeout") ?? 0,
-    voteStart: store.get("autoHost.voteStart") ?? false,
-    voteStartPercent: store.get("autoHost.voteStartPercent") ?? 60,
-    voteStartTeamFill: store.get("autoHost.voteStartTeamFill") ?? true,
-    closeSlots: store.get("autoHost.closeSlots") ?? [],
-    customAnnouncement: store.get("autoHost.customAnnouncement") ?? "",
-    observers:
-      typeof store.get("autoHost.observers") !== "string"
-        ? "0"
-        : store.get("autoHost.observers"),
-    advancedMapOptions: store.get("autoHost.advancedMapOptions") ?? false,
-    flagLockTeams: store.get("autoHost.flagLockTeams") ?? true,
-    flagPlaceTeamsTogether: store.get("autoHost.flagPlaceTeamsTogether") ?? true,
-    flagFullSharedUnitControl: store.get("autoHost.flagFullSharedUnitControl") ?? false,
-    flagRandomRaces: store.get("autoHost.flagRandomRaces") ?? false,
-    flagRandomHero: store.get("autoHost.flagRandomHero") ?? false,
-    settingVisibility: store.get("autoHost.settingVisibility") ?? "0",
-    leaveAlternate: store.get("autoHost.leaveAlternate") ?? false,
-    shufflePlayers: store.get("autoHost.shufflePlayers") ?? false,
-    regionChange: store.get("autoHost.regionChange") ?? false,
-    regionChangeTimeEU: store.get("autoHost.regionChangeTimeEU") ?? "11:00",
-    regionChangeTimeNA: store.get("autoHost.regionChangeTimeNA") ?? "01:00",
-    whitelist: store.get("autoHost.whitelist") ?? false,
-    minPlayers: store.get("autoHost.minPlayers") ?? 0,
-    delayStart: store.get("autoHost.delayStart") ?? 0,
-  };
-
-  var autoHostProxy = new Proxy(autoHostSettings, {
+  /*var autoHostProxy = new Proxy(autoHostSettings, {
     set: function (target, property, value, receiver) {
       console.log("Setting " + String(property) + " to " + value);
       if (property in target) {
@@ -387,19 +339,6 @@ if (!gotLock) {
     },
   });
 
-  var obsSettings = <AppSettings["obs"]>{
-    enabled: store.get("obs.enabled") ?? false,
-    sceneSwitchType: store.get("obs.sceneSwitchType") ?? "off",
-    inGameHotkey: store.get("obs.inGameHotkey") ?? false,
-    outOfGameHotkey: store.get("obs.outOfGameHotkey") ?? false,
-    inGameWSScene: store.get("obs.inGameWSScene") ?? "",
-    outOfGameWSScene: store.get("obs.outOfGameWSScene") ?? "",
-    address: store.get("obs.obsAddress") ?? "",
-    token: store.get("obs.obsPassword") ?? "",
-    autoStream: store.get("obs.autoStream") ?? false,
-    textSource: store.get("obs.textSource") ?? false,
-  };
-
   var obsProxy = new Proxy(obsSettings, {
     set: function (target, property, value, receiver) {
       console.log("Setting " + String(property) + " to " + value);
@@ -446,65 +385,7 @@ if (!gotLock) {
         return false;
       }
     },
-  });
-
-  var settings: AppSettings = <AppSettings>{
-    autoHost: autoHostSettings,
-    obs: obsSettings,
-    elo: {
-      type: store.get("elo.type") ?? "off",
-      balanceTeams: store.get("elo.balanceTeams") ?? true,
-      announce: store.get("elo.announce") ?? true,
-      excludeHostFromSwap: store.get("elo.excludeHostFromSwap") ?? true,
-      lookupName: store.get("elo.lookupName") ?? "",
-      privateKey: store.get("elo.privateKey") ?? "",
-      available: store.get("elo.available") ?? false,
-      wc3StatsVariant:
-        store.get("elo.wc3StatsVariant") ?? store.get("elo.wc3statsVariant") ?? "",
-      handleReplays: store.get("elo.handleReplays") ?? true,
-      requireStats: store.get("elo.requireStats") ?? false,
-      minGames: store.get("elo.minGames") ?? 0,
-      minWins: store.get("elo.minWins") ?? 0,
-      minRank: store.get("elo.minRank") ?? 0,
-      minRating: store.get("elo.minRating") ?? 0,
-    },
-    discord: {
-      enabled: store.get("discord.enabled") ?? false,
-      token: store.get("discord.token") ?? "",
-      announceChannel: store.get("discord.announceChannel") ?? "",
-      chatChannel: store.get("discord.chatChannel") ?? "",
-      bidirectionalChat: store.get("discord.bidirectionalChat") ?? false,
-      sendInGameChat: store.get("discord.sendInGameChat") ?? false,
-    },
-    client: {
-      restartOnUpdate: store.get("client.restartOnUpdate") ?? false,
-      checkForUpdates: store.get("client.checkForUpdates") ?? true,
-      performanceMode: store.get("client.performanceMode") ?? false,
-      openWarcraftOnStart: store.get("client.openWarcraftOnStart") ?? false,
-      startOnLogin: store.get("client.startOnLogin") ?? false,
-      commAddress: store.get("client.commAddress") ?? "",
-      language: store.get("client.language") ?? "en",
-      translateToLobby: store.get("client.translateToLobby") ?? false,
-      antiCrash: store.get("client.antiCrash") ?? true,
-      alternateLaunch: store.get("client.alternateLaunch") ?? false,
-      bnetUsername: store.get("client.bnetUsername") ?? "",
-      bnetPassword: store.get("client.bnetPassword") ?? "",
-    },
-    streaming: {
-      enabled: store.get("streaming.enabled") ?? false,
-      seToken: store.get("streaming.seToken") ?? "",
-      sendTipsInGame: store.get("streaming.sendTipsInGame") ?? false,
-      minInGameTip: store.get("streaming.minInGameTip") ?? 1,
-      sendTipsInDiscord: store.get("streaming.sendTipsInDiscord") ?? false,
-      sendTipsInLobby: store.get("streaming.sendTipsInLobby") ?? false,
-    },
-  };
-
-  var identifier: string = store.get("anonymousIdentifier") as string;
-  if (!identifier || identifier.length !== 21) {
-    identifier = nanoid();
-    store.set("anonymousIdentifier", identifier);
-  }
+  });*/
 
   var warInstallLoc: string = store.get("warInstallLoc") as string;
   if (!warInstallLoc || warInstallLoc.includes(".exe")) {
@@ -552,9 +433,10 @@ if (!gotLock) {
 
   const lobbyController = new LobbyControl(moduleInitialData);
   const discRPC = new DiscordRPC(moduleInitialData);
-  const warControl = new WarControl(moduleInitialData, warInstallLoc);
+  const warControl = new WarControl(moduleInitialData, warInstallLoc, app.getAppPath());
   const discClient = new DisClient(moduleInitialData);
   const seClient = new SEClient(moduleInitialData);
+  const commClient = new Comm(moduleInitialData);
   const hubConnection = new HubControl(
     moduleInitialData,
     app.isPackaged,
@@ -564,6 +446,16 @@ if (!gotLock) {
     address: settings.obs.address,
     password: settings.obs.token,
   });
+
+  let modules = [
+    lobbyController,
+    discRPC,
+    warControl,
+    discClient,
+    seClient,
+    hubConnection,
+    obsSocket,
+  ];
 
   screen.height().then((height) => {
     warControl.setResourceDir(height);
@@ -590,7 +482,7 @@ if (!gotLock) {
   });
 
   app.on("before-quit", () => {
-    hubConnection.sendToHub("lobbyUpdate", { lobbyUpdates: { leftLobby: true } });
+    hubConnection.sendToHub({ lobbyUpdates: { leftLobby: true } });
     discClient?.lobbyClosed();
     lobbyController?.clear();
   });
@@ -645,7 +537,6 @@ if (!gotLock) {
 
   function updateSetting(setting: keyof AppSettings, key: SettingsKeys, value: any) {
     // TODO Replace with proxy
-    // TODO Update all modules
     if (
       // @ts-ignore
       settings[setting]?.[key] !== undefined &&
@@ -658,24 +549,7 @@ if (!gotLock) {
     ) {
       // @ts-ignore
       settings[setting][key] = value;
-      if (setting === "discord") {
-        if (key === "enabled" || key === "token") {
-          discordSetup();
-        } else if (key === "announceChannel" || key === "chatChannel") {
-          discClient?.updateChannel(value, key);
-        } else if (key === "bidirectionalChat" && discClient) {
-          discClient.bidirectionalChat = value;
-        }
-      } else if (setting === "streaming" && (key === "seToken" || key === "enabled")) {
-        seSetup();
-      } else if (
-        setting === "obs" &&
-        (key === "enabled" || key === "address" || key === "token")
-      ) {
-        obsSetup();
-      } else if (key === "commAddress") {
-        commSetup();
-      }
+      // TODO update all modules
       if (key === "performanceMode") {
         togglePerformanceMode(value);
       }
@@ -866,24 +740,31 @@ if (!gotLock) {
     );
     if (clientState.tableVersion < 1) {
       log.info("Updating tables");
-      db.exec("ALTER TABLE banList rename to banListBackup");
-      db.exec(
-        "CREATE TABLE banList(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, add_date DATETIME default current_timestamp NOT NULL, admin TEXT NOT NULL, region TEXT NOT NULL, reason TEXT, removal_date DATETIME)"
-      );
-      db.exec("INSERT INTO banList SELECT * FROM banListBackup;");
+      try {
+        db.exec("ALTER TABLE banList rename to banListBackup");
+        db.exec(
+          "CREATE TABLE IF NOT EXISTS banList(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, add_date DATETIME default current_timestamp NOT NULL, admin TEXT NOT NULL, region TEXT NOT NULL, reason TEXT, removal_date DATETIME)"
+        );
+        db.exec("INSERT INTO banList SELECT * FROM banListBackup;");
+      } catch (e) {
+        log.info("Already at table version 1");
+      }
       store.set("tableVersion", 1);
       clientState.tableVersion = 1;
     }
     if (clientState.tableVersion < 2) {
       log.info("Updating tables");
-      db.exec("ALTER TABLE whiteList RENAME COLUMN white_date TO add_date");
-      db.exec("ALTER TABLE whiteList RENAME COLUMN unwhite_date TO removal_date");
-      db.exec("ALTER TABLE banList RENAME COLUMN ban_date TO add_date");
-      db.exec("ALTER TABLE banList RENAME COLUMN unban_date TO removal_date");
+      try {
+        db.exec("ALTER TABLE whiteList RENAME COLUMN white_date TO add_date");
+        db.exec("ALTER TABLE whiteList RENAME COLUMN unwhite_date TO removal_date");
+        db.exec("ALTER TABLE banList RENAME COLUMN ban_date TO add_date");
+        db.exec("ALTER TABLE banList RENAME COLUMN unban_date TO removal_date");
+      } catch (e) {
+        log.error("Already at table version 2");
+      }
       store.set("tableVersion", 2);
       clientState.tableVersion = 2;
     }
-    commSetup();
     wss = new WebSocket.Server({ port: 8888 });
     wss.on("connection", function connection(ws) {
       log.info("Connection");
@@ -913,15 +794,19 @@ if (!gotLock) {
       log.info("Removing leftover file");
       fs.rmSync(wc3mtTargetFile);
     }
-    lobbySetup();
+
+    initModules();
+
     globalShortcut.register("Alt+CommandOrControl+S", () => {
       sendMessage("PlaySound", { sound: "MenuButtonClick" });
     });
     globalShortcut.register("Alt+CommandOrControl+O", () => {});
     createWindow();
+
     if (settings.client.checkForUpdates) {
       autoUpdater.checkForUpdatesAndNotify();
     }
+
     if (process.argv[1] && process.argv[1] !== ".") {
       setTimeout(() => {
         protocolHandler(process.argv[1]);
@@ -932,7 +817,7 @@ if (!gotLock) {
   });
 
   app.on("window-all-closed", () => {
-    hubConnection.sendToHub("lobbyUpdate", { lobbyUpdates: { leftLobby: true } });
+    hubConnection.sendToHub({ lobbyUpdates: { leftLobby: true } });
     discClient?.lobbyClosed();
     lobbyController?.clear();
     if (process.platform !== "darwin") {
@@ -945,14 +830,6 @@ if (!gotLock) {
       createWindow();
     }
   });
-
-  function lobbySetup() {
-    // TODO: This is ugly and unnecessary, just pass autoHost and ELO?
-    lobbyController.testMode = !app.isPackaged;
-    lobbyController.on("event", (data: EmitEvents) => {
-      moduleHandler(data);
-    });
-  }
 
   async function triggerOBS() {
     if (settings.obs.enabled) {
@@ -1037,14 +914,12 @@ if (!gotLock) {
                 // @ts-expect-error
                 gameStateProxy[key] = value;
               });
-              commSend("gameState", newState);
             }, 250);
           } else {
             Object.entries(newState).forEach(([key, value]) => {
               // @ts-expect-error
               gameStateProxy[key] = value;
             });
-            commSend("gameState", newState);
           }
         } else {
           log.warn("New state error: ", data.data);
@@ -1075,7 +950,6 @@ if (!gotLock) {
         settings.autoHost.type = settings.autoHost.type === "off" ? "lobbyHost" : "off";
         store.set("autoHost", settings.autoHost);
         sendSocket("autoHost", settings.autoHost);
-      //sendWindow("autoHost", settings.autoHost);
       case "error":
         log.warn(data);
         win.webContents.send("fromMain", data);
@@ -1552,7 +1426,7 @@ if (!gotLock) {
       lobbyController.lobby?.lobbyStatic.lobbyName
     ) {
       sendWindow("lobbyUpdate", { lobbyData: { leftLobby: true } });
-      sendToHub("lobbyUpdate", { lobbyUpdates: { leftLobby: true } });
+      hubConnection.sendToHub({ lobbyUpdates: { leftLobby: true } });
       discClient?.lobbyClosed();
       gameStateProxy.action = "nothing";
       lobbyController.clear();
@@ -2257,7 +2131,7 @@ if (!gotLock) {
         }
 
         if (!settings.autoHost.private || !app.isPackaged) {
-          hubConnection.sendToHub("lobbyUpdate", {
+          hubConnection.sendToHub({
             lobbyUpdates: {
               chatMessage: {
                 name: sender,
@@ -2589,7 +2463,7 @@ if (!gotLock) {
     messageType: WindowReceive["messageType"],
     message: WindowReceive["data"]
   ) {
-    commSend(messageType, JSON.stringify(message));
+    commClient.commSend(message);
     if (win?.webContents) {
       win.webContents.send("fromMain", <WindowReceive>{
         messageType: messageType,
@@ -2848,60 +2722,6 @@ if (!gotLock) {
     }
   }
 
-  function commSend(
-    messageType: HubReceive["messageType"] | WindowReceive["messageType"] | "gameState",
-    data?: string | Object
-  ) {
-    if (settings.client.commAddress) {
-      if (commSocket) {
-        if (commSocket.readyState === commSocket.OPEN) {
-          commSocket.send(JSON.stringify({ messageType, data }));
-        } else if (commSocket.readyState === commSocket.CONNECTING) {
-          setTimeout(() => {
-            commSend(messageType, data);
-          }, 250);
-        }
-      } else {
-        //log.warn("Comm socket not connected.");
-      }
-    }
-  }
-
-  function commSetup() {
-    if (settings.client.commAddress && isValidUrl(settings.client.commAddress)) {
-      log.info(
-        "Connecting to comm socket: " + settings.client.commAddress + "/" + identifier
-      );
-      if (commSocket) {
-        log.info("Comm socket already connected. Disconnecting old socket.");
-        commSocket.close();
-        commSocket = null;
-      }
-      commSocket = new WebSocket(settings.client.commAddress + "/" + identifier);
-      commSocket.on("open", () => {
-        log.info("Connected to comm");
-        commSend("settings", { settings });
-        commSend("gameState", { gameState: gameState });
-      });
-      commSocket.on("close", () => {
-        log.info("Disconnected from comm");
-        commSocket = null;
-        setTimeout(() => {
-          commSetup();
-        }, 1000);
-      });
-      commSocket.on("error", (error) => {
-        log.warn("Error in comm: " + error);
-        commSocket = null;
-      });
-      commSocket.on("message", (message) => {
-        commandClient(JSON.parse(message.toString()));
-      });
-    } else {
-      commSocket = null;
-    }
-  }
-
   function commandClient(args: WindowSend) {
     switch (args.messageType) {
       case "changePerm":
@@ -3088,12 +2908,17 @@ if (!gotLock) {
               });
             });
         }
-
         break;
       default:
         log.info("Unknown client command:", args);
         break;
     }
+  }
+
+  function initModules() {
+    modules.forEach((module) => {
+      module.on("event", moduleHandler);
+    });
   }
 
   function moduleHandler(command: EmitEvents) {
@@ -3122,13 +2947,6 @@ if (!gotLock) {
     }
     if (command.lobbyUpdate) {
       let update = command.lobbyUpdate;
-      discRPC.setActivity({
-        state: gameState.menuState,
-        details: lobbyController.lobby?.lobbyStatic.lobbyName,
-        region: gameState.selfRegion,
-        inGame: gameState.inGame,
-        currentPlayers: lobbyController.lobby?.nonSpecPlayers.length,
-      });
       if (lobbyController.lobby) {
         if (
           update.playerPayload ||
@@ -3142,7 +2960,7 @@ if (!gotLock) {
             gameStateProxy.action = "waitingInLobby";
           }
           sendWindow("lobbyUpdate", { lobbyData: update });
-          hubConnection.sendToHub("lobbyUpdate", { lobbyUpdates: update });
+          hubConnection.sendToHub({ lobbyUpdates: update });
           if (discClient) {
             if (update.newLobby) {
               discClient.sendNewLobby(

@@ -3,7 +3,7 @@ import { LobbyUpdates, MicroLobby, MicroLobbyData } from "wc3mt-lobby-container"
 
 import type { SEEventEvent } from "./modules/stream";
 
-import type { GameState, AppSettings } from "./utility";
+import type { GameState, SettingsUpdate, GameStateUpdate } from "./utility";
 
 export interface EmitEvents {
   lobbyUpdate?: LobbyUpdates;
@@ -18,115 +18,87 @@ export interface EmitEvents {
 }
 
 export class Module extends EventEmitter {
-  settings: AppSettings;
-  gameState: GameState;
-  identifier: string;
-  lobby: MicroLobby | null = null;
+  protected gameState: GameState;
+  protected identifier: string;
+  protected lobby: MicroLobby | null = null;
+  protected gameStateUpdater: GameState;
 
   constructor(baseModule: {
-    settings: AppSettings;
     gameState: GameState;
     identifier: string;
     lobby?: MicroLobbyData;
   }) {
     super();
-    this.settings = baseModule.settings;
     this.gameState = baseModule.gameState;
     this.identifier = baseModule.identifier;
     if (baseModule.lobby) {
       this.lobby = new MicroLobby({ fullData: baseModule.lobby });
     }
+    this.gameStateUpdater = new Proxy<GameState>(this.gameState, {
+      set: (target, key: keyof GameState, value) => {
+        if (key in target && target[key] !== value) {
+          this.emitUpdateGameState(key, value);
+          // @ts-expect-error Not sure why this is 'never'
+          target[key] = value;
+        }
+        return true;
+      },
+    });
   }
 
-  updateGameState(key: keyof GameState, value: string | boolean) {
-    (this.gameState[key] as any) = value;
+  updateGameState(update: GameStateUpdate): boolean {
+    // Do validation at base module so that modules don't have to worry about it.
+    if (update.key in this.gameState && this.gameState[update.key] !== update.value) {
+      // @ts-expect-error Not sure why this is 'never'
+      this.gameState[update.key] = update.value;
+      return true;
+    }
+    return false;
   }
 
-  updateSettings(key: {
-    autoHost?: { [key in keyof AppSettings["autoHost"]]: any };
-    obs?: { [key in keyof AppSettings["obs"]]: any };
-    discord?: { [key in keyof AppSettings["discord"]]: any };
-    elo?: { [key in keyof AppSettings["elo"]]: any };
-    client?: { [key in keyof AppSettings["client"]]: any };
-    streaming?: { [key in keyof AppSettings["streaming"]]: any };
-  }) {
-    if (key.autoHost) {
-      (
-        Object.entries(key.autoHost) as Array<[keyof AppSettings["autoHost"], any]>
-      ).forEach(([key, newValue]) => {
-        (this.settings.autoHost[key] as any) = newValue;
-      });
-    }
-    if (key.obs) {
-      (Object.entries(key.obs) as Array<[keyof AppSettings["obs"], any]>).forEach(
-        ([key, newValue]) => {
-          (this.settings.obs[key] as any) = newValue;
-        }
-      );
-    }
-    if (key.discord) {
-      (Object.entries(key.discord) as Array<[keyof AppSettings["discord"], any]>).forEach(
-        ([key, newValue]) => {
-          (this.settings.discord[key] as any) = newValue;
-        }
-      );
-    }
-    if (key.elo) {
-      (Object.entries(key.elo) as Array<[keyof AppSettings["elo"], any]>).forEach(
-        ([key, newValue]) => {
-          (this.settings.elo[key] as any) = newValue;
-        }
-      );
-    }
-    if (key.client) {
-      (Object.entries(key.client) as Array<[keyof AppSettings["client"], any]>).forEach(
-        ([key, newValue]) => {
-          (this.settings.client[key] as any) = newValue;
-        }
-      );
-    }
-    if (key.streaming) {
-      (
-        Object.entries(key.streaming) as Array<[keyof AppSettings["streaming"], any]>
-      ).forEach(([key, newValue]) => {
-        (this.settings.streaming[key] as any) = newValue;
-      });
-    }
+  updateSettings(updates: SettingsUpdate): boolean {
+    return true;
   }
 
-  updateLobby(update: LobbyUpdates) {
-    if (this.lobby) {
-      this.lobby.ingestUpdate(update);
-    } else if (update.newLobby) {
+  updateLobby(update: LobbyUpdates): {
+    isUpdated: boolean;
+    events: LobbyUpdates[];
+  } {
+    if (update.newLobby) {
       this.lobby = new MicroLobby({ fullData: update.newLobby });
+      return { isUpdated: true, events: [update] };
     }
+    if (this.lobby) {
+      return this.lobby.ingestUpdate(update);
+    }
+    return { isUpdated: false, events: [] };
   }
 
-  emitEvent(data: EmitEvents) {
+  protected emitEvent(data: EmitEvents) {
     this.emit("event", data);
   }
 
-  emitError(error: string) {
+  protected emitError(error: string) {
     this.emitEvent({ error });
   }
 
-  emitInfo(info: string) {
+  protected emitInfo(info: string) {
     this.emitEvent({ info });
   }
 
-  emitUpdate(lobbyUpdate: LobbyUpdates) {
+  protected emitUpdate(lobbyUpdate: LobbyUpdates) {
     this.emitEvent({ lobbyUpdate });
   }
 
-  sendGameChat(sendGameChat: string) {
+  protected sendGameChat(sendGameChat: string) {
     this.emitEvent({ sendGameChat });
   }
 
-  emitProgress(step: string, progress: number) {
+  protected emitProgress(step: string, progress: number) {
     this.emitEvent({ newProgress: { step, progress } });
   }
 
-  emitMessage(type: string, payload: any) {
+  protected emitMessage(type: string, payload: any) {
     this.emitEvent({
       sendGameMessage: {
         type,
@@ -135,15 +107,15 @@ export class Module extends EventEmitter {
     });
   }
 
-  emitNewTip(newTip: SEEventEvent | SEEventEvent[]) {
+  protected emitNewTip(newTip: SEEventEvent | SEEventEvent[]) {
     this.emitEvent({ newTip });
   }
 
-  emitNotification(title: string, body: string) {
+  protected emitNotification(title: string, body: string) {
     this.emitEvent({ notification: { title, body } });
   }
 
-  emitUpdateGameState(key: keyof GameState, value: string | boolean) {
+  protected emitUpdateGameState(key: keyof GameState, value: string | boolean) {
     this.emitEvent({ newGameState: { key, value } });
   }
 }
