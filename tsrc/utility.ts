@@ -90,7 +90,7 @@ export interface WindowSend {
     | "startLobby"
     | "exportWhitesBans"
     | "importWhitesBans";
-  update?: { setting: keyof AppSettings; key: SettingsKeys; value: any };
+  update?: SettingsUpdates;
   addWhiteBan?: {
     type: "banList" | "whiteList";
     player: string;

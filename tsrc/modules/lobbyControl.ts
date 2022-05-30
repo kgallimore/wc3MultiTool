@@ -1,6 +1,7 @@
 import { Module } from "../moduleBase";
 
-import { settings } from "./../globals/settings";
+import type { SettingsUpdates } from "./../globals/settings";
+import type { GameState } from "./../globals/gameState";
 
 import fetch from "cross-fetch";
 import {
@@ -47,7 +48,7 @@ export class LobbyControl extends Module {
       ) {
         try {
           this.microLobby = new MicroLobby({ region, payload });
-          if (settings.values.elo.type !== "off") {
+          if (this.settings.values.elo.type !== "off") {
             this.eloMapName(payload.mapData.mapName).then((eloMapName) => {
               this.eloName = eloMapName.name;
               if (eloMapName.elo) {
@@ -67,13 +68,13 @@ export class LobbyControl extends Module {
           }
           if (
             payload.mapData.mapPath.split(/\/|\\/).slice(-1)[0] !==
-            settings.values.autoHost.mapPath.split(/\/|\\/).slice(-1)[0]
+            this.settings.values.autoHost.mapPath.split(/\/|\\/).slice(-1)[0]
           ) {
             this.#isTargetMap = false;
           } else {
             this.#isTargetMap = true;
           }
-          settings.values.autoHost.closeSlots.forEach((slot) => {
+          this.settings.values.autoHost.closeSlots.forEach((slot) => {
             this.closeSlot(slot);
           });
           setTimeout(() => this.moveToSpec(), 150);
@@ -144,7 +145,7 @@ export class LobbyControl extends Module {
   }
 
   moveToSpec() {
-    if (this.microLobby && settings.values.autoHost.moveToSpec) {
+    if (this.microLobby && this.settings.values.autoHost.moveToSpec) {
       let lobby = this.microLobby;
       let teams = Object.entries(this.microLobby.teamListLookup);
       let specTeams = Object.entries(this.microLobby.teamListLookup).filter(
@@ -153,9 +154,11 @@ export class LobbyControl extends Module {
       let selfSlot = this.microLobby.getSelfSlot();
       if (selfSlot !== false) {
         let target: [string, { type: TeamTypes; name?: string }] | undefined;
-        if (settings.values.autoHost.moveToTeam) {
+        if (this.settings.values.autoHost.moveToTeam) {
           target = teams.find(([teamNumber, teamData]) =>
-            teamData.name?.match(new RegExp(settings.values.autoHost.moveToTeam, "i"))
+            teamData.name?.match(
+              new RegExp(this.settings.values.autoHost.moveToTeam, "i")
+            )
           );
           if (!target) {
             this.emitError("Could not find target team to move to");
@@ -192,7 +195,7 @@ export class LobbyControl extends Module {
             slot: selfSlot,
             team: ensureInt(target[0]),
           });
-          if (settings.values.autoHost.closeSlots.includes(selfSlot)) {
+          if (this.settings.values.autoHost.closeSlots.includes(selfSlot)) {
             setTimeout(() => {
               if (selfSlot !== false) this.closeSlot(selfSlot);
             }, 250);
@@ -218,7 +221,7 @@ export class LobbyControl extends Module {
   }
 
   async eloMapName(mapName: string) {
-    if (settings.values.elo.type === "wc3stats") {
+    if (this.settings.values.elo.type === "wc3stats") {
       if (mapName.match(/(HLW)/i)) {
         return { name: "HLW", elo: true };
       } else if (mapName.match(/(pyro\s*td\s*league)/i)) {
@@ -256,7 +259,7 @@ export class LobbyControl extends Module {
   }
 
   async fetchStats(name: string) {
-    if (settings.values.elo.type !== "off") {
+    if (this.settings.values.elo.type !== "off") {
       try {
         if (!this.eloName) {
           this.emitInfo("Waiting for lookup name");
@@ -265,11 +268,11 @@ export class LobbyControl extends Module {
           }, 1000);
           return;
         } else if (this.microLobby?.statsAvailable) {
-          if (settings.values.elo.type === "wc3stats") {
+          if (this.settings.values.elo.type === "wc3stats") {
             let buildVariant = "";
-            if (this.#isTargetMap && settings.values.elo.wc3StatsVariant) {
+            if (this.#isTargetMap && this.settings.values.elo.wc3StatsVariant) {
               for (const [key, value] of Object.entries(
-                JSON.parse(settings.values.elo.wc3StatsVariant)
+                JSON.parse(this.settings.values.elo.wc3StatsVariant)
               )) {
                 if (value) buildVariant += "&" + key + "=" + value;
               }
@@ -316,25 +319,25 @@ export class LobbyControl extends Module {
                 },
               });
               this.emitInfo(name + " stats received and saved.");
-              if (settings.values.elo.requireStats) {
-                if (data.played < settings.values.elo.minGames) {
+              if (this.settings.values.elo.requireStats) {
+                if (data.played < this.settings.values.elo.minGames) {
                   this.emitInfo(
                     `${name} has not played enough games to qualify for the ladder.`
                   );
                   this.banPlayer(name);
                   return;
-                } else if (data.rating < settings.values.elo.minRating) {
+                } else if (data.rating < this.settings.values.elo.minRating) {
                   this.emitInfo(`${name} has an ELO rating below the minimum.`);
                   this.banPlayer(name);
                   return;
                 } else if (
-                  settings.values.elo.minRank !== 0 &&
-                  data.rank < settings.values.elo.minRank
+                  this.settings.values.elo.minRank !== 0 &&
+                  data.rank < this.settings.values.elo.minRank
                 ) {
                   this.emitInfo(`${name} has a rank below the minimum.`);
                   this.banPlayer(name);
                   return;
-                } else if (data.wins < settings.values.elo.minWins) {
+                } else if (data.wins < this.settings.values.elo.minWins) {
                   this.emitInfo(
                     `${name} has not won enough games to qualify for the ladder.`
                   );
@@ -472,9 +475,9 @@ export class LobbyControl extends Module {
         Object.values(teamPlayers).filter((player) => player.realPlayer).length > 0
     );
     if (
-      settings.values.elo.type !== "off" &&
+      this.settings.values.elo.type !== "off" &&
       this.microLobby?.statsAvailable &&
-      settings.values.elo.balanceTeams
+      this.settings.values.elo.balanceTeams
     ) {
       let lobbyCopy = new MicroLobby({ fullData: this.microLobby.exportMin() });
       this.emitInfo("Auto balancing teams");
@@ -523,9 +526,9 @@ export class LobbyControl extends Module {
           );
           // If not excludeHostFromSwap and team1 has more best combo people, or excludeHostFromSwap and the best combo includes the host keep all best combo players in team 1.
           if (
-            (!settings.values.elo.excludeHostFromSwap &&
+            (!this.settings.values.elo.excludeHostFromSwap &&
               bestComboInTeam1.length >= bestComboInTeam2.length) ||
-            (settings.values.elo.excludeHostFromSwap &&
+            (this.settings.values.elo.excludeHostFromSwap &&
               this.bestCombo.includes(lobbyCopy.lobbyStatic?.playerHost || ""))
           ) {
             // Go through team 1 and grab everyone who is not in the best combo
@@ -637,7 +640,7 @@ export class LobbyControl extends Module {
         }
         this.emitInfo("Players should now be balanced.");
         this.emitLobbyUpdate({ lobbyReady: true });
-        this.sendGameChat("ELO data provided by: " + settings.values.elo.type);
+        this.sendGameChat("ELO data provided by: " + this.settings.values.elo.type);
       }
     } else {
       this.emitLobbyUpdate({ lobbyReady: true });
@@ -657,7 +660,7 @@ export class LobbyControl extends Module {
       }
     }
 
-    if (settings.values.elo.type !== "off") {
+    if (this.settings.values.elo.type !== "off") {
       if (!this.microLobby?.lookupName) {
         console.log("No lookup name");
         return false;

@@ -1,22 +1,23 @@
 import { Module } from "../moduleBase";
 
-import { settings, SettingsUpdates } from "./../globals/settings";
-import { GameState } from "./../globals/gameState";
+import type { SettingsUpdates } from "./../globals/settings";
+import type { GameState } from "./../globals/gameState";
 
 import { WebSocket } from "ws";
 import { HubReceive } from "../utility";
 import type { LobbyUpdates } from "wc3mt-lobby-container";
+import { app } from "electron";
 
-export class HubControl extends Module {
+class HubControl extends Module {
   hubWebSocket: WebSocket | null = null;
   isPackaged: boolean;
   appVersion: string;
   #heartBeatTimer: NodeJS.Timeout | null = null;
 
-  constructor(isPackaged: boolean, appVersion: string) {
+  constructor() {
     super();
-    this.isPackaged = isPackaged;
-    this.appVersion = appVersion;
+    this.isPackaged = app.isPackaged;
+    this.appVersion = app.getVersion();
     this.socketSetup();
   }
 
@@ -32,7 +33,7 @@ export class HubControl extends Module {
     });
   }
 
-  protected onLobbyUpdate(updates: LobbyUpdates): void {
+  onLobbyUpdate(updates: LobbyUpdates): void {
     this.sendToHub({
       lobbyUpdates: updates,
     });
@@ -56,7 +57,7 @@ export class HubControl extends Module {
       this.emitInfo("Connected to hub");
       if (
         this.lobby?.microLobby?.lobbyStatic &&
-        (!settings.values.autoHost.private || !this.isPackaged)
+        (!this.settings.values.autoHost.private || !this.isPackaged)
       ) {
         this.sendToHub({
           lobbyUpdates: { newLobby: this.lobby.microLobby.exportMin() },
@@ -69,7 +70,7 @@ export class HubControl extends Module {
     };
     this.hubWebSocket.onclose = (ev) => {
       if (this.isPackaged) this.emitError("Disconnected from hub");
-      setTimeout(this.socketSetup, Math.random() * 5000 + 3000);
+      setTimeout(this.socketSetup.bind(this), Math.random() * 5000 + 3000);
       if (this.#heartBeatTimer) {
         clearTimeout(this.#heartBeatTimer);
         this.#heartBeatTimer = null;
@@ -91,3 +92,5 @@ export class HubControl extends Module {
     }
   }
 }
+
+export const HubSingle = new HubControl();

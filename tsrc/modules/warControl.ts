@@ -1,7 +1,10 @@
 import { Module } from "../moduleBase";
 
 import { getTargetRegion } from "../utility";
-import { shell } from "electron";
+import { shell, app } from "electron";
+
+import Store from "electron-store";
+const store = new Store();
 
 import {
   Window,
@@ -26,9 +29,7 @@ const exec = promisify(require("child_process").exec);
 
 import type { Regions } from "wc3mt-lobby-container";
 
-import { settings } from "./../globals/settings";
-
-export class WarControl extends Module {
+class WarControl extends Module {
   inFocus: boolean = false;
   isOpen: boolean = false;
   windowRegion: Region | null = null;
@@ -36,11 +37,11 @@ export class WarControl extends Module {
   isPackaged: boolean = false;
   appPath: string;
 
-  constructor(warInstallLoc: string, appPath: string, isPackaged: boolean = false) {
+  constructor() {
     super();
-    this.warInstallLoc = warInstallLoc;
-    this.appPath = appPath;
-    this.isPackaged = isPackaged;
+    this.warInstallLoc = store.get("warInstallLoc") as string;
+    this.appPath = app.getAppPath();
+    this.isPackaged = app.isPackaged;
   }
   async openWarcraft(
     region: Regions | "" = "",
@@ -57,7 +58,7 @@ export class WarControl extends Module {
         this.emitUpdateGameState("action", "nothing");
         return true;
       }
-      if (settings.values.client.alternateLaunch) {
+      if (this.settings.values.client.alternateLaunch) {
         //shell.openPath(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe -launch");
         if (callCount === 0 || callCount % 15 === 0) {
           exec(
@@ -173,10 +174,10 @@ export class WarControl extends Module {
       searchRegion.height = searchRegion.height * 0.5;
       searchRegion.width = searchRegion.width * 0.4;
       searchRegion.top = searchRegion.top + searchRegion.height;
-      if (!region && settings.values.autoHost.regionChange) {
+      if (!region && this.settings.values.autoHost.regionChange) {
         region = getTargetRegion(
-          settings.values.autoHost.regionChangeTimeEU,
-          settings.values.autoHost.regionChangeTimeNA
+          this.settings.values.autoHost.regionChangeTimeEU,
+          this.settings.values.autoHost.regionChangeTimeNA
         );
       }
       let targetRegion = { asia: 1, eu: 2, us: 3, usw: 3, "": 0 }[region];
@@ -336,3 +337,5 @@ export class WarControl extends Module {
     }
   }
 }
+
+export const WarSingle = new WarControl();

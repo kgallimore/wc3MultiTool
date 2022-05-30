@@ -37,12 +37,12 @@ export class Module extends EventEmitter {
 
   constructor(includeLobby: boolean = true) {
     super();
-    settings.on("settingsUpdate", this.onSettingsUpdate);
-    gameState.on("gameStateUpdate", this.onGameStateUpdate);
+    this.settings.on("settingsUpdate", this.onSettingsUpdate.bind(this));
+    this.gameState.on("gameStateUpdates", this.onGameStateUpdate.bind(this));
     if (includeLobby) {
-      import("./modules/lobbyControl").then((data) => {
-        this.lobby = data.LobbySingle;
-        this.lobby.on("lobbyUpdate", this.onLobbyUpdate);
+      import("./modules/lobbyControl").then((exports) => {
+        this.lobby = exports.LobbySingle;
+        this.lobby.on("lobbyUpdate", this.onLobbyUpdate.bind(this));
       });
     }
   }
@@ -50,25 +50,23 @@ export class Module extends EventEmitter {
   /**
    *
    *
-   * @protected
    * @param {Partial<GameState>} updates
    * A list of all new gameState values
    * @memberof Module
    */
-  protected onGameStateUpdate(updates: Partial<GameState>) {}
+  onGameStateUpdate(updates: Partial<GameState>) {}
 
   /**
    *
    *
-   * @protected
    * @param {SettingsUpdates} updates
    * A list of all new settings values
    * @memberof Module
    *
    */
-  protected onSettingsUpdate(updates: SettingsUpdates) {}
+  onSettingsUpdate(updates: SettingsUpdates) {}
 
-  protected onLobbyUpdate(updates: LobbyUpdates) {}
+  onLobbyUpdate(updates: LobbyUpdates) {}
 
   updateLobby(update: LobbyUpdates): {
     isUpdated: boolean;
