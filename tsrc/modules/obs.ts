@@ -4,7 +4,7 @@ import { SettingsUpdates } from "./../globals/settings";
 
 import OBSWebSocket from "obs-websocket-js";
 
-export class OBSSocket extends Module {
+class OBSSocket extends Module {
   socket: OBSWebSocket | null = null;
 
   constructor() {
@@ -60,3 +60,5 @@ export class OBSSocket extends Module {
     });
   }
 }
+
+export const obsSocketSingle = new OBSSocket();

@@ -1,12 +1,11 @@
 <script lang="ts">
   import {
-    AppSettings,
     BanWhiteList,
-    SettingsKeys,
     WindowReceive,
     WindowSend,
     isValidUrl,
   } from "../../tsrc/utility";
+  import type { AppSettings, SettingsKeys } from "./../../tsrc/globals/settings";
   import { onMount } from "svelte";
   import { getTargetRegion } from "../../tsrc/utility";
   import { MicroLobby, PlayerData } from "wc3mt-lobby-container";
@@ -340,9 +339,9 @@
       toMain({
         messageType: "updateSettingSingle",
         update: {
-          setting: "obs",
-          key: key as SettingsKeys,
-          value: newValue,
+          obs: {
+            [key as "inGameHotkey" | "outOfGameHotkey"]: newValue,
+          },
         },
       });
     }
@@ -369,11 +368,7 @@
     if (settings[setting][key] !== value || key === "closeSlots") {
       toMain({
         messageType: "updateSettingSingle",
-        update: {
-          setting: setting,
-          key,
-          value: value,
-        },
+        update: { [setting]: { [key]: value } },
       });
     }
   }

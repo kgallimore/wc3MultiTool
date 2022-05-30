@@ -14,7 +14,7 @@ export interface NewActivity {
   inGame: boolean;
 }
 
-export class DiscordRPC extends Module {
+class DiscordRPC extends Module {
   private clientId = "876866700644073533";
   private client: Client;
   private ready: boolean = false;
@@ -87,6 +87,10 @@ export class DiscordRPC extends Module {
         baseDetails.smallImageText = activity.region;
       }
       this.client.setActivity(baseDetails);
+    } else {
+      console.log("DiscRPC not yet ready.");
     }
   }
 }
+
+export const discRPCSingle = new DiscordRPC();

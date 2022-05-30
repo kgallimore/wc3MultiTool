@@ -35,7 +35,7 @@ export interface SEEventEvent {
   message?: string;
 }
 
-export class SEClient extends Module {
+class SEClient extends Module {
   socket: any;
 
   constructor() {
@@ -91,3 +91,5 @@ export class SEClient extends Module {
     this.emitInfo(`Successfully connected to StreamElements channel ${data.channelId}`);
   }
 }
+
+export const SEClientSingle = new SEClient();

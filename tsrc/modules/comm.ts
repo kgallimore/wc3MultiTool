@@ -29,7 +29,7 @@ export class Comm extends Module {
     });
   }
 
-  protected onLobbyUpdate(updates: LobbyUpdates): void {
+  onLobbyUpdate(updates: LobbyUpdates): void {
     this.commSend({
       lobbyUpdates: updates,
     });
@@ -89,3 +89,5 @@ export class Comm extends Module {
     }
   }
 }
+
+export const CommSingle = new Comm();

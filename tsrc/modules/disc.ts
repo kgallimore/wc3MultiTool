@@ -8,7 +8,7 @@ import type { mmdResults } from "../utility";
 import type { PlayerTeamsData } from "wc3mt-lobby-container";
 import { DeColorName } from "../utility";
 
-export class DisClient extends Module {
+class DisClient extends Module {
   client: Discord.Client;
   announceChannel: Discord.TextChannel | null = null;
   chatChannel: Discord.TextChannel | null = null;
@@ -303,3 +303,5 @@ export class DisClient extends Module {
     }
   }
 }
+
+export const discSingle = new DisClient();

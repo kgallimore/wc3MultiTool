@@ -2,7 +2,7 @@ import EventEmitter from "events";
 
 import Store from "electron-store";
 
-import { PickByValue } from "./../utility";
+import type { PickByValue } from "./../utility";
 
 const store = new Store();
 
