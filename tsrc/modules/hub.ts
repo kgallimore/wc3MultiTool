@@ -1,12 +1,10 @@
 import { Module } from "../moduleBase";
-import type { GameState } from "../utility";
-import type { MicroLobbyData } from "wc3mt-lobby-container";
+
+import { settings, SettingsUpdates } from "./../globals/settings";
 
 import { WebSocket } from "ws";
-import { HubReceive, GameStateUpdate, SettingsUpdate } from "../utility";
+import { HubReceive } from "../utility";
 import type { LobbyUpdates } from "wc3mt-lobby-container";
-
-import { settings } from "./../globals/settings";
 
 export class HubControl extends Module {
   hubWebSocket: WebSocket | null = null;
@@ -14,22 +12,14 @@ export class HubControl extends Module {
   appVersion: string;
   #heartBeatTimer: NodeJS.Timeout | null = null;
 
-  constructor(
-    baseModule: {
-      gameState: GameState;
-      identifier: string;
-      lobby?: MicroLobbyData;
-    },
-    isPackaged: boolean,
-    appVersion: string
-  ) {
-    super(baseModule);
+  constructor(isPackaged: boolean, appVersion: string) {
+    super();
     this.isPackaged = isPackaged;
     this.appVersion = appVersion;
     this.socketSetup();
   }
 
-  updateGameState(updates: GameStateUpdate): boolean {
+  /*updateGameState(updates: GameStateUpdate): boolean {
     let updated = super.updateGameState(updates);
     if (updated) {
       this.sendToHub({
@@ -37,16 +27,12 @@ export class HubControl extends Module {
       });
     }
     return updated;
-  }
+  }*/
 
-  updateSettings(updates: SettingsUpdate): boolean {
-    let updated = super.updateSettings(updates);
-    if (updated) {
-      this.sendToHub({
-        settingsUpdate: updates,
-      });
-    }
-    return updated;
+  onSettingsUpdate(updates: SettingsUpdates): void {
+    this.sendToHub({
+      settingsUpdates: updates,
+    });
   }
 
   updateLobby(update: LobbyUpdates): { isUpdated: boolean; events: LobbyUpdates[] } {
@@ -75,9 +61,12 @@ export class HubControl extends Module {
     this.hubWebSocket.onopen = (ev) => {
       if (this.hubWebSocket?.readyState !== WebSocket.OPEN) return;
       this.emitInfo("Connected to hub");
-      if (this.lobby?.lobbyStatic && (!settings.autoHost.private || !this.isPackaged)) {
+      if (
+        this.lobby?.microLobby?.lobbyStatic &&
+        (!settings.values.autoHost.private || !this.isPackaged)
+      ) {
         this.sendToHub({
-          lobbyUpdates: { newLobby: this.lobby.exportMin() },
+          lobbyUpdates: { newLobby: this.lobby.microLobby.exportMin() },
         });
       }
       this.#heartBeatTimer = setInterval(this.hubHeartbeat, 30000);

@@ -106,8 +106,8 @@ screenshots
 
 public/build
 
-src/*.js
-src/*.map
+src/**/*.js
+src/**/*.map
 warpi
 move.bat
 

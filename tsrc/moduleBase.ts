@@ -1,9 +1,14 @@
 import EventEmitter from "events";
-import { LobbyUpdates, MicroLobby, MicroLobbyData } from "wc3mt-lobby-container";
+import { LobbyUpdates } from "wc3mt-lobby-container";
+
+import { gameState, GameState } from "./globals/gameState";
+import { settings } from "./globals/settings";
+import { identifier } from "./globals/identifier";
 
 import type { SEEventEvent } from "./modules/stream";
+import type { LobbyControl } from "./modules/lobbyControl";
 
-import type { GameState, SettingsUpdate, GameStateUpdate } from "./utility";
+import type { SettingsUpdates } from "./globals/settings";
 
 export interface EmitEvents {
   lobbyUpdate?: LobbyUpdates;
@@ -18,58 +23,40 @@ export interface EmitEvents {
 }
 
 export class Module extends EventEmitter {
-  protected gameState: GameState;
-  protected identifier: string;
-  protected lobby: MicroLobby | null = null;
-  protected gameStateUpdater: GameState;
+  protected gameState = gameState;
+  protected identifier = identifier;
+  protected settings = settings;
+  protected lobby: LobbyControl | null = null;
 
-  constructor(baseModule: {
-    gameState: GameState;
-    identifier: string;
-    lobby?: MicroLobbyData;
-  }) {
+  constructor(includeLobby: boolean = true) {
     super();
-    this.gameState = baseModule.gameState;
-    this.identifier = baseModule.identifier;
-    if (baseModule.lobby) {
-      this.lobby = new MicroLobby({ fullData: baseModule.lobby });
+    settings.on("settingsUpdate", this.onSettingsUpdate);
+    gameState.on("gameStateUpdate", this.onGameStateUpdate);
+    if (includeLobby) {
+      this.lobby = require("./modules/lobbyControl");
     }
-    this.gameStateUpdater = new Proxy<GameState>(this.gameState, {
-      set: (target, key: keyof GameState, value) => {
-        if (key in target && target[key] !== value) {
-          this.emitUpdateGameState(key, value);
-          // @ts-expect-error Not sure why this is 'never'
-          target[key] = value;
-        }
-        return true;
-      },
-    });
   }
 
-  updateGameState(update: GameStateUpdate): boolean {
+  /*updateGameState(update: GameStateUpdate): boolean {
     // Do validation at base module so that modules don't have to worry about it.
     if (update.key in this.gameState && this.gameState[update.key] !== update.value) {
-      // @ts-expect-error Not sure why this is 'never'
+       @ts-expect-error Not sure why this is 'never'
       this.gameState[update.key] = update.value;
       return true;
     }
     return false;
-  }
+  }*/
 
-  updateSettings(updates: SettingsUpdate): boolean {
-    return true;
-  }
+  onGameStateUpdate(updates: Partial<GameState>) {}
+
+  onSettingsUpdate(updates: SettingsUpdates) {}
 
   updateLobby(update: LobbyUpdates): {
     isUpdated: boolean;
     events: LobbyUpdates[];
   } {
     if (update.newLobby) {
-      this.lobby = new MicroLobby({ fullData: update.newLobby });
       return { isUpdated: true, events: [update] };
-    }
-    if (this.lobby) {
-      return this.lobby.ingestUpdate(update);
     }
     return { isUpdated: false, events: [] };
   }

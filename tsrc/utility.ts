@@ -1,6 +1,9 @@
 import type { LobbyUpdates, Regions, MicroLobbyData } from "wc3mt-lobby-container";
 import type { AppSettings, SettingsKeys } from "./globals/settings";
 
+import type { GameState } from "./globals/gameState";
+import type { SettingsUpdates } from "./globals/settings";
+
 export interface WindowReceive {
   messageType:
     | "action"
@@ -140,27 +143,13 @@ export interface mmdResults {
   lookup: { [key: string]: string };
 }
 
-export interface SettingsUpdate {
-  autoHost?: { [key in keyof AppSettings["autoHost"]]: any };
-  obs?: { [key in keyof AppSettings["obs"]]: any };
-  discord?: { [key in keyof AppSettings["discord"]]: any };
-  elo?: { [key in keyof AppSettings["elo"]]: any };
-  client?: { [key in keyof AppSettings["client"]]: any };
-  streaming?: { [key in keyof AppSettings["streaming"]]: any };
-}
-
-export interface GameStateUpdate {
-  key: keyof GameState;
-  value: string | boolean;
-}
-
 export interface HubReceive {
   data: {
     lobbyUpdates?: LobbyUpdates;
     settings?: AppSettings;
     gameState?: GameState;
-    settingsUpdate?: SettingsUpdate;
-    gameStateUpdate?: GameStateUpdate;
+    settingsUpdates?: SettingsUpdates;
+    gameStateUpdate?: Partial<GameState>;
     heartbeat?: true;
   };
   appVersion: string;
@@ -210,6 +199,11 @@ export interface LobbyAppSettings {
   minRating: number;
 }
 
+export type PickByValue<T, V> = Pick<
+  T,
+  { [K in keyof T]: T[K] extends V ? K : never }[keyof T]
+>;
+
 export interface OpenLobbyParams {
   lobbyName?: string;
   gameId?: string;
@@ -240,32 +234,6 @@ export function getTargetRegion(
       return "eu";
     }
   }
-}
-
-export interface GameState {
-  selfRegion: Regions | "";
-  menuState:
-    | "OUT_OF_MENUS"
-    | "MAIN_MENU"
-    | "CUSTOM_LOBBIES"
-    | "GAME_LOBBY"
-    | "LOADING_SCREEN"
-    | "SCORE_SCREEN"
-    | "LOGIN_DOORS"
-    | "CUSTOM_GAME_LOBBY"
-    | "null";
-  screenState: string;
-  selfBattleTag: string;
-  inGame: boolean;
-  action:
-    | "openingWarcraft"
-    | "creatingLobby"
-    | "waitingToLeaveGame"
-    | "waitingInLobby"
-    | "nothing"
-    | "joiningLobby"
-    | "leavingLobby"
-    | "closingWarcraft";
 }
 
 export const ColorLookup = {
