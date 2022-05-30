@@ -22,6 +22,13 @@ export interface EmitEvents {
   newGameState?: { key: keyof GameState; value: string | boolean };
 }
 
+/**
+ *
+ *
+ * @export
+ * @class Module
+ * @extends {EventEmitter}
+ */
 export class Module extends EventEmitter {
   protected gameState = gameState;
   protected identifier = identifier;
@@ -37,18 +44,25 @@ export class Module extends EventEmitter {
     }
   }
 
-  /*updateGameState(update: GameStateUpdate): boolean {
-    // Do validation at base module so that modules don't have to worry about it.
-    if (update.key in this.gameState && this.gameState[update.key] !== update.value) {
-       @ts-expect-error Not sure why this is 'never'
-      this.gameState[update.key] = update.value;
-      return true;
-    }
-    return false;
-  }*/
-
+  /**
+   *
+   *
+   * @protected
+   * @param {Partial<GameState>} updates
+   * A list of all new gameState values
+   * @memberof Module
+   */
   protected onGameStateUpdate(updates: Partial<GameState>) {}
 
+  /**
+   *
+   *
+   * @protected
+   * @param {SettingsUpdates} updates
+   * A list of all new settings values
+   * @memberof Module
+   *
+   */
   protected onSettingsUpdate(updates: SettingsUpdates) {}
 
   updateLobby(update: LobbyUpdates): {
