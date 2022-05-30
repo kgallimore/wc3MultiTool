@@ -1,6 +1,7 @@
 import { Module } from "../moduleBase";
 
 import type { SettingsUpdates } from "./../globals/settings";
+import { GameState } from "./../globals/gameState";
 
 import { WebSocket } from "ws";
 import { HubReceive, isValidUrl } from "../utility";
@@ -13,6 +14,12 @@ export class Comm extends Module {
   constructor() {
     super();
     this.initialize();
+  }
+
+  onGameStateUpdate(updates: Partial<GameState>): void {
+    this.commSend({
+      gameStateUpdates: updates,
+    });
   }
 
   onSettingsUpdate(updates: SettingsUpdates): void {

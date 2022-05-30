@@ -1,5 +1,4 @@
 import { Module } from "../moduleBase";
-import { MicroLobbyData } from "wc3mt-lobby-container";
 
 import { settings } from "./../globals/settings";
 
