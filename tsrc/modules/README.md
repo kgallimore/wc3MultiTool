@@ -5,46 +5,36 @@ Each module is a class that extends the `BaseModule` class. You initiate each mo
 ```ts
 import { Module } from "../moduleBase";
 import type { GameState, AppSettings } from "../utility";
-import { MicroLobbyData } from "wc3mt-lobby-container";
 
-export class NewModule extends Module {
+// Only import the types you want to listen to
+import type { SettingsUpdates } from "./../globals/settings";
+import type { GameState } from "./../globals/gameState";
+
+class NewModule extends Module {
     // Declare any additional args
 
-  constructor(baseModule: {
-    settings: AppSettings;
-    gameState: GameState;
-    identifier: string;
-    lobby?: MicroLobbyData;
-  }  //, ...args[]
-  ) {
-    super(baseModule);
+  constructor() {
+    super();
     // Initialize any other args
   }
 
-  updateGameState(key: keyof GameState, value: string | boolean) {
-        // Do something with the new game state. Super can be called before or after
-        super()
-    }
+  // This is optional. You only need to include it if you want to listen to GameState updates
+  onGameStateUpdate(updates: Partial<GameState>) {
+    // Do something with the new game state. Only new values will be fed.
+  }
 
-    updateSettings(key: {
-        autoHost?: { [key in keyof AppSettings["autoHost"]]: any };
-        obs?: { [key in keyof AppSettings["obs"]]: any };
-        discord?: { [key in keyof AppSettings["discord"]]: any };
-        elo?: { [key in keyof AppSettings["elo"]]: any };
-        client?: { [key in keyof AppSettings["client"]]: any };
-        streaming?: { [key in keyof AppSettings["streaming"]]: any };
-    }) {
-        // A list of all updated key value pairs for each section of the settings is available. You can choose to only listen to specific keys or sections.
-        // Do something with the new settings. Super can be called before or after
-        super()
+  // This is optional. You only need to include it if you want to listen to Settings updates
+  onSettingsUpdate(updates: SettingsUpdates) {
+    // Do something with the new game state. Only new values will be present.
+  }
 
-    }
-
-    updateLobby(update: LobbyUpdates) {
-        // Do something with the new lobby data. Super can be called before or after
-        super()
-    }
+  updateLobby(updates: LobbyUpdates) {
+    // Do something with the new lobby data. Super can be called before or after
+    super()
+  }
 }
+
+export const NewMod = new NewModule();
 ```
 
 The identifier is a unique code that is used to differentiate different instances of an app. Its main use is when connecting to the central hub or a comm server.
