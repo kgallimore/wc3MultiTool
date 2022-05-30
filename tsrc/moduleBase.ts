@@ -40,7 +40,10 @@ export class Module extends EventEmitter {
     settings.on("settingsUpdate", this.onSettingsUpdate);
     gameState.on("gameStateUpdate", this.onGameStateUpdate);
     if (includeLobby) {
-      this.lobby = require("./modules/lobbyControl");
+      import("./modules/lobbyControl").then((data) => {
+        this.lobby = data.LobbySingle;
+        this.lobby.on("lobbyUpdate", this.onLobbyUpdate);
+      });
     }
   }
 
@@ -65,6 +68,8 @@ export class Module extends EventEmitter {
    */
   protected onSettingsUpdate(updates: SettingsUpdates) {}
 
+  protected onLobbyUpdate(updates: LobbyUpdates) {}
+
   updateLobby(update: LobbyUpdates): {
     isUpdated: boolean;
     events: LobbyUpdates[];
@@ -85,10 +90,6 @@ export class Module extends EventEmitter {
 
   protected emitInfo(info: string) {
     this.emitEvent({ info });
-  }
-
-  protected emitUpdate(lobbyUpdate: LobbyUpdates) {
-    this.emitEvent({ lobbyUpdate });
   }
 
   protected sendGameChat(sendGameChat: string) {
