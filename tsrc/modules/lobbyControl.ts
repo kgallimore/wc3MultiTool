@@ -21,19 +21,19 @@ require = require("esm")(module);
 var { Combination, Permutation } = require("js-combinatorics");
 
 export class LobbyControl extends Module {
-  #refreshing: boolean = false;
-  #staleTimer: NodeJS.Timeout | null = null;
+  private refreshing: boolean = false;
+  private staleTimer: NodeJS.Timeout | null = null;
 
   voteStartVotes: Array<string> = [];
   bestCombo: Array<string> | Array<Array<string>> = [];
   microLobby: MicroLobby | null = null;
   eloName: string = "";
-  #isTargetMap: boolean = false;
+  private isTargetMap: boolean = false;
   testMode: boolean = false;
 
-  #startTimer: NodeJS.Timeout | null = null;
+  private startTimer: NodeJS.Timeout | null = null;
 
-  #expectedSwaps: Array<[string, string]> = [];
+  private expectedSwaps: Array<[string, string]> = [];
 
   constructor() {
     super(false);
@@ -70,9 +70,9 @@ export class LobbyControl extends Module {
             payload.mapData.mapPath.split(/\/|\\/).slice(-1)[0] !==
             this.settings.values.autoHost.mapPath.split(/\/|\\/).slice(-1)[0]
           ) {
-            this.#isTargetMap = false;
+            this.isTargetMap = false;
           } else {
-            this.#isTargetMap = true;
+            this.isTargetMap = true;
           }
           this.settings.values.autoHost.closeSlots.forEach((slot) => {
             this.closeSlot(slot);
@@ -97,40 +97,40 @@ export class LobbyControl extends Module {
             this.fetchStats(event.playerJoined.name);
             if (this.microLobby?.nonSpecPlayers.includes(event.playerJoined.name)) {
             }
-            if (this.#startTimer) {
+            if (this.startTimer) {
               this.sendGameChat(`Lobby start was cancelled`);
-              clearTimeout(this.#startTimer);
-              this.#startTimer = null;
+              clearTimeout(this.startTimer);
+              this.startTimer = null;
             }
           } else if (event.playerLeft) {
-            if (this.#startTimer) {
+            if (this.startTimer) {
               this.sendGameChat(`Lobby start was cancelled`);
-              clearTimeout(this.#startTimer);
-              this.#startTimer = null;
+              clearTimeout(this.startTimer);
+              this.startTimer = null;
             }
             let player = event.playerLeft;
-            let expectedSwapsCheck = this.#expectedSwaps.findIndex((swaps) =>
+            let expectedSwapsCheck = this.expectedSwaps.findIndex((swaps) =>
               swaps.includes(player)
             );
             if (expectedSwapsCheck !== -1) {
-              this.#expectedSwaps.splice(expectedSwapsCheck, 1);
+              this.expectedSwaps.splice(expectedSwapsCheck, 1);
               this.emitInfo(`Expected swap removed for ${player}`);
             }
           } else if (event.playersSwapped) {
             let players = event.playersSwapped.players.sort();
-            let expectedIndex = this.#expectedSwaps.findIndex(
+            let expectedIndex = this.expectedSwaps.findIndex(
               (swap) => JSON.stringify(swap.sort()) === JSON.stringify(players)
             );
             if (expectedIndex !== -1) {
-              this.#expectedSwaps.splice(expectedIndex, 1);
+              this.expectedSwaps.splice(expectedIndex, 1);
               metExpectedSwap = true;
             }
           }
         });
-        if (this.#staleTimer) {
-          clearTimeout(this.#staleTimer);
+        if (this.staleTimer) {
+          clearTimeout(this.staleTimer);
         }
-        this.#staleTimer = setInterval(() => {
+        this.staleTimer = setInterval(() => {
           this.staleLobby();
         }, 1000 * 60 * 15);
         if (!metExpectedSwap) {
@@ -212,10 +212,10 @@ export class LobbyControl extends Module {
   clear() {
     this.voteStartVotes = [];
     this.bestCombo = [];
-    this.#refreshing = false;
-    if (this.#staleTimer) {
-      clearTimeout(this.#staleTimer);
-      this.#staleTimer = null;
+    this.refreshing = false;
+    if (this.staleTimer) {
+      clearTimeout(this.staleTimer);
+      this.staleTimer = null;
     }
     this.microLobby = null;
   }
@@ -270,7 +270,7 @@ export class LobbyControl extends Module {
         } else if (this.microLobby?.statsAvailable) {
           if (this.settings.values.elo.type === "wc3stats") {
             let buildVariant = "";
-            if (this.#isTargetMap && this.settings.values.elo.wc3StatsVariant) {
+            if (this.isTargetMap && this.settings.values.elo.wc3StatsVariant) {
               for (const [key, value] of Object.entries(
                 JSON.parse(this.settings.values.elo.wc3StatsVariant)
               )) {
@@ -373,7 +373,7 @@ export class LobbyControl extends Module {
 
   refreshGame() {
     if (this.microLobby?.lobbyStatic?.isHost) {
-      this.#refreshing = true;
+      this.refreshing = true;
       let targetSlots = Object.values(this.microLobby.slots)
         .filter((slot) => slot.slotStatus === 0)
         .map((slot) => slot.slot);
@@ -383,23 +383,23 @@ export class LobbyControl extends Module {
       for (const slot of targetSlots) {
         this.openSlot(slot);
       }
-      setTimeout(() => (this.#refreshing = false), 150);
+      setTimeout(() => (this.refreshing = false), 150);
     }
   }
 
   startGame(delay: number = 0) {
     if (delay > 0) {
-      if (this.#startTimer) {
+      if (this.startTimer) {
         this.sendGameChat("Lobby changed. Starting game in " + delay + " second(s)!");
       } else {
         this.sendGameChat("Starting game in " + delay + " second(s)!");
       }
     }
-    if (this.#startTimer) {
-      clearTimeout(this.#startTimer);
+    if (this.startTimer) {
+      clearTimeout(this.startTimer);
     }
-    this.#startTimer = setTimeout(() => {
-      this.#startTimer = null;
+    this.startTimer = setTimeout(() => {
+      this.startTimer = null;
       if (this.microLobby?.lobbyStatic?.isHost) {
         this.emitInfo("Starting game");
         this.sendGameChat("AutoHost functionality provided by WC3 MultiTool.");
@@ -649,7 +649,7 @@ export class LobbyControl extends Module {
 
   isLobbyReady() {
     let teams = this.exportDataStructure(true);
-    if (this.#refreshing) {
+    if (this.refreshing) {
       console.log("Refreshing slots, not ready.");
       return false;
     }
@@ -761,7 +761,7 @@ export class LobbyControl extends Module {
         let target1 = this.microLobby.searchPlayer(data.players[0])[0];
         let target2 = this.microLobby.searchPlayer(data.players[1])[0];
         if (target1 && target2 && target1 !== target2) {
-          this.#expectedSwaps.push([target1, target2].sort() as [string, string]);
+          this.expectedSwaps.push([target1, target2].sort() as [string, string]);
           this.sendGameChat("!swap " + target1 + " " + target2);
         } else {
           this.sendGameChat("Possible invalid swap targets");
@@ -820,19 +820,19 @@ export class LobbyControl extends Module {
   }
 
   banSlot(slotNumber: number) {
-    return this.#slotInteraction("BanPlayerFromGameLobby", slotNumber);
+    return this.slotInteraction("BanPlayerFromGameLobby", slotNumber);
   }
 
   closeSlot(slotNumber: number) {
-    return this.#slotInteraction("CloseSlot", slotNumber);
+    return this.slotInteraction("CloseSlot", slotNumber);
   }
 
   kickSlot(slotNumber: number) {
-    return this.#slotInteraction("KickPlayerFromGameLobby", slotNumber);
+    return this.slotInteraction("KickPlayerFromGameLobby", slotNumber);
   }
 
   openSlot(slotNumber: number) {
-    return this.#slotInteraction("OpenSlot", slotNumber);
+    return this.slotInteraction("OpenSlot", slotNumber);
   }
 
   setHandicapSlot(slotNumber: number, handicap: number) {
@@ -843,7 +843,7 @@ export class LobbyControl extends Module {
     });
   }
 
-  #slotInteraction(action: string, slotNumber: number) {
+  private slotInteraction(action: string, slotNumber: number) {
     if (this.microLobby?.lobbyStatic.isHost) {
       let targetSlot = Object.values(this.microLobby.slots).find(
         (slot) => slot.slot === slotNumber && !slot.isSelf && slot.slotTypeChangeEnabled

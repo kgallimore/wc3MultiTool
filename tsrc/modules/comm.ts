@@ -23,7 +23,9 @@ export class Comm extends Module {
   }
 
   onSettingsUpdate(updates: SettingsUpdates): void {
-    this.initialize();
+    if (updates.client?.commAddress !== undefined) {
+      this.initialize();
+    }
     this.commSend({
       settingsUpdates: updates,
     });

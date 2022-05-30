@@ -3,7 +3,7 @@ import { Module } from "../moduleBase";
 import type { GameState } from "./../globals/gameState";
 
 import { Client, register, Presence } from "discord-rpc";
-import type { Regions } from "wc3mt-lobby-container";
+import type { LobbyUpdates, Regions } from "wc3mt-lobby-container";
 
 export interface NewActivity {
   details?: string;
@@ -40,6 +40,17 @@ class DiscordRPC extends Module {
       inGame: this.gameState.values.inGame,
       //currentPlayers: this.lobby?.nonSpecPlayers.length,
     });
+  }
+
+  protected onLobbyUpdate(updates: LobbyUpdates): void {
+    // TODO: More details
+    if (updates.newLobby?.lobbyStatic.lobbyName) {
+      this.setActivity({
+        state: this.gameState.values.menuState,
+        inGame: this.gameState.values.inGame,
+        details: updates.newLobby.lobbyStatic.lobbyName,
+      });
+    }
   }
 
   private setActivity(activity: NewActivity) {

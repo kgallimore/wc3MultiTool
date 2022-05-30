@@ -3,6 +3,7 @@ import EventEmitter from "events";
 import Store from "electron-store";
 
 import type { PickByValue } from "./../utility";
+import type { ObsHotkeys } from "./../modules/obs";
 
 const store = new Store();
 
@@ -85,12 +86,7 @@ export interface ObsSettings {
   autoStream: boolean;
   textSource: boolean;
 }
-export interface ObsHotkeys {
-  key: string;
-  altKey: boolean;
-  ctrlKey: boolean;
-  shiftKey: boolean;
-}
+
 export interface DiscordSettings {
   enabled: boolean;
   token: string;
@@ -267,6 +263,10 @@ class AppSettingsContainer extends EventEmitter {
 
   get values(): AppSettings {
     return this._values;
+  }
+
+  set values(value: AppSettings) {
+    throw new Error("Can not set values directly. Use updateGameState.");
   }
 
   updateSettings(updates: SettingsUpdates) {

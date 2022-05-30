@@ -1,8 +1,17 @@
 import { Module } from "../moduleBase";
 
-import { SettingsUpdates } from "./../globals/settings";
+import type { SettingsUpdates } from "./../globals/settings";
 
 import OBSWebSocket from "obs-websocket-js";
+import type { GameState } from "./../globals/gameState";
+import { Key, keyboard } from "@nut-tree/nut-js";
+
+export interface ObsHotkeys {
+  key: string;
+  altKey: boolean;
+  ctrlKey: boolean;
+  shiftKey: boolean;
+}
 
 class OBSSocket extends Module {
   socket: OBSWebSocket | null = null;
@@ -12,10 +21,28 @@ class OBSSocket extends Module {
     this.setup();
   }
 
+  onSettingsUpdate(updates: SettingsUpdates) {
+    if (updates.obs?.address !== undefined || updates.obs?.token !== undefined) {
+      this.setup();
+    }
+  }
+
+  protected onGameStateUpdate(updates: Partial<GameState>): void {
+    if (updates.inGame !== undefined) {
+      this.switchScene();
+    }
+  }
+
   private setup() {
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;
+    }
+    if (
+      !this.settings.values.obs.enabled ||
+      this.settings.values.obs.sceneSwitchType !== "websockets"
+    ) {
+      return;
     }
     let address = this.settings.values.obs.address;
     let password = this.settings.values.obs.token;
@@ -45,19 +72,78 @@ class OBSSocket extends Module {
     });
   }
 
-  onSettingsUpdate(updates: SettingsUpdates) {
-    if (updates.obs?.address !== undefined || updates.obs?.token !== undefined) {
-      this.setup();
+  private buildKeys(keys: ObsHotkeys): Array<Key> {
+    let modifiers: Array<Key> = [];
+    if (keys.altKey) {
+      modifiers.push(Key.LeftAlt);
     }
+    if (keys.ctrlKey) {
+      modifiers.push(Key.LeftControl);
+    }
+    if (keys.shiftKey) {
+      modifiers.push(Key.LeftShift);
+    }
+    return modifiers;
   }
 
-  switchScene(scene: string) {
-    if (!this.socket) {
+  private switchScene() {
+    if (!this.settings.values.obs.enabled) {
       return;
     }
-    this.socket.send("SetCurrentScene", {
-      "scene-name": scene,
-    });
+    if (!this.gameState.values.inGame) {
+      if (
+        this.settings.values.obs.sceneSwitchType === "websockets" &&
+        this.socket &&
+        this.settings.values.obs.outOfGameWSScene
+      ) {
+        this.emitInfo("Triggering OBS Websocket Out of Game");
+        this.socket.send("SetCurrentScene", {
+          "scene-name": this.settings.values.obs.outOfGameWSScene,
+        });
+      } else if (
+        this.settings.values.obs.sceneSwitchType === "hotkeys" &&
+        this.settings.values.obs.outOfGameHotkey
+      ) {
+        this.emitInfo("Triggering OBS Hotkey Out of Game");
+        let modifiers = this.buildKeys(this.settings.values.obs.outOfGameHotkey);
+
+        keyboard
+          .type(
+            ...modifiers,
+            // @ts-expect-error This works
+            Key[this.settings.values.obs.outOfGameHotkey.key.toUpperCase()]
+          )
+          .catch((e: any) => {
+            this.emitError("Failed to trigger OBS Out of Game: " + e.toString());
+          });
+      }
+    } else if (this.gameState.values.inGame) {
+      if (
+        this.settings.values.obs.sceneSwitchType === "websockets" &&
+        this.socket &&
+        this.settings.values.obs.inGameWSScene
+      ) {
+        this.emitInfo("Triggering OBS Websocket In Game");
+        this.socket.send("SetCurrentScene", {
+          "scene-name": this.settings.values.obs.inGameWSScene,
+        });
+      } else if (
+        this.settings.values.obs.sceneSwitchType === "hotkeys" &&
+        this.settings.values.obs.inGameHotkey
+      ) {
+        this.emitInfo("Triggering OBS Hotkey In Game");
+        let modifiers = this.buildKeys(this.settings.values.obs.inGameHotkey);
+        keyboard
+          .type(
+            ...modifiers,
+            // @ts-expect-error This works
+            Key[this.settings.values.obs.inGameHotkey.key.toUpperCase()]
+          )
+          .catch((e) => {
+            this.emitError("Failed to trigger OBS In-Game" + e);
+          });
+      }
+    }
   }
 }
 

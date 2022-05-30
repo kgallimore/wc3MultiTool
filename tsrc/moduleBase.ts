@@ -1,5 +1,5 @@
 import EventEmitter from "events";
-import { LobbyUpdates } from "wc3mt-lobby-container";
+import type { LobbyUpdates } from "wc3mt-lobby-container";
 
 import { gameState, GameState } from "./globals/gameState";
 import { settings } from "./globals/settings";
@@ -19,7 +19,6 @@ export interface EmitEvents {
   sendGameMessage?: { type: string; payload: any };
   newTip?: SEEventEvent | SEEventEvent[];
   notification?: { title: string; body: string };
-  newGameState?: { key: keyof GameState; value: string | boolean };
 }
 
 /**
@@ -54,7 +53,7 @@ export class Module extends EventEmitter {
    * A list of all new gameState values
    * @memberof Module
    */
-  onGameStateUpdate(updates: Partial<GameState>) {}
+  protected onGameStateUpdate(updates: Partial<GameState>) {}
 
   /**
    *
@@ -64,19 +63,9 @@ export class Module extends EventEmitter {
    * @memberof Module
    *
    */
-  onSettingsUpdate(updates: SettingsUpdates) {}
+  protected onSettingsUpdate(updates: SettingsUpdates) {}
 
-  onLobbyUpdate(updates: LobbyUpdates) {}
-
-  updateLobby(update: LobbyUpdates): {
-    isUpdated: boolean;
-    events: LobbyUpdates[];
-  } {
-    if (update.newLobby) {
-      return { isUpdated: true, events: [update] };
-    }
-    return { isUpdated: false, events: [] };
-  }
+  protected onLobbyUpdate(updates: LobbyUpdates) {}
 
   protected emitEvent(data: EmitEvents) {
     this.emit("event", data);
@@ -113,9 +102,5 @@ export class Module extends EventEmitter {
 
   protected emitNotification(title: string, body: string) {
     this.emitEvent({ notification: { title, body } });
-  }
-
-  protected emitUpdateGameState(key: keyof GameState, value: string | boolean) {
-    this.emitEvent({ newGameState: { key, value } });
   }
 }

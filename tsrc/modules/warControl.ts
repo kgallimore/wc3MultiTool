@@ -48,14 +48,14 @@ class WarControl extends Module {
     callCount = 0,
     focusAttempted = false
   ): Promise<boolean> {
-    this.emitUpdateGameState("action", "openingWarcraft");
+    this.gameState.updateGameState({ action: "openingWarcraft" });
     try {
       if (callCount > 60) {
         this.emitError("Failed to open Warcraft after 60 attempts");
       }
       if (await this.isWarcraftOpen()) {
         this.emitInfo("Warcraft is now open");
-        this.emitUpdateGameState("action", "nothing");
+        this.gameState.updateGameState({ action: "nothing" });
         return true;
       }
       if (this.settings.values.client.alternateLaunch) {
@@ -84,7 +84,7 @@ class WarControl extends Module {
         }
         if (title === "Blizzard Battle.net Login") {
           this.emitError("A login is required to open Warcraft");
-          this.emitUpdateGameState("action", "nothing");
+          this.gameState.updateGameState({ action: "nothing" });
           return false;
         }
         if (title === "Battle.net") {
@@ -120,7 +120,7 @@ class WarControl extends Module {
           return await this.openWarcraft(region, callCount + 1, true);
         } else {
           this.emitError("Failed to focus Battle.net");
-          this.emitUpdateGameState("action", "nothing");
+          this.gameState.updateGameState({ action: "nothing" });
           return false;
         }
       }
@@ -222,7 +222,7 @@ class WarControl extends Module {
         for (let i = 0; i < 10; i++) {
           if (await this.isWarcraftOpen()) {
             this.emitInfo("Warcraft is now open.");
-            this.emitUpdateGameState("action", "nothing");
+            this.gameState.updateGameState({ action: "nothing" });
             return true;
           }
           await sleep(100);
@@ -233,11 +233,11 @@ class WarControl extends Module {
         return await this.openWarcraft(region, callCount + 15);
       }
       this.emitError("Failed to open Warcraft.");
-      this.emitUpdateGameState("action", "nothing");
+      this.gameState.updateGameState({ action: "nothing" });
       return false;
     } catch (e) {
       this.emitError(e as string);
-      this.emitUpdateGameState("action", "nothing");
+      this.gameState.updateGameState({ action: "nothing" });
       return false;
     }
   }
