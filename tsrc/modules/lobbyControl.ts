@@ -1,5 +1,4 @@
 import { Module } from "../moduleBase";
-import { MicroLobbyData } from "wc3mt-lobby-container";
 
 import { settings } from "./../globals/settings";
 
@@ -13,6 +12,7 @@ import {
   Regions,
   SlotNumbers,
   TeamTypes,
+  LobbyUpdates,
 } from "wc3mt-lobby-container";
 import { ensureInt } from "../utility";
 
@@ -77,7 +77,7 @@ export class LobbyControl extends Module {
             this.closeSlot(slot);
           });
           setTimeout(() => this.moveToSpec(), 150);
-          this.emitUpdate({ newLobby: this.microLobby.exportMin() });
+          this.emitLobbyUpdate({ newLobby: this.microLobby.exportMin() });
         } catch (e) {
           // @ts-ignore
           this.emitError(e);
@@ -86,12 +86,12 @@ export class LobbyControl extends Module {
     } else {
       let changedValues = this.microLobby.updateLobbySlots(payload.players);
       if (changedValues.playerUpdates.length > 0) {
-        this.emitUpdate({ playerPayload: changedValues.playerUpdates });
+        this.emitLobbyUpdate({ playerPayload: changedValues.playerUpdates });
       }
       if (changedValues.events.isUpdated) {
         var metExpectedSwap = false;
         changedValues.events.events.forEach((event) => {
-          this.emitUpdate(event);
+          this.emitLobbyUpdate(event);
           if (event.playerJoined) {
             this.fetchStats(event.playerJoined.name);
             if (this.microLobby?.nonSpecPlayers.includes(event.playerJoined.name)) {
@@ -309,7 +309,7 @@ export class LobbyControl extends Module {
               this.microLobby.ingestUpdate({ playerData: { name, extraData: data } })
                 .isUpdated
             ) {
-              this.emitUpdate({
+              this.emitLobbyUpdate({
                 playerData: {
                   extraData: data,
                   name,
@@ -361,7 +361,7 @@ export class LobbyControl extends Module {
   staleLobby() {
     if (this.microLobby && this.microLobby.allPlayers.length < 2) {
       this.emitInfo("Try to refresh possibly stale lobby");
-      this.emitUpdate({ stale: true });
+      this.emitLobbyUpdate({ stale: true });
     } else {
       this.emitInfo("Refreshing possibly stale lobby");
       this.refreshGame();
@@ -480,7 +480,7 @@ export class LobbyControl extends Module {
       this.emitInfo("Auto balancing teams");
       if (this.bestCombo === undefined || this.bestCombo.length == 0) {
         if (teams.length < 2) {
-          this.emitUpdate({ lobbyReady: true });
+          this.emitLobbyUpdate({ lobbyReady: true });
           return;
         } else if (teams.length === 2) {
           let leastSwapTeam = "Team ?";
@@ -636,11 +636,11 @@ export class LobbyControl extends Module {
           }
         }
         this.emitInfo("Players should now be balanced.");
-        this.emitUpdate({ lobbyReady: true });
+        this.emitLobbyUpdate({ lobbyReady: true });
         this.sendGameChat("ELO data provided by: " + settings.values.elo.type);
       }
     } else {
-      this.emitUpdate({ lobbyReady: true });
+      this.emitLobbyUpdate({ lobbyReady: true });
     }
   }
 
@@ -925,6 +925,9 @@ export class LobbyControl extends Module {
   getPlayerData(player: string) {
     return this.microLobby?.getAllPlayerData()[player] ?? false;
   }
+
+  emitLobbyUpdate(update: LobbyUpdates) {
+    this.emit("lobbyUpdate", update);
+  }
 }
-const LobbySingle = new LobbyControl();
-export default LobbySingle;
+export const LobbySingle = new LobbyControl();

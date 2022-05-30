@@ -9,6 +9,7 @@ import type { GameState, AppSettings } from "../utility";
 // Only import the types you want to listen to
 import type { SettingsUpdates } from "./../globals/settings";
 import type { GameState } from "./../globals/gameState";
+import { LobbyUpdates } from "wc3mt-lobby-container";
 
 class NewModule extends Module {
     // Declare any additional args
@@ -28,9 +29,9 @@ class NewModule extends Module {
     // Do something with the new game state. Only new values will be present.
   }
 
-  updateLobby(updates: LobbyUpdates) {
+  // This is optional. You only need to include it if you want to listen to Lobby updates
+  onLobbyUpdate(updates: LobbyUpdates) {
     // Do something with the new lobby data. Super can be called before or after
-    super()
   }
 }
 

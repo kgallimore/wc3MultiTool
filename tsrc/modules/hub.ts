@@ -32,14 +32,10 @@ export class HubControl extends Module {
     });
   }
 
-  updateLobby(update: LobbyUpdates): { isUpdated: boolean; events: LobbyUpdates[] } {
-    let updates = super.updateLobby(update);
-    if (updates.isUpdated) {
-      this.sendToHub({
-        lobbyUpdates: update,
-      });
-    }
-    return updates;
+  protected onLobbyUpdate(updates: LobbyUpdates): void {
+    this.sendToHub({
+      lobbyUpdates: updates,
+    });
   }
 
   private socketSetup() {

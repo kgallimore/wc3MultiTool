@@ -52,12 +52,11 @@ export class OBSSocket extends Module {
   }
 
   switchScene(scene: string) {
-    try {
-      this.socket?.send("SetCurrentScene", {
-        "scene-name": scene,
-      });
-    } catch (e) {
-      console.error(e);
+    if (!this.socket) {
+      return;
     }
+    this.socket.send("SetCurrentScene", {
+      "scene-name": scene,
+    });
   }
 }

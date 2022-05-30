@@ -29,14 +29,10 @@ export class Comm extends Module {
     });
   }
 
-  updateLobby(update: LobbyUpdates): { isUpdated: boolean; events: LobbyUpdates[] } {
-    let updates = super.updateLobby(update);
-    if (updates.isUpdated) {
-      this.commSend({
-        lobbyUpdates: update,
-      });
-    }
-    return updates;
+  protected onLobbyUpdate(updates: LobbyUpdates): void {
+    this.commSend({
+      lobbyUpdates: updates,
+    });
   }
 
   private initialize() {
