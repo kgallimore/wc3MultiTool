@@ -1,15 +1,16 @@
 import { Module } from "../moduleBase";
-import type { MicroLobbyData } from "wc3mt-lobby-container";
 
-import { settings } from "./../globals/settings";
+import type { SettingsUpdates } from "./../globals/settings";
 
 import Discord from "discord.js";
 import type { mmdResults } from "../utility";
-import type { PlayerTeamsData } from "wc3mt-lobby-container";
+import type { PlayerTeamsData, LobbyUpdates } from "wc3mt-lobby-container";
 import { DeColorName } from "../utility";
+import { app } from "electron";
+import { GameState } from "./../globals/gameState";
 
 class DisClient extends Module {
-  client: Discord.Client;
+  client: Discord.Client | null = null;
   announceChannel: Discord.TextChannel | null = null;
   chatChannel: Discord.TextChannel | null = null;
   dev: boolean;
@@ -23,103 +24,135 @@ class DisClient extends Module {
     status: "closed",
     name: "",
   };
-  private _lobbyUpdates: { lastUpdate: number; update: PlayerTeamsData | null } = {
+  private _lobbyUpdates: { lastUpdate: number; updateTimer: NodeJS.Timeout | null } = {
     lastUpdate: 0,
-    update: null,
+    updateTimer: null,
   };
 
-  constructor(dev: boolean = false) {
+  constructor() {
     super();
-    this.dev = dev;
-    if (!settings.values.discord.token) {
-      throw new Error("Token is empty");
+    this.dev = app.isPackaged;
+  }
+
+  protected onSettingsUpdate(updates: SettingsUpdates) {
+    if (updates.discord) {
+      if (updates.discord.token !== undefined) {
+        this.initialize();
+      }
+      if (
+        updates.discord.announceChannel !== undefined ||
+        updates.discord.chatChannel !== undefined
+      ) {
+        this.initialize();
+      }
+    }
+  }
+
+  protected onLobbyUpdate(updates: LobbyUpdates): void {
+    if (updates.newLobby) {
+      this.sendNewLobby();
+    } else if (updates.leftLobby) {
+      this.lobbyClosed();
+    } else if (
+      updates.lobbyReady === undefined &&
+      updates.stale === undefined &&
+      updates.chatMessage === undefined
+    ) {
+      this.updateDiscordLobby();
+    }
+  }
+
+  protected onGameStateUpdate(updates: Partial<GameState>): void {
+    if (updates.inGame) {
+      this.lobbyStarted();
+    }
+    if (!updates.inGame) {
+      this.lobbyEnded(null);
+    }
+  }
+
+  private initialize() {
+    this.client?.destroy();
+    this.client = null;
+    if (!this.settings.values.discord.token) {
+      return;
     }
     this.client = new Discord.Client({
       intents: [Discord.Intents.FLAGS.GUILD_MESSAGES, Discord.Intents.FLAGS.GUILDS],
     });
     this.client.on("ready", () => {
-      if (this.client.user) {
-        this.client.user.setStatus("online");
-        this.client.user.setUsername("WC3 MultiTool");
-        if (!dev) {
-          this.client.user.setAvatar("./images/wc3_auto_balancer_v2.png");
-        }
-        console.log(`Logged in as ${this.client.user.tag}!`);
-        this.client?.user?.setActivity({
-          name: "war.trenchguns.com",
-          type: "WATCHING",
-        });
-        if (
-          settings.values.discord.chatChannel ||
-          settings.values.discord.announceChannel
-        ) {
-          this.client.channels.cache
-            .filter((channel) => channel.isText())
-            .forEach((channel) => {
-              if (
-                (settings.values.discord.announceChannel &&
-                  (channel as Discord.TextChannel).name ===
-                    settings.values.discord.announceChannel) ||
-                channel.id === settings.values.discord.announceChannel
-              ) {
-                this.announceChannel = channel as Discord.TextChannel;
-              }
-              if (
-                (settings.values.discord.chatChannel &&
-                  settings.values.discord.chatChannel &&
-                  (channel as Discord.TextChannel).name ===
-                    settings.values.discord.chatChannel) ||
-                channel.id === settings.values.discord.chatChannel
-              ) {
-                this.chatChannel = channel as Discord.TextChannel;
-              }
-            });
-        }
-      } else {
-        console.error("Client is not ready?");
+      if (!this.client?.user) {
+        return;
       }
+      this.client.user.setStatus("online");
+      this.client.user.setUsername("WC3 MultiTool");
+      if (!this.dev) {
+        this.client.user.setAvatar("./images/wc3_auto_balancer_v2.png");
+      }
+      console.log(`Logged in as ${this.client.user.tag}!`);
+      this.client.user.setActivity({
+        name: "war.trenchguns.com",
+        type: "WATCHING",
+      });
+      this.getChannels();
     });
 
     this.client.on("message", (msg) => {
       if (msg.channel === this.chatChannel && !msg.author.bot) {
-        if (settings.values.discord.bidirectionalChat) {
+        if (this.settings.values.discord.bidirectionalChat) {
           this.sendGameChat("(DC)" + msg.author.username + ": " + msg.content);
         }
       }
     });
-
-    this.client.login(settings.values.discord.token);
+    this.client.login(this.settings.values.discord.token);
   }
 
-  updateChannel(channelName: string, channelType: "announceChannel" | "chatChannel") {
-    if (!channelName) {
-      if (channelType === "announceChannel") {
-        this.announceChannel = null;
-      } else if (channelType === "chatChannel") {
-        this.chatChannel = null;
-      }
-    } else {
-      this.client.channels.cache.forEach((channel) => {
-        if (channel.isText()) {
+  private getChannels() {
+    if (!this.client) {
+      return;
+    }
+    // Flush channels just in case the new ones don't exist or the channels aren't wanted.
+    this.chatChannel = null;
+    this.announceChannel = null;
+    if (
+      this.settings.values.discord.chatChannel ||
+      this.settings.values.discord.announceChannel
+    ) {
+      this.client.channels.cache
+        .filter((channel) => channel.isText())
+        .forEach((channel) => {
           if (
-            (channel as Discord.TextChannel).name === channelName ||
-            channel.id === channelName
+            (this.settings.values.discord.announceChannel &&
+              (channel as Discord.TextChannel).name ===
+                this.settings.values.discord.announceChannel) ||
+            channel.id === this.settings.values.discord.announceChannel
           ) {
-            if (channelType === "announceChannel") {
-              this.announceChannel = channel as Discord.TextChannel;
-            } else if (channelType === "chatChannel") {
-              this.chatChannel = channel as Discord.TextChannel;
-            }
+            this.announceChannel = channel as Discord.TextChannel;
           }
-        }
-      });
+          if (
+            (this.settings.values.discord.chatChannel &&
+              this.settings.values.discord.chatChannel &&
+              (channel as Discord.TextChannel).name ===
+                this.settings.values.discord.chatChannel) ||
+            channel.id === this.settings.values.discord.chatChannel
+          ) {
+            this.chatChannel = channel as Discord.TextChannel;
+          }
+        });
     }
   }
 
-  async sendNewLobby(lobbyData: MicroLobbyData, data: PlayerTeamsData) {
+  // TODO: Reimplement with new lobby updates
+
+  private async sendNewLobby() {
     if (this._embed && this._sentEmbed) {
       await this.lobbyClosed();
     }
+    if (!this.lobby?.microLobby) {
+      return;
+    }
+    let lobbyData = this.lobby.microLobby.exportMin();
+    let data = this.lobby.microLobby.exportTeamStructure();
     this._embed = new Discord.MessageEmbed()
       .setTitle(
         (lobbyData.region === "us" ? ":flag_us: " : ":flag_eu: ") +
@@ -141,6 +174,8 @@ class DisClient extends Module {
           inline: true,
         },
       ]);
+    if (data) {
+    }
     Object.entries(data).forEach(([teamName, data]) => {
       let combinedData = data.map(
         (data) =>
@@ -164,13 +199,10 @@ class DisClient extends Module {
     });
     this._lobbyState.status = "active";
     this._lobbyState.name = lobbyData.lobbyStatic.lobbyName;
-    this._sentEmbed = await this.sendMessage(
-      { embeds: [this._embed] },
-      this.announceChannel
-    );
+    this._sentEmbed = await this.sendMessage({ embeds: [this._embed] }, "announce");
   }
 
-  async lobbyStarted() {
+  private async lobbyStarted() {
     if (this._embed && this._sentEmbed && this._lobbyState.status === "active") {
       let newEmbed = new Discord.MessageEmbed(this._embed);
       newEmbed.setDescription("Game has started");
@@ -186,21 +218,22 @@ class DisClient extends Module {
     }
   }
 
-  async lobbyEnded(results: mmdResults) {
+  async lobbyEnded(results: mmdResults | null) {
     if (this._embed && this._sentEmbed) {
       if (this._lobbyState.status === "started") {
         let newEmbed = new Discord.MessageEmbed(this._embed);
         newEmbed.setDescription("Game has ended");
         newEmbed.setColor("#228B22");
         newEmbed.setURL("");
-        newEmbed.fields.forEach((field) => {
-          // TODO append results
-          for (const [playerName, value] of Object.entries(results.list)) {
-            if (field.value.match(new RegExp(playerName, "i"))) {
+        if (results)
+          newEmbed.fields.forEach((field) => {
+            // TODO append results
+            for (const [playerName, value] of Object.entries(results.list)) {
+              if (field.value.match(new RegExp(playerName, "i"))) {
+              }
             }
-          }
-          Object.entries(results.list).some((key) => {});
-        });
+            Object.entries(results.list).some((key) => {});
+          });
         newEmbed.addFields([
           { name: "Game Ended", value: `<t:${Math.floor(Date.now() / 1000)}:R>` },
         ]);
@@ -242,25 +275,25 @@ class DisClient extends Module {
     }
   }
 
-  async updateDiscordLobby(data: PlayerTeamsData | false) {
+  private async updateDiscordLobby() {
     if (this._embed && this._sentEmbed && this._lobbyState.status === "active") {
+      if (!this.lobby?.microLobby) {
+        return;
+      }
+      let data = this.lobby.microLobby.exportTeamStructure();
       if (data === this._sentEmbedData) {
         return;
       }
       let now = Date.now();
       if (now - this._lobbyUpdates.lastUpdate > 1000) {
+        if (this._lobbyUpdates.updateTimer) {
+          clearTimeout(this._lobbyUpdates.updateTimer);
+          this._lobbyUpdates.updateTimer = null;
+        }
         this._lobbyUpdates.lastUpdate = now;
         let newEmbed = new Discord.MessageEmbed(this._embed);
         newEmbed.fields = this._embed.fields.splice(0, 3);
         this._embed = newEmbed;
-        if (!data) {
-          if (this._lobbyUpdates.update) {
-            data = this._lobbyUpdates.update;
-          } else {
-            console.error("No data to update lobby with");
-            return;
-          }
-        }
         Object.entries(data).forEach(([teamName, data]) => {
           let combinedData = data.map(
             (data) =>
@@ -281,22 +314,24 @@ class DisClient extends Module {
         this._sentEmbed.edit({ embeds: [newEmbed] });
       } else {
         // Debounce
-        if (data) {
-          this._lobbyUpdates.update = data;
+        if (!this._lobbyUpdates.updateTimer) {
+          this._lobbyUpdates.updateTimer = setTimeout(
+            this.updateDiscordLobby.bind(this),
+            this._lobbyUpdates.lastUpdate + 1000 - now
+          );
         }
-        setTimeout(() => {
-          this.updateDiscordLobby(false);
-        }, now - this._lobbyUpdates.lastUpdate);
       }
     }
   }
 
   async sendMessage(
     message: string | Discord.MessagePayload | Discord.MessageOptions,
-    channel = this.chatChannel
+    channel: "chat" | "announce" = "chat"
   ) {
-    if (channel) {
-      return channel.send(message);
+    if (channel === "chat" && this.chatChannel) {
+      return this.chatChannel.send(message);
+    } else if (channel === "announce" && this.announceChannel) {
+      return this.announceChannel.send(message);
     } else {
       console.log("Channel is not defined");
       return null;

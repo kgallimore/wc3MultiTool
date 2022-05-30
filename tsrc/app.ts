@@ -203,8 +203,8 @@ if (!gotLock) {
 
   app.on("before-quit", () => {
     HubSingle.sendToHub({ lobbyUpdates: { leftLobby: true } });
-    discSingle?.lobbyClosed();
-    LobbySingle?.clear();
+    discSingle.lobbyClosed();
+    LobbySingle.clear();
   });
 
   async function protocolHandler(url: string) {
@@ -486,7 +486,7 @@ if (!gotLock) {
 
   app.on("window-all-closed", () => {
     HubSingle.sendToHub({ lobbyUpdates: { leftLobby: true } });
-    discSingle?.lobbyClosed();
+    discSingle.lobbyClosed();
     LobbySingle?.clear();
     if (process.platform !== "darwin") {
       app.quit();
@@ -498,66 +498,6 @@ if (!gotLock) {
       createWindow();
     }
   });
-
-  async function triggerOBS() {
-    if (settings.values.obs.enabled) {
-      if (settings.values.obs.sceneSwitchType === "hotkeys") {
-        if (gameState.values.inGame && settings.values.obs.inGameHotkey) {
-          log.info("Triggering OBS In-Game");
-          let modifiers: Array<Key> = [];
-          if (settings.values.obs.inGameHotkey) {
-            if (settings.values.obs.inGameHotkey.altKey) {
-              modifiers.push(Key.LeftAlt);
-            }
-            if (settings.values.obs.inGameHotkey.ctrlKey) {
-              modifiers.push(Key.LeftControl);
-            }
-            if (settings.values.obs.inGameHotkey.shiftKey) {
-              modifiers.push(Key.LeftShift);
-            }
-            try {
-              await keyboard.type(
-                ...modifiers,
-                // @ts-ignore
-                Key[settings.values.obs.inGameHotkey.key.toUpperCase()]
-              );
-            } catch (e) {
-              log.warn("Failed to trigger OBS In-Game", e);
-            }
-          }
-        } else if (!gameState.values.inGame && settings.values.obs.outOfGameHotkey) {
-          log.info("Triggering OBS Out of Game");
-          let modifiers: Array<Key> = [];
-          if (settings.values.obs.outOfGameHotkey.altKey) {
-            modifiers.push(Key.LeftAlt);
-          }
-          if (settings.values.obs.outOfGameHotkey.ctrlKey) {
-            modifiers.push(Key.LeftControl);
-          }
-          if (settings.values.obs.outOfGameHotkey.shiftKey) {
-            modifiers.push(Key.LeftShift);
-          }
-          try {
-            await keyboard.type(
-              ...modifiers,
-              // @ts-ignore
-              Key[settings.values.obs.outOfGameHotkey.key.toUpperCase()]
-            );
-          } catch (e) {
-            log.warn("Failed to trigger OBS Out of Game", e);
-          }
-        }
-      } else if (settings.values.obs.sceneSwitchType === "websockets") {
-        if (gameState.values.inGame && settings.values.obs.inGameWSScene) {
-          log.info("Triggering OBS In-Game");
-          obsSocketSingle.switchScene(settings.values.obs.inGameWSScene);
-        } else if (!gameState.values.inGame && settings.values.obs.outOfGameWSScene) {
-          log.info("Triggering OBS Out of Game");
-          obsSocketSingle.switchScene(settings.values.obs.outOfGameWSScene);
-        }
-      }
-    }
-  }
 
   function sendProgress(step = "Nothing", progress = 0) {
     sendWindow("progress", { progress: { step, progress } });
@@ -771,7 +711,6 @@ if (!gotLock) {
         setTimeout(autoHostGame, 250);
       }
     } else if (newScreen === "LOADING_SCREEN") {
-      discSingle?.lobbyStarted();
       if (settings.values.autoHost.type === "rapidHost") {
         if (settings.values.autoHost.rapidHostTimer === 0) {
           log.info("Rapid Host leave game immediately");
@@ -792,7 +731,6 @@ if (!gotLock) {
         log.info("Setting up smart host.");
         setTimeout(smartQuit, 15000);
       }
-      triggerOBS();
       if (
         settings.values.autoHost.type === "rapidHost" &&
         settings.values.autoHost.rapidHostTimer > 0
@@ -838,8 +776,6 @@ if (!gotLock) {
         });
       }
     } else {
-      triggerOBS();
-
       gameState.updateGameState({ inGame: false, action: "nothing" });
       if (settings.values.elo.handleReplays) {
         let mostModified = { file: "", mtime: 0 };
@@ -862,7 +798,6 @@ if (!gotLock) {
             }
           });
         if (mostModified.file && mostModified.mtime > clientState.latestUploadedReplay) {
-          // TODO parse file for results and update discord etc
           analyzeGame(mostModified.file).then((results) => {
             if (discSingle) discSingle.lobbyEnded(results);
           });
@@ -1096,7 +1031,7 @@ if (!gotLock) {
     ) {
       sendWindow("lobbyUpdate", { lobbyData: { leftLobby: true } });
       HubSingle.sendToHub({ lobbyUpdates: { leftLobby: true } });
-      discSingle?.lobbyClosed();
+      discSingle.lobbyClosed();
       gameState.updateGameState({ action: "nothing" });
       LobbySingle.clear();
     }
@@ -2636,12 +2571,8 @@ if (!gotLock) {
     if (command.notification) {
       new Notification(command.notification).show();
     }
-    if (command.newGameState) {
-      gameState.updateGameState({
-        [command.newGameState.key]: command.newGameState.value,
-      });
-    }
     if (command.lobbyUpdate) {
+      // TODO Move the below code to the module system.
       let update = command.lobbyUpdate;
       if (LobbySingle.microLobby) {
         if (
@@ -2657,18 +2588,6 @@ if (!gotLock) {
           }
           sendWindow("lobbyUpdate", { lobbyData: update });
           HubSingle.sendToHub({ lobbyUpdates: update });
-          if (discSingle) {
-            if (update.newLobby) {
-              discSingle.sendNewLobby(
-                update.newLobby,
-                LobbySingle.microLobby?.exportTeamStructure()
-              );
-            } else {
-              discSingle.updateDiscordLobby(
-                LobbySingle.microLobby?.exportTeamStructure()
-              );
-            }
-          }
           if (settings.values.obs.textSource) {
             fs.writeFileSync(
               path.join(app.getPath("documents"), "wc3mt.txt"),

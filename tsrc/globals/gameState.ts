@@ -2,7 +2,7 @@ import EventEmitter from "events";
 
 import { BattleTagRegex, Regions } from "wc3mt-lobby-container";
 
-import { PickByValue } from "./../utility";
+import type { PickByValue } from "./../utility";
 
 export type MenuStates =
   | "OUT_OF_MENUS"
@@ -50,6 +50,10 @@ class GameStateContainer extends EventEmitter {
 
   get values(): GameState {
     return this._values;
+  }
+
+  set values(value: GameState) {
+    throw new Error("Can not set values directly. Use updateGameState.");
   }
 
   updateGameState(values: Partial<GameState>) {
