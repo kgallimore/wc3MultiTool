@@ -1,44 +1,25 @@
 import { Module } from "../moduleBase";
-import type { GameState } from "../utility";
-import type { MicroLobbyData } from "wc3mt-lobby-container";
+
+import type { SettingsUpdates } from "./../globals/settings";
 
 import { WebSocket } from "ws";
-import { HubReceive, isValidUrl, SettingsUpdate, GameStateUpdate } from "../utility";
+import { HubReceive, isValidUrl } from "../utility";
 import type { LobbyUpdates } from "wc3mt-lobby-container";
-
-import { settings } from "./../globals/settings";
 
 export class Comm extends Module {
   commSocket: WebSocket | null = null;
   retrySetup: NodeJS.Timeout | null = null;
 
-  constructor(baseModule: {
-    gameState: GameState;
-    identifier: string;
-    lobby?: MicroLobbyData;
-  }) {
-    super(baseModule);
-    this.initialize(settings.client.commAddress);
+  constructor() {
+    super();
+    this.initialize();
   }
 
-  updateGameState(updates: GameStateUpdate): boolean {
-    let updated = super.updateGameState(updates);
-    if (updated) {
-      this.commSend({
-        gameStateUpdate: updates,
-      });
-    }
-    return updated;
-  }
-
-  updateSettings(updates: SettingsUpdate): boolean {
-    let updated = super.updateSettings(updates);
-    if (updated) {
-      this.commSend({
-        settingsUpdate: updates,
-      });
-    }
-    return updated;
+  onSettingsUpdate(updates: SettingsUpdates): void {
+    this.initialize();
+    this.commSend({
+      settingsUpdates: updates,
+    });
   }
 
   updateLobby(update: LobbyUpdates): { isUpdated: boolean; events: LobbyUpdates[] } {
@@ -51,11 +32,12 @@ export class Comm extends Module {
     return updates;
   }
 
-  private initialize(address: string) {
+  private initialize() {
     if (this.retrySetup) {
       clearTimeout(this.retrySetup);
       this.retrySetup = null;
     }
+    let address = this.settings.values.client.commAddress;
     if (address && isValidUrl(address)) {
       this.emitInfo("Connecting to comm socket: " + address + "/" + this.identifier);
 
@@ -67,15 +49,14 @@ export class Comm extends Module {
       this.commSocket = new WebSocket(address + "/" + this.identifier);
       this.commSocket.onopen = () => {
         this.emitInfo("Connected to comm");
-        this.commSend({ settings });
-        this.commSend({ gameState: this.gameState });
+        this.commSend({ settings: this.settings.values });
+        // TODO Fix this
+        //this.commSend({ gameState: this.gameState });
       };
       this.commSocket.onclose = () => {
         this.emitInfo("Disconnected from comm");
         this.commSocket = null;
-        this.retrySetup = setTimeout(() => {
-          this.initialize(address);
-        }, 1000);
+        this.retrySetup = setTimeout(() => this.initialize, 1000);
       };
       this.commSocket.onerror = (error) => {
         this.emitError("Error in comm: " + error);
@@ -90,7 +71,7 @@ export class Comm extends Module {
   }
 
   commSend(data: HubReceive["data"]) {
-    if (settings.client.commAddress) {
+    if (this.settings.values.client.commAddress) {
       if (this.commSocket) {
         if (this.commSocket.readyState === this.commSocket.OPEN) {
           this.commSocket.send(JSON.stringify(data));

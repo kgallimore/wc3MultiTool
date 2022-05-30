@@ -1,12 +1,10 @@
 import { Module } from "../moduleBase";
-import type { GameState } from "../utility";
 import type { MicroLobbyData } from "wc3mt-lobby-container";
+
+import type { GameState } from "./../globals/gameState";
 
 import { Client, register, Presence } from "discord-rpc";
 import type { Regions } from "wc3mt-lobby-container";
-import { GameStateUpdate } from "../utility";
-
-import { settings } from "./../globals/settings";
 
 export interface NewActivity {
   details?: string;
@@ -24,12 +22,8 @@ export class DiscordRPC extends Module {
   private startTimestamp: number = 0;
   private previousActivity: NewActivity = { state: "OUT_OF_MENUS", inGame: false };
 
-  constructor(baseModule: {
-    gameState: GameState;
-    identifier: string;
-    lobby?: MicroLobbyData;
-  }) {
-    super(baseModule);
+  constructor() {
+    super();
     this.client = new Client({ transport: "ipc" });
     register(this.clientId);
     this.client.on("ready", () => {
@@ -39,7 +33,7 @@ export class DiscordRPC extends Module {
     this.client.login({ clientId: this.clientId }).catch(console.error);
   }
 
-  updateGameState(updates: GameStateUpdate): boolean {
+  /*updateGameState(updates: GameStateUpdate): boolean {
     let updated = super.updateGameState(updates);
     if (updated) {
       this.setActivity({
@@ -51,7 +45,7 @@ export class DiscordRPC extends Module {
       });
     }
     return updated;
-  }
+  }*/
 
   private setActivity(activity: NewActivity) {
     if (this.ready) {

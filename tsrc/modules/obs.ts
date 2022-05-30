@@ -1,26 +1,30 @@
 import { Module } from "../moduleBase";
-import type { GameState } from "../utility";
-import type { MicroLobbyData } from "wc3mt-lobby-container";
 
-import { settings } from "./../globals/settings";
+import { SettingsUpdates } from "./../globals/settings";
 
 import OBSWebSocket from "obs-websocket-js";
 
 export class OBSSocket extends Module {
-  socket: OBSWebSocket;
+  socket: OBSWebSocket | null = null;
 
-  constructor(
-    baseModule: {
-      gameState: GameState;
-      identifier: string;
-      lobby?: MicroLobbyData;
-    },
-    options?: { address?: string; password?: string }
-  ) {
-    super(baseModule);
+  constructor() {
+    super();
+    this.setup();
+  }
+
+  private setup() {
+    if (this.socket) {
+      this.socket.disconnect();
+      this.socket = null;
+    }
+    let address = this.settings.values.obs.address;
+    let password = this.settings.values.obs.token;
+    if (!address) {
+      return;
+    }
     this.socket = new OBSWebSocket();
     this.socket
-      .connect(options)
+      .connect({ address, password })
       .then(() => {
         console.log("OBS connection started");
       })
@@ -39,6 +43,12 @@ export class OBSSocket extends Module {
     this.socket.on("SwitchScenes", (data) => {
       console.log(`New Active Scene: ${data["scene-name"]}`);
     });
+  }
+
+  onSettingsUpdate(updates: SettingsUpdates) {
+    if (updates.obs?.address !== undefined || updates.obs?.token !== undefined) {
+      this.setup();
+    }
   }
 
   switchScene(scene: string) {

@@ -1,42 +1,37 @@
 import { Module } from "../moduleBase";
-import type { GameState } from "../utility";
 import type { MicroLobbyData } from "wc3mt-lobby-container";
+
+import { settings } from "./../globals/settings";
 
 import Discord from "discord.js";
 import type { mmdResults } from "../utility";
 import type { PlayerTeamsData } from "wc3mt-lobby-container";
 import { DeColorName } from "../utility";
 
-import { settings } from "./../globals/settings";
-
 export class DisClient extends Module {
   client: Discord.Client;
   announceChannel: Discord.TextChannel | null = null;
   chatChannel: Discord.TextChannel | null = null;
   dev: boolean;
-  #embed: Discord.MessageEmbed | null = null;
-  #sentEmbed: Discord.Message | null = null;
-  #sentEmbedData: PlayerTeamsData | null = null;
-  #lobbyState: { status: "started" | "closed" | "active" | "ended"; name: string } = {
+  private _embed: Discord.MessageEmbed | null = null;
+  private _sentEmbed: Discord.Message | null = null;
+  private _sentEmbedData: PlayerTeamsData | null = null;
+  private _lobbyState: {
+    status: "started" | "closed" | "active" | "ended";
+    name: string;
+  } = {
     status: "closed",
     name: "",
   };
-  #lobbyUpdates: { lastUpdate: number; update: PlayerTeamsData | null } = {
+  private _lobbyUpdates: { lastUpdate: number; update: PlayerTeamsData | null } = {
     lastUpdate: 0,
     update: null,
   };
-  _events: { [key: string]: any } = {};
-  constructor(
-    baseModule: {
-      gameState: GameState;
-      identifier: string;
-      lobby?: MicroLobbyData;
-    },
-    dev = false
-  ) {
-    super(baseModule);
+
+  constructor(dev: boolean = false) {
+    super();
     this.dev = dev;
-    if (!settings.discord.token) {
+    if (!settings.values.discord.token) {
       throw new Error("Token is empty");
     }
     this.client = new Discord.Client({
@@ -54,24 +49,27 @@ export class DisClient extends Module {
           name: "war.trenchguns.com",
           type: "WATCHING",
         });
-        if (settings.discord.chatChannel || settings.discord.announceChannel) {
+        if (
+          settings.values.discord.chatChannel ||
+          settings.values.discord.announceChannel
+        ) {
           this.client.channels.cache
             .filter((channel) => channel.isText())
             .forEach((channel) => {
               if (
-                (settings.discord.announceChannel &&
+                (settings.values.discord.announceChannel &&
                   (channel as Discord.TextChannel).name ===
-                    settings.discord.announceChannel) ||
-                channel.id === settings.discord.announceChannel
+                    settings.values.discord.announceChannel) ||
+                channel.id === settings.values.discord.announceChannel
               ) {
                 this.announceChannel = channel as Discord.TextChannel;
               }
               if (
-                (settings.discord.chatChannel &&
-                  settings.discord.chatChannel &&
+                (settings.values.discord.chatChannel &&
+                  settings.values.discord.chatChannel &&
                   (channel as Discord.TextChannel).name ===
-                    settings.discord.chatChannel) ||
-                channel.id === settings.discord.chatChannel
+                    settings.values.discord.chatChannel) ||
+                channel.id === settings.values.discord.chatChannel
               ) {
                 this.chatChannel = channel as Discord.TextChannel;
               }
@@ -84,13 +82,13 @@ export class DisClient extends Module {
 
     this.client.on("message", (msg) => {
       if (msg.channel === this.chatChannel && !msg.author.bot) {
-        if (settings.discord.bidirectionalChat) {
+        if (settings.values.discord.bidirectionalChat) {
           this.sendGameChat("(DC)" + msg.author.username + ": " + msg.content);
         }
       }
     });
 
-    this.client.login(settings.discord.token);
+    this.client.login(settings.values.discord.token);
   }
 
   updateChannel(channelName: string, channelType: "announceChannel" | "chatChannel") {
@@ -119,10 +117,10 @@ export class DisClient extends Module {
   }
 
   async sendNewLobby(lobbyData: MicroLobbyData, data: PlayerTeamsData) {
-    if (this.#embed && this.#sentEmbed) {
+    if (this._embed && this._sentEmbed) {
       await this.lobbyClosed();
     }
-    this.#embed = new Discord.MessageEmbed()
+    this._embed = new Discord.MessageEmbed()
       .setTitle(
         (lobbyData.region === "us" ? ":flag_us: " : ":flag_eu: ") +
           lobbyData.lobbyStatic.lobbyName
@@ -158,40 +156,40 @@ export class DisClient extends Module {
             : "") +
           (data.realPlayer ? `\n<t:${Math.floor(data.data.joinedAt / 1000)}:R>` : "")
       );
-      this.#embed?.addFields([{ name: teamName, value: combinedData.join("\n") ?? "" }]);
+      this._embed?.addFields([{ name: teamName, value: combinedData.join("\n") ?? "" }]);
     });
     this.client?.user?.setActivity({
       name: "Warcraft III - " + lobbyData.lobbyStatic.lobbyName,
       type: "PLAYING",
     });
-    this.#lobbyState.status = "active";
-    this.#lobbyState.name = lobbyData.lobbyStatic.lobbyName;
-    this.#sentEmbed = await this.sendMessage(
-      { embeds: [this.#embed] },
+    this._lobbyState.status = "active";
+    this._lobbyState.name = lobbyData.lobbyStatic.lobbyName;
+    this._sentEmbed = await this.sendMessage(
+      { embeds: [this._embed] },
       this.announceChannel
     );
   }
 
   async lobbyStarted() {
-    if (this.#embed && this.#sentEmbed && this.#lobbyState.status === "active") {
-      let newEmbed = new Discord.MessageEmbed(this.#embed);
+    if (this._embed && this._sentEmbed && this._lobbyState.status === "active") {
+      let newEmbed = new Discord.MessageEmbed(this._embed);
       newEmbed.setDescription("Game has started");
       newEmbed.setColor("#FF3D14");
       newEmbed.setURL("");
       newEmbed.addFields([
         { name: "Game Started", value: `<t:${Math.floor(Date.now() / 1000)}:R>` },
       ]);
-      this.#lobbyState.status = "started";
-      this.#sentEmbed.edit({ embeds: [newEmbed] });
-      if (this.#lobbyState.name)
-        this.sendMessage("Game started. End of chat for " + this.#lobbyState.name);
+      this._lobbyState.status = "started";
+      this._sentEmbed.edit({ embeds: [newEmbed] });
+      if (this._lobbyState.name)
+        this.sendMessage("Game started. End of chat for " + this._lobbyState.name);
     }
   }
 
   async lobbyEnded(results: mmdResults) {
-    if (this.#embed && this.#sentEmbed) {
-      if (this.#lobbyState.status === "started") {
-        let newEmbed = new Discord.MessageEmbed(this.#embed);
+    if (this._embed && this._sentEmbed) {
+      if (this._lobbyState.status === "started") {
+        let newEmbed = new Discord.MessageEmbed(this._embed);
         newEmbed.setDescription("Game has ended");
         newEmbed.setColor("#228B22");
         newEmbed.setURL("");
@@ -206,11 +204,11 @@ export class DisClient extends Module {
         newEmbed.addFields([
           { name: "Game Ended", value: `<t:${Math.floor(Date.now() / 1000)}:R>` },
         ]);
-        this.#sentEmbed.edit({ embeds: [newEmbed] });
+        this._sentEmbed.edit({ embeds: [newEmbed] });
       }
-      this.#sentEmbed = null;
-      this.#embed = null;
-      this.#lobbyState.status = "closed";
+      this._sentEmbed = null;
+      this._embed = null;
+      this._lobbyState.status = "closed";
       this.client?.user?.setActivity({
         name: "war.trenchguns.com",
         type: "WATCHING",
@@ -219,24 +217,24 @@ export class DisClient extends Module {
   }
 
   async lobbyClosed() {
-    if (this.#embed && this.#sentEmbed) {
-      if (this.#lobbyState.status !== "started" && this.#lobbyState.status !== "closed") {
-        let newEmbed = new Discord.MessageEmbed(this.#embed);
+    if (this._embed && this._sentEmbed) {
+      if (this._lobbyState.status !== "started" && this._lobbyState.status !== "closed") {
+        let newEmbed = new Discord.MessageEmbed(this._embed);
         newEmbed.setDescription("Lobby closed");
         newEmbed.setColor("#36454F");
         newEmbed.setURL("");
-        newEmbed.fields = this.#embed.fields.splice(0, 3);
-        this.#embed = newEmbed;
+        newEmbed.fields = this._embed.fields.splice(0, 3);
+        this._embed = newEmbed;
         newEmbed.addFields([
           { name: "Lobby Closed", value: `<t:${Math.floor(Date.now() / 1000)}:R>` },
         ]);
-        this.#sentEmbed.edit({ embeds: [newEmbed] });
-        if (this.#lobbyState.name)
-          this.sendMessage("Lobby left. End of chat for " + this.#lobbyState.name);
+        this._sentEmbed.edit({ embeds: [newEmbed] });
+        if (this._lobbyState.name)
+          this.sendMessage("Lobby left. End of chat for " + this._lobbyState.name);
       }
-      this.#sentEmbed = null;
-      this.#embed = null;
-      this.#lobbyState.status = "closed";
+      this._sentEmbed = null;
+      this._embed = null;
+      this._lobbyState.status = "closed";
       this.client?.user?.setActivity({
         name: "war.trenchguns.com",
         type: "WATCHING",
@@ -245,19 +243,19 @@ export class DisClient extends Module {
   }
 
   async updateDiscordLobby(data: PlayerTeamsData | false) {
-    if (this.#embed && this.#sentEmbed && this.#lobbyState.status === "active") {
-      if (data === this.#sentEmbedData) {
+    if (this._embed && this._sentEmbed && this._lobbyState.status === "active") {
+      if (data === this._sentEmbedData) {
         return;
       }
       let now = Date.now();
-      if (now - this.#lobbyUpdates.lastUpdate > 1000) {
-        this.#lobbyUpdates.lastUpdate = now;
-        let newEmbed = new Discord.MessageEmbed(this.#embed);
-        newEmbed.fields = this.#embed.fields.splice(0, 3);
-        this.#embed = newEmbed;
+      if (now - this._lobbyUpdates.lastUpdate > 1000) {
+        this._lobbyUpdates.lastUpdate = now;
+        let newEmbed = new Discord.MessageEmbed(this._embed);
+        newEmbed.fields = this._embed.fields.splice(0, 3);
+        this._embed = newEmbed;
         if (!data) {
-          if (this.#lobbyUpdates.update) {
-            data = this.#lobbyUpdates.update;
+          if (this._lobbyUpdates.update) {
+            data = this._lobbyUpdates.update;
           } else {
             console.error("No data to update lobby with");
             return;
@@ -280,15 +278,15 @@ export class DisClient extends Module {
           );
           newEmbed.addFields([{ name: teamName, value: combinedData.join("\n") ?? "" }]);
         });
-        this.#sentEmbed.edit({ embeds: [newEmbed] });
+        this._sentEmbed.edit({ embeds: [newEmbed] });
       } else {
         // Debounce
         if (data) {
-          this.#lobbyUpdates.update = data;
+          this._lobbyUpdates.update = data;
         }
         setTimeout(() => {
           this.updateDiscordLobby(false);
-        }, now - this.#lobbyUpdates.lastUpdate);
+        }, now - this._lobbyUpdates.lastUpdate);
       }
     }
   }

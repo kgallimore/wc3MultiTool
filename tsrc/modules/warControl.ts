@@ -1,5 +1,4 @@
 import { Module } from "../moduleBase";
-import type { GameState } from "../utility";
 import type { MicroLobbyData } from "wc3mt-lobby-container";
 
 import { getTargetRegion } from "../utility";
@@ -38,17 +37,8 @@ export class WarControl extends Module {
   isPackaged: boolean = false;
   appPath: string;
 
-  constructor(
-    baseModule: {
-      gameState: GameState;
-      identifier: string;
-      lobby?: MicroLobbyData;
-    },
-    warInstallLoc: string,
-    appPath: string,
-    isPackaged: boolean = false
-  ) {
-    super(baseModule);
+  constructor(warInstallLoc: string, appPath: string, isPackaged: boolean = false) {
+    super();
     this.warInstallLoc = warInstallLoc;
     this.appPath = appPath;
     this.isPackaged = isPackaged;
@@ -68,7 +58,7 @@ export class WarControl extends Module {
         this.emitUpdateGameState("action", "nothing");
         return true;
       }
-      if (settings.client.alternateLaunch) {
+      if (settings.values.client.alternateLaunch) {
         //shell.openPath(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe -launch");
         if (callCount === 0 || callCount % 15 === 0) {
           exec(
@@ -184,15 +174,19 @@ export class WarControl extends Module {
       searchRegion.height = searchRegion.height * 0.5;
       searchRegion.width = searchRegion.width * 0.4;
       searchRegion.top = searchRegion.top + searchRegion.height;
-      if (!region && settings.autoHost.regionChange) {
+      if (!region && settings.values.autoHost.regionChange) {
         region = getTargetRegion(
-          settings.autoHost.regionChangeTimeEU,
-          settings.autoHost.regionChangeTimeNA
+          settings.values.autoHost.regionChangeTimeEU,
+          settings.values.autoHost.regionChangeTimeNA
         );
       }
       let targetRegion = { asia: 1, eu: 2, us: 3, usw: 3, "": 0 }[region];
       try {
-        if (targetRegion && targetRegion > 0 && this.gameState.selfRegion !== region) {
+        if (
+          targetRegion &&
+          targetRegion > 0 &&
+          this.gameState.values.selfRegion !== region
+        ) {
           this.emitInfo(`Changing region to ${region}`);
           let changeRegionPosition = await screen.waitFor(
             imageResource("changeRegion.png"),
