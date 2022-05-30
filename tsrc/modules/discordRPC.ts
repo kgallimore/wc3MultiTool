@@ -1,5 +1,4 @@
 import { Module } from "../moduleBase";
-import type { MicroLobbyData } from "wc3mt-lobby-container";
 
 import type { GameState } from "./../globals/gameState";
 
@@ -33,19 +32,15 @@ export class DiscordRPC extends Module {
     this.client.login({ clientId: this.clientId }).catch(console.error);
   }
 
-  /*updateGameState(updates: GameStateUpdate): boolean {
-    let updated = super.updateGameState(updates);
-    if (updated) {
-      this.setActivity({
-        state: this.gameState.menuState,
-        details: this.lobby?.lobbyStatic.lobbyName,
-        region: this.gameState.selfRegion,
-        inGame: this.gameState.inGame,
-        //currentPlayers: this.lobby?.nonSpecPlayers.length,
-      });
-    }
-    return updated;
-  }*/
+  onGameStateUpdate(updates: Partial<GameState>): void {
+    this.setActivity({
+      state: this.gameState.values.menuState,
+      details: this.lobby?.microLobby?.lobbyStatic.lobbyName,
+      region: this.gameState.values.selfRegion,
+      inGame: this.gameState.values.inGame,
+      //currentPlayers: this.lobby?.nonSpecPlayers.length,
+    });
+  }
 
   private setActivity(activity: NewActivity) {
     if (this.ready) {

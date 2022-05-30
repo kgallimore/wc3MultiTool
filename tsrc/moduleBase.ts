@@ -47,9 +47,9 @@ export class Module extends EventEmitter {
     return false;
   }*/
 
-  onGameStateUpdate(updates: Partial<GameState>) {}
+  protected onGameStateUpdate(updates: Partial<GameState>) {}
 
-  onSettingsUpdate(updates: SettingsUpdates) {}
+  protected onSettingsUpdate(updates: SettingsUpdates) {}
 
   updateLobby(update: LobbyUpdates): {
     isUpdated: boolean;

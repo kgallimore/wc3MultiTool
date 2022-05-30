@@ -1,5 +1,4 @@
 import { Module } from "../moduleBase";
-import type { MicroLobbyData } from "wc3mt-lobby-container";
 
 import { getTargetRegion } from "../utility";
 import { shell } from "electron";

@@ -1,6 +1,7 @@
 import { Module } from "../moduleBase";
 
 import { settings, SettingsUpdates } from "./../globals/settings";
+import { GameState } from "./../globals/gameState";
 
 import { WebSocket } from "ws";
 import { HubReceive } from "../utility";
@@ -19,15 +20,11 @@ export class HubControl extends Module {
     this.socketSetup();
   }
 
-  /*updateGameState(updates: GameStateUpdate): boolean {
-    let updated = super.updateGameState(updates);
-    if (updated) {
-      this.sendToHub({
-        gameStateUpdate: updates,
-      });
-    }
-    return updated;
-  }*/
+  onGameStateUpdate(updates: Partial<GameState>): void {
+    this.sendToHub({
+      gameStateUpdates: updates,
+    });
+  }
 
   onSettingsUpdate(updates: SettingsUpdates): void {
     this.sendToHub({

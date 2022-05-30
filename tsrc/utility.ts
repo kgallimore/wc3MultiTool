@@ -149,7 +149,7 @@ export interface HubReceive {
     settings?: AppSettings;
     gameState?: GameState;
     settingsUpdates?: SettingsUpdates;
-    gameStateUpdate?: Partial<GameState>;
+    gameStateUpdates?: Partial<GameState>;
     heartbeat?: true;
   };
   appVersion: string;
