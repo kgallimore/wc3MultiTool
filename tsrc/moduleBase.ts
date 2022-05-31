@@ -1,5 +1,6 @@
 import EventEmitter from "events";
 import type { LobbyUpdates } from "wc3mt-lobby-container";
+import type { WindowReceive } from "./utility";
 
 import { gameState, GameState } from "./globals/gameState";
 import { settings } from "./globals/settings";
@@ -19,6 +20,7 @@ export interface EmitEvents {
   sendGameMessage?: { type: string; payload: any };
   newTip?: SEEventEvent | SEEventEvent[];
   notification?: { title: string; body: string };
+  sendWindow?: { messageType: WindowReceive["messageType"]; data: WindowReceive["data"] };
 }
 
 /**
@@ -69,6 +71,13 @@ export class Module extends EventEmitter {
 
   protected emitEvent(data: EmitEvents) {
     this.emit("event", data);
+  }
+
+  protected emitWindow(sendWindow: {
+    messageType: WindowReceive["messageType"];
+    data: WindowReceive["data"];
+  }) {
+    this.emitEvent({ sendWindow });
   }
 
   protected emitError(error: string) {
