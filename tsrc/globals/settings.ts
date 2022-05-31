@@ -137,24 +137,6 @@ class AppSettingsContainer extends EventEmitter {
   // TODO Get that returns settings with sensitive fields removed
   private _values: AppSettings;
 
-  // TODO update all modules
-  /*if (key === "performanceMode") {
-        togglePerformanceMode(value);
-      }
-      if (key === "startOnLogin") {
-        app.setLoginItemSettings({
-          openAtLogin: value,
-        });
-      }
-      sendSocket(setting + "Settings", settings.values[setting]);
-      sendWindow("updateSettingSingle", {
-        update: {
-          setting,
-          key,
-          value,
-        },
-      });*/
-
   constructor() {
     super();
     this._values = <AppSettings>{

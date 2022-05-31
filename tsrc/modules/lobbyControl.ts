@@ -1,8 +1,5 @@
 import { Module } from "../moduleBase";
 
-import type { SettingsUpdates } from "./../globals/settings";
-import type { GameState } from "./../globals/gameState";
-
 import fetch from "cross-fetch";
 import {
   MicroLobby,
@@ -21,6 +18,7 @@ require = require("esm")(module);
 var { Combination, Permutation } = require("js-combinatorics");
 
 export class LobbyControl extends Module {
+  // TODO move autohost logic to a separate module
   private refreshing: boolean = false;
   private staleTimer: NodeJS.Timeout | null = null;
 
@@ -49,22 +47,24 @@ export class LobbyControl extends Module {
         try {
           this.microLobby = new MicroLobby({ region, payload });
           if (this.settings.values.elo.type !== "off") {
-            this.eloMapName(payload.mapData.mapName).then((eloMapName) => {
-              this.eloName = eloMapName.name;
-              if (eloMapName.elo) {
-                if (this.microLobby) {
-                  this.microLobby.statsAvailable = eloMapName.elo;
-                  Object.values(this.microLobby.slots)
-                    .filter(
-                      (slot) =>
-                        slot.slotStatus === 2 && (slot.playerRegion || slot.isSelf)
-                    )
-                    .forEach((slot) => {
-                      this.fetchStats(slot.name);
-                    });
+            this.eloMapName(payload.mapData.mapName, this.settings.values.elo.type).then(
+              (eloMapName) => {
+                this.eloName = eloMapName.name;
+                if (eloMapName.elo) {
+                  if (this.microLobby) {
+                    this.microLobby.statsAvailable = eloMapName.elo;
+                    Object.values(this.microLobby.slots)
+                      .filter(
+                        (slot) =>
+                          slot.slotStatus === 2 && (slot.playerRegion || slot.isSelf)
+                      )
+                      .forEach((slot) => {
+                        this.fetchStats(slot.name);
+                      });
+                  }
                 }
               }
-            });
+            );
           }
           if (
             payload.mapData.mapPath.split(/\/|\\/).slice(-1)[0] !==
@@ -220,8 +220,11 @@ export class LobbyControl extends Module {
     this.microLobby = null;
   }
 
-  async eloMapName(mapName: string) {
-    if (this.settings.values.elo.type === "wc3stats") {
+  async eloMapName(
+    mapName: string,
+    type: "off" | "wc3stats" | "pyroTD"
+  ): Promise<{ name: string; elo: boolean }> {
+    if (type === "wc3stats") {
       if (mapName.match(/(HLW)/i)) {
         return { name: "HLW", elo: true };
       } else if (mapName.match(/(pyro\s*td\s*league)/i)) {

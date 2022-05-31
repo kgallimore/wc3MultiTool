@@ -39,6 +39,9 @@ class WarControl extends Module {
 
   constructor() {
     super();
+    screen.height().then((height) => {
+      this.setResourceDir(height);
+    });
     this.warInstallLoc = store.get("warInstallLoc") as string;
     this.appPath = app.getAppPath();
     this.isPackaged = app.isPackaged;
@@ -261,6 +264,25 @@ class WarControl extends Module {
         console.log(`${processName} is not running`);
         return false;
       }
+    }
+  }
+
+  async exitGame(callCount: number = 0): Promise<boolean> {
+    if (await this.isWarcraftOpen()) {
+      if (callCount < 5) {
+        return await this.forceQuitWar();
+      } else if (this.gameState.values.menuState === "LOADING_SCREEN") {
+        this.emitInfo("Warcraft is loading game, forcing quit");
+        return await this.forceQuitWar();
+      } else {
+        this.emitInfo("Sending Exit Game");
+        this.emitMessage("ExitGame", {});
+        await sleep(200);
+        return this.exitGame(callCount + 1);
+      }
+    } else {
+      this.emitInfo("Warcraft is no longer open.");
+      return true;
     }
   }
 
