@@ -4,6 +4,8 @@ import type { AppSettings, SettingsKeys } from "./globals/settings";
 import type { GameState } from "./globals/gameState";
 import type { SettingsUpdates } from "./globals/settings";
 
+import type { FetchListOptions } from "./modules/banWhiteList";
+
 export interface WindowReceive {
   messageType:
     | "action"
@@ -100,13 +102,7 @@ export interface WindowSend {
     player: string;
     type: "banList" | "whiteList";
   };
-  fetch?: {
-    page: number;
-    type: "whiteList" | "banList";
-    sort?: FetchWhiteBanListSortOptions;
-    sortOrder?: "ASC" | "DESC";
-    activeOnly?: boolean;
-  };
+  fetch?: FetchListOptions;
   exportImport?: {
     type: "banList" | "whiteList";
   };
@@ -116,13 +112,6 @@ export interface WindowSend {
   };
   lobbyOptions?: {};
 }
-
-export type FetchWhiteBanListSortOptions =
-  | "id"
-  | "username"
-  | "admin"
-  | "region"
-  | "reason";
 
 export interface TeamData {
   data: { [key: string]: number };

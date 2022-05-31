@@ -66,6 +66,7 @@ import {
 
 import { AutoHostSettings, settings } from "./globals/settings";
 import { GameState, gameState } from "./globals/gameState";
+import { clientState } from "./globals/clientState";
 
 import {
   GameClientLobbyPayload,
@@ -115,16 +116,7 @@ if (!gotLock) {
   var clientWebSocket: WebSocket;
   var voteTimer: NodeJS.Timeout | null;
   var openLobbyParams: OpenLobbyParams | null;
-  // Get the tableVersion, if it's not set then we are going to create the most up to date table, so we set it to the most recent version.
-  let tableVersion: number = store.get("tableVersion") as number;
-  if (!tableVersion) {
-    tableVersion = 2;
-    store.set("tableVersion", 2);
-  }
-  var clientState: { tableVersion: number; latestUploadedReplay: number } = {
-    tableVersion,
-    latestUploadedReplay: (store.get("latestUploadedReplay") as number) ?? 0,
-  };
+
   var sendingInGameChat: { active: boolean; queue: Array<string> } = {
     active: false,
     queue: [],
@@ -737,12 +729,15 @@ if (!gotLock) {
               }
             }
           });
-        if (mostModified.file && mostModified.mtime > clientState.latestUploadedReplay) {
+        if (
+          mostModified.file &&
+          mostModified.mtime > clientState.values.latestUploadedReplay
+        ) {
           analyzeGame(mostModified.file).then((results) => {
             if (discSingle) discSingle.lobbyEnded(results);
           });
-          clientState.latestUploadedReplay = mostModified.mtime;
-          store.set("latestUploadedReplay", clientState.latestUploadedReplay);
+          clientState.updateClientState({ latestUploadedReplay: mostModified.mtime });
+          store.set("latestUploadedReplay", clientState.values.latestUploadedReplay);
           if (settings.values.elo.type === "wc3stats") {
             let form = new FormData();
             form.append("replay", fs.createReadStream(mostModified.file));
@@ -2195,16 +2190,7 @@ if (!gotLock) {
         break;
       case "fetchWhiteBanList":
         if (args.fetch) {
-          console.log(args.fetch);
-          const whiteBanList = db
-            .prepare(
-              `SELECT * FROM ${args.fetch.type} ${
-                args.fetch.activeOnly ? "WHERE removal_date IS NULL" : ""
-              } ORDER BY ${args.fetch.sort ?? "id"} ${
-                args.fetch?.sortOrder ?? "ASC"
-              } LIMIT 10 OFFSET ?`
-            )
-            .all((args.fetch.page ?? 0) * 10);
+          const whiteBanList = banWhiteListSingle.fetchList(args.fetch);
           sendWindow("fetchedWhiteBanList", {
             fetched: {
               type: args.fetch.type,
@@ -2289,9 +2275,7 @@ if (!gotLock) {
         break;
       case "exportWhitesBans":
         if (args.exportImport) {
-          let list = db
-            .prepare(`SELECT * FROM ${args.exportImport.type} WHERE removal_date IS NULL`)
-            .all();
+          let list = banWhiteListSingle.fetchList({ type: args.exportImport.type });
           if (args.exportImport.type === "banList") {
             let path = app.getPath("documents") + "\\bans.json";
             fs.writeFileSync(path, JSON.stringify(list));
@@ -2425,12 +2409,7 @@ if (!gotLock) {
           log.info("Player left: " + update.playerLeft);
         } else if (update.playerJoined) {
           if (update.playerJoined.name) {
-            db.open;
-            const row = db
-              .prepare(
-                "SELECT * FROM banList WHERE username = ? AND removal_date IS NULL"
-              )
-              .get(update.playerJoined.name);
+            let row = banWhiteListSingle.isBanned(update.playerJoined.name);
             if (row) {
               LobbySingle.banSlot(update.playerJoined.slot);
               sendChatMessage(
@@ -2447,20 +2426,16 @@ if (!gotLock) {
               return;
             }
             if (settings.values.autoHost.whitelist) {
-              if (update.playerJoined.name !== gameState.values.selfBattleTag) {
-                const row = db
-                  .prepare(
-                    "SELECT * FROM whiteList WHERE username = ? AND removal_date IS NULL"
-                  )
-                  .get(update.playerJoined.name);
-                if (!row) {
-                  LobbySingle.banSlot(update.playerJoined.slot);
-                  sendChatMessage(update.playerJoined.name + " is not whitelisted");
-                  log.info(
-                    "Kicked " + update.playerJoined.name + " for not being whitelisted"
-                  );
-                  return;
-                }
+              if (
+                update.playerJoined.name !== gameState.values.selfBattleTag &&
+                !banWhiteListSingle.isWhiteListed(update.playerJoined.name)
+              ) {
+                LobbySingle.banSlot(update.playerJoined.slot);
+                sendChatMessage(update.playerJoined.name + " is not whitelisted");
+                log.info(
+                  "Kicked " + update.playerJoined.name + " for not being whitelisted"
+                );
+                return;
               }
             }
             log.info("Player joined: " + update.playerJoined.name);

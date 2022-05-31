@@ -5,6 +5,7 @@ import type { WindowReceive } from "./utility";
 import { gameState, GameState } from "./globals/gameState";
 import { settings } from "./globals/settings";
 import { identifier } from "./globals/identifier";
+import { clientState } from "./globals/clientState";
 
 import type { SEEventEvent } from "./modules/stream";
 import type { LobbyControl } from "./modules/lobbyControl";
@@ -34,6 +35,7 @@ export class Module extends EventEmitter {
   protected gameState = gameState;
   protected identifier = identifier;
   protected settings = settings;
+  protected clientState = clientState;
   protected lobby: LobbyControl | null = null;
 
   constructor(includeLobby: boolean = true) {
