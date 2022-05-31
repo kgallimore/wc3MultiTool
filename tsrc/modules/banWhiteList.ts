@@ -7,6 +7,21 @@ import { app } from "electron";
 import Store from "electron-store";
 const store = new Store();
 
+export type FetchWhiteBanListSortOptions =
+  | "id"
+  | "username"
+  | "admin"
+  | "region"
+  | "reason";
+
+export interface FetchListOptions {
+  type: "whiteList" | "banList";
+  page?: number;
+  sort?: FetchWhiteBanListSortOptions;
+  sortOrder?: "ASC" | "DESC";
+  activeOnly?: boolean;
+}
+
 class banWhiteList extends Module {
   db = new sqlite3(app.getPath("userData") + "/wc3mt.db");
 
@@ -24,7 +39,7 @@ class banWhiteList extends Module {
     this.db.exec(
       "CREATE TABLE IF NOT EXISTS adminList(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, add_date DATETIME default current_timestamp NOT NULL, admin TEXT NOT NULL, region TEXT NOT NULL, role TEXT NOT NULL)"
     );
-    if (clientState.tableVersion < 1) {
+    if (this.clientState.values.tableVersion < 1) {
       this.emitInfo("Updating tables");
       try {
         this.db.exec("ALTER TABLE banList rename to banListBackup");
@@ -36,9 +51,9 @@ class banWhiteList extends Module {
         this.emitInfo("Already at table version 1");
       }
       store.set("tableVersion", 1);
-      clientState.tableVersion = 1;
+      this.clientState.updateClientState({ tableVersion: 1 });
     }
-    if (clientState.tableVersion < 2) {
+    if (this.clientState.values.tableVersion < 2) {
       this.emitInfo("Updating tables");
       try {
         this.db.exec("ALTER TABLE whiteList RENAME COLUMN white_date TO add_date");
@@ -49,7 +64,7 @@ class banWhiteList extends Module {
         this.emitError("Already at table version 2");
       }
       store.set("tableVersion", 2);
-      clientState.tableVersion = 2;
+      this.clientState.updateClientState({ tableVersion: 2 });
     }
   }
 
@@ -233,6 +248,35 @@ class banWhiteList extends Module {
       }
     }
     return false;
+  }
+
+  isWhiteListed(player: string): boolean {
+    const row = this.db
+      .prepare("SELECT * FROM whiteList WHERE username = ? AND removal_date IS NULL")
+      .get(player);
+    return !!row;
+  }
+
+  isBanned(player: string): { reason: string } | null {
+    const row = this.db
+      .prepare("SELECT * FROM banList WHERE username = ? AND removal_date IS NULL")
+      .get(player);
+    return row;
+  }
+
+  fetchList(options: FetchListOptions) {
+    let prep = this.db.prepare(
+      `SELECT * FROM ${options.type} ${
+        options.activeOnly ? "WHERE removal_date IS NULL" : ""
+      } ORDER BY ${options.sort ?? "id"} ${options.sortOrder ?? "ASC"} ${
+        options.page !== undefined ? "LIMIT 10 OFFSET ?" : ""
+      }`
+    );
+    if (options.page !== undefined) {
+      return prep.all(options.page * 10);
+    } else {
+      return prep.all();
+    }
   }
 }
 
