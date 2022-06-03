@@ -1,4 +1,4 @@
-import EventEmitter from "events";
+import { Global } from "./globalBase";
 import type { LobbyUpdates } from "wc3mt-lobby-container";
 import type { WindowReceive } from "./utility";
 
@@ -6,6 +6,8 @@ import { gameState, GameState } from "./globals/gameState";
 import { settings } from "./globals/settings";
 import { identifier } from "./globals/identifier";
 import { clientState } from "./globals/clientState";
+import { gameSocket, GameSocketEvents } from "./globals/gameSocket";
+import { webUISocket, WebUIEvents } from "./globals/webUISocket";
 
 import type { SEEventEvent } from "./modules/stream";
 import type { LobbyControl } from "./modules/lobbyControl";
@@ -14,8 +16,6 @@ import type { SettingsUpdates } from "./globals/settings";
 
 export interface EmitEvents {
   lobbyUpdate?: LobbyUpdates;
-  error?: string;
-  info?: string;
   sendGameChat?: string;
   newProgress?: { step: string; progress: number };
   sendGameMessage?: { type: string; payload: any };
@@ -31,17 +31,21 @@ export interface EmitEvents {
  * @class Module
  * @extends {EventEmitter}
  */
-export class Module extends EventEmitter {
+export class Module extends Global {
   protected gameState = gameState;
   protected identifier = identifier;
   protected settings = settings;
   protected clientState = clientState;
+  protected webUISocket = webUISocket;
+  protected gameSocket = gameSocket;
   protected lobby: LobbyControl | null = null;
 
   constructor(includeLobby: boolean = true) {
     super();
     this.settings.on("settingsUpdate", this.onSettingsUpdate.bind(this));
     this.gameState.on("gameStateUpdates", this.onGameStateUpdate.bind(this));
+    this.webUISocket.on("event", this.onGameStateUpdate.bind(this));
+    this.gameSocket.on("event", this.onGameStateUpdate.bind(this));
     if (includeLobby) {
       import("./modules/lobbyControl").then((exports) => {
         this.lobby = exports.LobbySingle;
@@ -71,31 +75,27 @@ export class Module extends EventEmitter {
 
   protected onLobbyUpdate(updates: LobbyUpdates) {}
 
+  protected onGameSocketEvent(events: GameSocketEvents) {}
+
+  protected onWebUISocketEvent(events: WebUIEvents) {}
+
   protected emitEvent(data: EmitEvents) {
     this.emit("event", data);
   }
 
-  protected emitWindow(sendWindow: {
+  protected sendWindow(sendWindow: {
     messageType: WindowReceive["messageType"];
     data: WindowReceive["data"];
   }) {
     this.emitEvent({ sendWindow });
   }
 
-  protected emitError(error: string) {
-    this.emitEvent({ error });
-  }
-
-  protected emitInfo(info: string) {
-    this.emitEvent({ info });
-  }
-
   protected sendGameChat(sendGameChat: string) {
     this.emitEvent({ sendGameChat });
   }
 
-  protected emitProgress(step: string, progress: number) {
-    this.emitEvent({ newProgress: { step, progress } });
+  protected emitProgress(newProgress?: { step: string; progress: number }) {
+    this.emitEvent({ newProgress });
   }
 
   protected emitMessage(type: string, payload: any) {

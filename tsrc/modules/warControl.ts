@@ -54,10 +54,10 @@ class WarControl extends Module {
     this.gameState.updateGameState({ action: "openingWarcraft" });
     try {
       if (callCount > 60) {
-        this.emitError("Failed to open Warcraft after 60 attempts");
+        this.error("Failed to open Warcraft after 60 attempts");
       }
       if (await this.isWarcraftOpen()) {
-        this.emitInfo("Warcraft is now open");
+        this.info("Warcraft is now open");
         this.gameState.updateGameState({ action: "nothing" });
         return true;
       }
@@ -86,7 +86,7 @@ class WarControl extends Module {
           return await this.openWarcraft(region, callCount + 1);
         }
         if (title === "Blizzard Battle.net Login") {
-          this.emitError("A login is required to open Warcraft");
+          this.error("A login is required to open Warcraft");
           this.gameState.updateGameState({ action: "nothing" });
           return false;
         }
@@ -107,13 +107,13 @@ class WarControl extends Module {
       if (activeWindowTitle !== "Battle.net") {
         let bnetRegion = await battleNetWindow.region;
         if (bnetRegion.left < -bnetRegion.width || bnetRegion.top < -bnetRegion.height) {
-          this.emitInfo("Battle.net window minimized. Attempting to open the window");
+          this.info("Battle.net window minimized. Attempting to open the window");
           shell.openPath(this.warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe");
           await sleep(1000);
           return await this.openWarcraft(region, callCount + 1, false);
         }
         if (!focusAttempted) {
-          this.emitInfo("Attempting to focus Battle.net");
+          this.info("Attempting to focus Battle.net");
           if (this.isPackaged) {
             shell.openPath(join(this.appPath, "../../focusWar.js"));
           } else {
@@ -122,7 +122,7 @@ class WarControl extends Module {
           await sleep(1000);
           return await this.openWarcraft(region, callCount + 1, true);
         } else {
-          this.emitError("Failed to focus Battle.net");
+          this.error("Failed to focus Battle.net");
           this.gameState.updateGameState({ action: "nothing" });
           return false;
         }
@@ -131,7 +131,7 @@ class WarControl extends Module {
       searchRegion.width = searchRegion.width * 0.4;
       if (searchRegion.left < 0) {
         //Battle.net window left of screen
-        this.emitInfo("Move Battle.net window right");
+        this.info("Move Battle.net window right");
         let targetPosition = new Point(
           searchRegion.left + searchRegion.width - searchRegion.width * 0.12,
           searchRegion.top + 10
@@ -144,7 +144,7 @@ class WarControl extends Module {
       }
       if (searchRegion.left + searchRegion.width > screenSize.width) {
         //Battle.net window right of screen
-        this.emitInfo("Move Battle.net window left");
+        this.info("Move Battle.net window left");
         let targetPosition = new Point(searchRegion.left + 10, searchRegion.top + 10);
         await mouse.setPosition(targetPosition);
         await mouse.pressButton(0);
@@ -155,7 +155,7 @@ class WarControl extends Module {
       }
       if (searchRegion.top + searchRegion.height > screenSize.height) {
         //Battle.net window bottom of screen
-        this.emitInfo("Move Battle.net window up");
+        this.info("Move Battle.net window up");
         let targetPosition = new Point(
           searchRegion.left + searchRegion.width / 2,
           searchRegion.top + 10
@@ -169,7 +169,7 @@ class WarControl extends Module {
       }
       if (searchRegion.top < 0) {
         // Battle.net window top of screen
-        this.emitError("Battle.net window in inaccessible region.");
+        this.error("Battle.net window in inaccessible region.");
         await this.forceQuitProcess("Battle.net.exe");
         return await this.openWarcraft(region, callCount + 1);
       }
@@ -190,7 +190,7 @@ class WarControl extends Module {
           targetRegion > 0 &&
           this.gameState.values.selfRegion !== region
         ) {
-          this.emitInfo(`Changing region to ${region}`);
+          this.info(`Changing region to ${region}`);
           let changeRegionPosition = await screen.waitFor(
             imageResource("changeRegion.png"),
             30000,
@@ -211,7 +211,7 @@ class WarControl extends Module {
           );
           await mouse.setPosition(newRegionPosition);
           await mouse.leftClick();
-          this.emitInfo(`Changed region to ${region}`);
+          this.info(`Changed region to ${region}`);
         }
         let playRegionCenter = await centerOf(
           screen.waitFor(imageResource("play.png"), 30000, 100, {
@@ -221,25 +221,25 @@ class WarControl extends Module {
         );
         await mouse.setPosition(playRegionCenter);
         await mouse.leftClick();
-        this.emitInfo("Found and clicked play");
+        this.info("Found and clicked play");
         for (let i = 0; i < 10; i++) {
           if (await this.isWarcraftOpen()) {
-            this.emitInfo("Warcraft is now open.");
+            this.info("Warcraft is now open.");
             this.gameState.updateGameState({ action: "nothing" });
             return true;
           }
           await sleep(100);
         }
       } catch (e) {
-        this.emitError("Failed image recognition: " + e);
+        this.error("Failed image recognition: " + e);
         // Add 5 to call count since OCR takes longer
         return await this.openWarcraft(region, callCount + 15);
       }
-      this.emitError("Failed to open Warcraft.");
+      this.error("Failed to open Warcraft.");
       this.gameState.updateGameState({ action: "nothing" });
       return false;
     } catch (e) {
-      this.emitError(e as string);
+      this.error(e as string);
       this.gameState.updateGameState({ action: "nothing" });
       return false;
     }
@@ -254,7 +254,7 @@ class WarControl extends Module {
       `tasklist /NH /FI "STATUS eq RUNNING" /FI "USERNAME ne N/A" /FI "IMAGENAME eq ${processName}"`
     );
     if (stderr) {
-      this.emitError(stderr);
+      this.error(stderr);
       return false;
     } else {
       if (stdout.includes(processName)) {
@@ -272,16 +272,16 @@ class WarControl extends Module {
       if (callCount < 5) {
         return await this.forceQuitWar();
       } else if (this.gameState.values.menuState === "LOADING_SCREEN") {
-        this.emitInfo("Warcraft is loading game, forcing quit");
+        this.info("Warcraft is loading game, forcing quit");
         return await this.forceQuitWar();
       } else {
-        this.emitInfo("Sending Exit Game");
+        this.info("Sending Exit Game");
         this.emitMessage("ExitGame", {});
         await sleep(200);
         return this.exitGame(callCount + 1);
       }
     } else {
-      this.emitInfo("Warcraft is no longer open.");
+      this.info("Warcraft is no longer open.");
       return true;
     }
   }
@@ -292,11 +292,11 @@ class WarControl extends Module {
 
   async forceQuitProcess(processName: string): Promise<boolean> {
     if (await this.checkProcess(processName)) {
-      this.emitInfo(processName + " is still running, forcing quit");
+      this.info(processName + " is still running, forcing quit");
       try {
         let { stdout, stderr } = await exec(`taskkill /F /IM "${processName}"`);
         if (stderr) {
-          this.emitError(stderr);
+          this.error(stderr);
           return true;
         }
       } catch (e) {
@@ -306,7 +306,7 @@ class WarControl extends Module {
       await sleep(200);
       return await this.forceQuitWar();
     } else {
-      this.emitInfo(processName + " force quit.");
+      this.info(processName + " force quit.");
       return true;
     }
   }

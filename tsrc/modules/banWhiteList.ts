@@ -40,7 +40,7 @@ class banWhiteList extends Module {
       "CREATE TABLE IF NOT EXISTS adminList(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, add_date DATETIME default current_timestamp NOT NULL, admin TEXT NOT NULL, region TEXT NOT NULL, role TEXT NOT NULL)"
     );
     if (this.clientState.values.tableVersion < 1) {
-      this.emitInfo("Updating tables");
+      this.info("Updating tables");
       try {
         this.db.exec("ALTER TABLE banList rename to banListBackup");
         this.db.exec(
@@ -48,20 +48,20 @@ class banWhiteList extends Module {
         );
         this.db.exec("INSERT INTO banList SELECT * FROM banListBackup;");
       } catch (e) {
-        this.emitInfo("Already at table version 1");
+        this.info("Already at table version 1");
       }
       store.set("tableVersion", 1);
       this.clientState.updateClientState({ tableVersion: 1 });
     }
     if (this.clientState.values.tableVersion < 2) {
-      this.emitInfo("Updating tables");
+      this.info("Updating tables");
       try {
         this.db.exec("ALTER TABLE whiteList RENAME COLUMN white_date TO add_date");
         this.db.exec("ALTER TABLE whiteList RENAME COLUMN unwhite_date TO removal_date");
         this.db.exec("ALTER TABLE banList RENAME COLUMN ban_date TO add_date");
         this.db.exec("ALTER TABLE banList RENAME COLUMN unban_date TO removal_date");
       } catch (e) {
-        this.emitError("Already at table version 2");
+        this.error("Already at table version 2");
       }
       store.set("tableVersion", 2);
       this.clientState.updateClientState({ tableVersion: 2 });
@@ -76,10 +76,8 @@ class banWhiteList extends Module {
             "INSERT INTO banList (username, admin, region, reason) VALUES (?, ?, ?, ?)"
           )
           .run(player, admin, region, reason);
-        this.emitInfo(
-          "Banned " + player + " by " + admin + (reason ? " for " + reason : "")
-        );
-        this.emitWindow({
+        this.info("Banned " + player + " by " + admin + (reason ? " for " + reason : ""));
+        this.sendWindow({
           messageType: "action",
           data: {
             value: "Banned " + player + " by " + admin + (reason ? " for " + reason : ""),
@@ -90,7 +88,7 @@ class banWhiteList extends Module {
           this.sendGameChat(player + " banned" + (reason ? " for " + reason : ""));
         }
       } else {
-        this.emitError("Failed to ban, invalid battleTag: " + player);
+        this.error("Failed to ban, invalid battleTag: " + player);
       }
     }
   }
@@ -103,10 +101,10 @@ class banWhiteList extends Module {
             "INSERT INTO whiteList (username, admin, region, reason) VALUES (?, ?, ?, ?)"
           )
           .run(player, admin, region, reason);
-        this.emitInfo(
+        this.info(
           "Whitelisted " + player + " by " + admin + (reason ? " for " + reason : "")
         );
-        this.emitWindow({
+        this.sendWindow({
           messageType: "action",
           data: {
             value:
@@ -117,7 +115,7 @@ class banWhiteList extends Module {
           this.sendGameChat(player + " whitelisted" + (reason ? " for " + reason : ""));
         }
       } else {
-        this.emitError("Failed to whitelist, invalid battleTag: " + player);
+        this.error("Failed to whitelist, invalid battleTag: " + player);
       }
     }
   }
@@ -128,8 +126,8 @@ class banWhiteList extends Module {
         "UPDATE whiteList SET removal_date = DateTime('now') WHERE username = ? AND removal_date IS NULL"
       )
       .run(player);
-    this.emitInfo("Un-whitelisted " + player + " by " + admin);
-    this.emitWindow({
+    this.info("Un-whitelisted " + player + " by " + admin);
+    this.sendWindow({
       messageType: "action",
       data: { value: "Un-whitelisted " + player + " by " + admin },
     });
@@ -141,8 +139,8 @@ class banWhiteList extends Module {
         "UPDATE banList SET removal_date = DateTime('now') WHERE username = ? AND removal_date IS NULL"
       )
       .run(player);
-    this.emitInfo("Unbanned " + player + " by " + admin);
-    this.emitWindow({
+    this.info("Unbanned " + player + " by " + admin);
+    this.sendWindow({
       messageType: "action",
       data: { value: "Unbanned " + player + " by " + admin },
     });
@@ -161,8 +159,8 @@ class banWhiteList extends Module {
             this.db
               .prepare("UPDATE adminList SET role = ?, admin = ?WHERE username = ?")
               .run(role, admin, player);
-            this.emitInfo("Updated " + player + " to " + role + " by " + admin);
-            this.emitWindow({
+            this.info("Updated " + player + " to " + role + " by " + admin);
+            this.sendWindow({
               messageType: "action",
               data: {
                 value: "Updated " + player + " to " + role + " by " + admin,
@@ -175,8 +173,8 @@ class banWhiteList extends Module {
                 "INSERT INTO adminList (username, admin, region, role) VALUES (?, ?, ?, ?)"
               )
               .run(player, admin, region, role);
-            this.emitInfo("Added " + player + " to " + role + " by " + admin);
-            this.emitWindow({
+            this.info("Added " + player + " to " + role + " by " + admin);
+            this.sendWindow({
               messageType: "action",
               data: {
                 value: "Added " + player + " to " + role + " by " + admin,
@@ -185,15 +183,15 @@ class banWhiteList extends Module {
             return true;
           }
         } else {
-          this.emitInfo("Failed to add admin, invalid battleTag: " + player);
+          this.info("Failed to add admin, invalid battleTag: " + player);
           return false;
         }
       } else {
-        this.emitInfo("Failed to add admin, invalid role: " + role);
+        this.info("Failed to add admin, invalid role: " + role);
         return false;
       }
     } else {
-      this.emitInfo(admin + " is not an admin and can not set perms.");
+      this.info(admin + " is not an admin and can not set perms.");
       return false;
     }
   }
@@ -203,17 +201,17 @@ class banWhiteList extends Module {
       if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
         if (this.checkRole(player, "baswapper")) {
           this.db.prepare("DELETE FROM adminList WHERE username = ?").run(player);
-          this.emitInfo("Removed permissions from " + player);
-          this.emitWindow({
+          this.info("Removed permissions from " + player);
+          this.sendWindow({
             messageType: "action",
             data: { value: "Removed permissions from " + player },
           });
         } else {
-          this.emitInfo(player + " is not a moderator");
+          this.info(player + " is not a moderator");
           return false;
         }
       } else {
-        this.emitError("Failed to remove admin, invalid battleTag: " + player);
+        this.error("Failed to remove admin, invalid battleTag: " + player);
         return false;
       }
       return true;

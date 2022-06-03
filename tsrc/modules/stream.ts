@@ -70,7 +70,7 @@ class SEClient extends Module {
   }
 
   onConnect() {
-    this.emitInfo("Successfully connected to StreamElements websocket");
+    this.info("Successfully connected to StreamElements websocket");
     this.socket.emit("authenticate", {
       method: "jwt",
       token: settings.values.streaming.seToken,
@@ -78,7 +78,7 @@ class SEClient extends Module {
   }
 
   onDisconnect() {
-    this.emitError("Disconnected from websocket");
+    this.error("Disconnected from websocket");
     // Reconnect
   }
 
@@ -88,7 +88,7 @@ class SEClient extends Module {
     project: string;
     message: string;
   }) {
-    this.emitInfo(`Successfully connected to StreamElements channel ${data.channelId}`);
+    this.info(`Successfully connected to StreamElements channel ${data.channelId}`);
   }
 }
 

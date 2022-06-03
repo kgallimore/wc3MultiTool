@@ -50,11 +50,11 @@ class HubControl extends Module {
       this.hubWebSocket = new WebSocket("wss://wsdev.trenchguns.com/" + this.identifier);
     }
     this.hubWebSocket.onerror = (error) => {
-      if (this.isPackaged) this.emitError("Failed hub connection: " + error);
+      if (this.isPackaged) this.error("Failed hub connection: " + error);
     };
     this.hubWebSocket.onopen = (ev) => {
       if (this.hubWebSocket?.readyState !== WebSocket.OPEN) return;
-      this.emitInfo("Connected to hub");
+      this.info("Connected to hub");
       if (
         this.lobby?.microLobby?.lobbyStatic &&
         (!this.settings.values.autoHost.private || !this.isPackaged)
@@ -66,10 +66,10 @@ class HubControl extends Module {
       this.#heartBeatTimer = setInterval(this.hubHeartbeat, 30000);
     };
     this.hubWebSocket.onmessage = (data) => {
-      this.emitInfo("Received message from hub: " + data);
+      this.info("Received message from hub: " + data);
     };
     this.hubWebSocket.onclose = (ev) => {
-      if (this.isPackaged) this.emitError("Disconnected from hub");
+      if (this.isPackaged) this.error("Disconnected from hub");
       setTimeout(this.socketSetup.bind(this), Math.random() * 5000 + 3000);
       if (this.#heartBeatTimer) {
         clearTimeout(this.#heartBeatTimer);

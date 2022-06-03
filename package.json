@@ -76,7 +76,8 @@
       {
         "provider": "generic",
         "url": "https://war.trenchguns.com/publish"
-      }
+      },
+      "github"
     ],
     "protocols": [
       {

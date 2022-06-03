@@ -96,7 +96,7 @@ class OBSSocket extends Module {
         this.socket &&
         this.settings.values.obs.outOfGameWSScene
       ) {
-        this.emitInfo("Triggering OBS Websocket Out of Game");
+        this.info("Triggering OBS Websocket Out of Game");
         this.socket.send("SetCurrentScene", {
           "scene-name": this.settings.values.obs.outOfGameWSScene,
         });
@@ -104,7 +104,7 @@ class OBSSocket extends Module {
         this.settings.values.obs.sceneSwitchType === "hotkeys" &&
         this.settings.values.obs.outOfGameHotkey
       ) {
-        this.emitInfo("Triggering OBS Hotkey Out of Game");
+        this.info("Triggering OBS Hotkey Out of Game");
         let modifiers = this.buildKeys(this.settings.values.obs.outOfGameHotkey);
 
         keyboard
@@ -114,7 +114,7 @@ class OBSSocket extends Module {
             Key[this.settings.values.obs.outOfGameHotkey.key.toUpperCase()]
           )
           .catch((e: any) => {
-            this.emitError("Failed to trigger OBS Out of Game: " + e.toString());
+            this.error("Failed to trigger OBS Out of Game: " + e.toString());
           });
       }
     } else if (this.gameState.values.inGame) {
@@ -123,7 +123,7 @@ class OBSSocket extends Module {
         this.socket &&
         this.settings.values.obs.inGameWSScene
       ) {
-        this.emitInfo("Triggering OBS Websocket In Game");
+        this.info("Triggering OBS Websocket In Game");
         this.socket.send("SetCurrentScene", {
           "scene-name": this.settings.values.obs.inGameWSScene,
         });
@@ -131,7 +131,7 @@ class OBSSocket extends Module {
         this.settings.values.obs.sceneSwitchType === "hotkeys" &&
         this.settings.values.obs.inGameHotkey
       ) {
-        this.emitInfo("Triggering OBS Hotkey In Game");
+        this.info("Triggering OBS Hotkey In Game");
         let modifiers = this.buildKeys(this.settings.values.obs.inGameHotkey);
         keyboard
           .type(
@@ -140,7 +140,7 @@ class OBSSocket extends Module {
             Key[this.settings.values.obs.inGameHotkey.key.toUpperCase()]
           )
           .catch((e) => {
-            this.emitError("Failed to trigger OBS In-Game" + e);
+            this.error("Failed to trigger OBS In-Game" + e);
           });
       }
     }
