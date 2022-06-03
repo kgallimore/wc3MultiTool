@@ -125,13 +125,6 @@ export interface GameClientMessage {
   message?: { source: string; sender: string; content: string };
 }
 
-export interface mmdResults {
-  list: {
-    [key: string]: { pid: string; won: boolean; extra: { [key: string]: string } };
-  };
-  lookup: { [key: string]: string };
-}
-
 export interface HubReceive {
   data: {
     lobbyUpdates?: LobbyUpdates;
@@ -273,4 +266,23 @@ export function isValidUrl(target: string) {
   }
 
   return true;
+}
+
+export function isInt(
+  string: string,
+  max: number | boolean = false,
+  min: number | boolean = false
+): boolean {
+  var isInt = /^-?\d+$/.test(string);
+  if (isInt) {
+    let intTest = parseInt(string);
+    if (max !== false && min !== false) {
+      return intTest <= max && intTest >= min;
+    } else if (max !== false) {
+      return intTest <= max;
+    } else if (min !== false) {
+      return intTest >= min;
+    }
+  }
+  return isInt;
 }

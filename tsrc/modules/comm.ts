@@ -44,27 +44,27 @@ export class Comm extends Module {
     }
     let address = this.settings.values.client.commAddress;
     if (address && isValidUrl(address)) {
-      this.emitInfo("Connecting to comm socket: " + address + "/" + this.identifier);
+      this.info("Connecting to comm socket: " + address + "/" + this.identifier);
 
       if (this.commSocket) {
-        this.emitInfo("Comm socket already connected. Disconnecting old socket.");
+        this.info("Comm socket already connected. Disconnecting old socket.");
         this.commSocket.close();
         this.commSocket = null;
       }
       this.commSocket = new WebSocket(address + "/" + this.identifier);
       this.commSocket.onopen = () => {
-        this.emitInfo("Connected to comm");
+        this.info("Connected to comm");
         this.commSend({ settings: this.settings.values });
         // TODO Fix this
         //this.commSend({ gameState: this.gameState });
       };
       this.commSocket.onclose = () => {
-        this.emitInfo("Disconnected from comm");
+        this.info("Disconnected from comm");
         this.commSocket = null;
         this.retrySetup = setTimeout(() => this.initialize, 1000);
       };
       this.commSocket.onerror = (error) => {
-        this.emitError("Error in comm: " + error);
+        this.error("Error in comm: " + error);
         this.commSocket = null;
       };
       this.commSocket.onmessage = (message) => {

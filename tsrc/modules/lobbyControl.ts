@@ -81,7 +81,7 @@ export class LobbyControl extends Module {
           this.emitLobbyUpdate({ newLobby: this.microLobby.exportMin() });
         } catch (e) {
           // @ts-ignore
-          this.emitError(e);
+          this.error(e);
         }
       }
     } else {
@@ -114,7 +114,7 @@ export class LobbyControl extends Module {
             );
             if (expectedSwapsCheck !== -1) {
               this.expectedSwaps.splice(expectedSwapsCheck, 1);
-              this.emitInfo(`Expected swap removed for ${player}`);
+              this.info(`Expected swap removed for ${player}`);
             }
           } else if (event.playersSwapped) {
             let players = event.playersSwapped.players.sort();
@@ -136,7 +136,7 @@ export class LobbyControl extends Module {
         if (!metExpectedSwap) {
           this.bestCombo = [];
           if (this.isLobbyReady()) {
-            this.emitInfo("Lobby is ready.");
+            this.info("Lobby is ready.");
             this.autoBalance();
           }
         }
@@ -161,10 +161,10 @@ export class LobbyControl extends Module {
             )
           );
           if (!target) {
-            this.emitError("Could not find target team to move to");
+            this.error("Could not find target team to move to");
             return;
           } else {
-            this.emitInfo(
+            this.info(
               `Found target team, moving to team ${target[0]}: ${target[1].name}`
             );
           }
@@ -186,10 +186,10 @@ export class LobbyControl extends Module {
               )
             );
         } else {
-          this.emitInfo("There are no available spec teams");
+          this.info("There are no available spec teams");
         }
         if (target) {
-          this.emitInfo("Found spec slot to move to: " + target[0]);
+          this.info("Found spec slot to move to: " + target[0]);
           console.log("Moving to spec", target[0], selfSlot);
           this.emitMessage("SetTeam", {
             slot: selfSlot,
@@ -201,10 +201,10 @@ export class LobbyControl extends Module {
             }, 250);
           }
         } else {
-          this.emitInfo("No available spec team found");
+          this.info("No available spec team found");
         }
       } else {
-        this.emitError("Could not find self slot");
+        this.error("Could not find self slot");
       }
     }
   }
@@ -265,7 +265,7 @@ export class LobbyControl extends Module {
     if (this.settings.values.elo.type !== "off") {
       try {
         if (!this.eloName) {
-          this.emitInfo("Waiting for lookup name");
+          this.info("Waiting for lookup name");
           setTimeout(() => {
             this.fetchStats(name);
           }, 1000);
@@ -284,13 +284,13 @@ export class LobbyControl extends Module {
             let targetUrl = `https://api.wc3stats.com/leaderboard&map=${
               this.eloName
             }${buildVariant}&search=${encodeURI(name)}`;
-            this.emitInfo(targetUrl);
+            this.info(targetUrl);
             let jsonData: { body: Array<PlayerData["extra"] & { name: string }> };
             try {
               jsonData = await (await fetch(targetUrl)).json();
             } catch (e) {
-              this.emitError("Failed to fetch wc3stats data:");
-              this.emitError(e as string);
+              this.error("Failed to fetch wc3stats data:");
+              this.error(e as string);
               jsonData = { body: [] };
             }
             let elo = 500;
@@ -321,27 +321,27 @@ export class LobbyControl extends Module {
                   name,
                 },
               });
-              this.emitInfo(name + " stats received and saved.");
+              this.info(name + " stats received and saved.");
               if (this.settings.values.elo.requireStats) {
                 if (data.played < this.settings.values.elo.minGames) {
-                  this.emitInfo(
+                  this.info(
                     `${name} has not played enough games to qualify for the ladder.`
                   );
                   this.banPlayer(name);
                   return;
                 } else if (data.rating < this.settings.values.elo.minRating) {
-                  this.emitInfo(`${name} has an ELO rating below the minimum.`);
+                  this.info(`${name} has an ELO rating below the minimum.`);
                   this.banPlayer(name);
                   return;
                 } else if (
                   this.settings.values.elo.minRank !== 0 &&
                   data.rank < this.settings.values.elo.minRank
                 ) {
-                  this.emitInfo(`${name} has a rank below the minimum.`);
+                  this.info(`${name} has a rank below the minimum.`);
                   this.banPlayer(name);
                   return;
                 } else if (data.wins < this.settings.values.elo.minWins) {
-                  this.emitInfo(
+                  this.info(
                     `${name} has not won enough games to qualify for the ladder.`
                   );
                   this.banPlayer(name);
@@ -350,26 +350,26 @@ export class LobbyControl extends Module {
               }
             }
             if (this.isLobbyReady()) {
-              this.emitInfo("Lobby is ready.");
+              this.info("Lobby is ready.");
               this.autoBalance();
             }
           } else {
-            //this.emitInfo("No elo enabled");
+            //this.info("No elo enabled");
           }
         }
       } catch (err: any) {
-        this.emitError("Failed to fetch stats:");
-        this.emitError(err);
+        this.error("Failed to fetch stats:");
+        this.error(err);
       }
     }
   }
 
   staleLobby() {
     if (this.microLobby && this.microLobby.allPlayers.length < 2) {
-      this.emitInfo("Try to refresh possibly stale lobby");
+      this.info("Try to refresh possibly stale lobby");
       this.emitLobbyUpdate({ stale: true });
     } else {
-      this.emitInfo("Refreshing possibly stale lobby");
+      this.info("Refreshing possibly stale lobby");
       this.refreshGame();
     }
   }
@@ -404,7 +404,7 @@ export class LobbyControl extends Module {
     this.startTimer = setTimeout(() => {
       this.startTimer = null;
       if (this.microLobby?.lobbyStatic?.isHost) {
-        this.emitInfo("Starting game");
+        this.info("Starting game");
         this.sendGameChat("AutoHost functionality provided by WC3 MultiTool.");
         this.emitMessage("LobbyStart", {});
       }
@@ -483,7 +483,7 @@ export class LobbyControl extends Module {
       this.settings.values.elo.balanceTeams
     ) {
       let lobbyCopy = new MicroLobby({ fullData: this.microLobby.exportMin() });
-      this.emitInfo("Auto balancing teams");
+      this.info("Auto balancing teams");
       if (this.bestCombo === undefined || this.bestCombo.length == 0) {
         if (teams.length < 2) {
           this.emitLobbyUpdate({ lobbyReady: true });
@@ -568,10 +568,13 @@ export class LobbyControl extends Module {
           } else {
             for (let i = 0; i < swaps[0].length; i++) {
               if (!this.isLobbyReady()) {
-                this.emitInfo("Lobby no longer ready.");
+                this.info("Lobby no longer ready.");
                 break;
               }
-              this.emitProgress("Swapping " + swaps[0][i] + " and " + swaps[1][i], 100);
+              this.emitProgress({
+                step: "Swapping " + swaps[0][i] + " and " + swaps[1][i],
+                progress: 100,
+              });
               this.swapPlayers({ players: [swaps[0][i], swaps[1][i]] });
             }
           }
@@ -605,10 +608,10 @@ export class LobbyControl extends Module {
                 ) {
                   for (let currentPlayer of currentTeam) {
                     if (!this.bestCombo[i].includes(currentPlayer.name)) {
-                      this.emitProgress(
-                        "Swapping " + currentPlayer.name + " and " + targetPlayer,
-                        100
-                      );
+                      this.emitProgress({
+                        step: "Swapping " + currentPlayer.name + " and " + targetPlayer,
+                        progress: 100,
+                      });
                       this.swapPlayers({ players: [currentPlayer.name, targetPlayer] });
                       // Swap the data of the two players
                       let targetPlayerOldSlot = lobbyCopy.playerToSlot(targetPlayer);
@@ -641,7 +644,7 @@ export class LobbyControl extends Module {
             }
           }
         }
-        this.emitInfo("Players should now be balanced.");
+        this.info("Players should now be balanced.");
         this.emitLobbyUpdate({ lobbyReady: true });
         this.sendGameChat("ELO data provided by: " + this.settings.values.elo.type);
       }
@@ -719,7 +722,7 @@ export class LobbyControl extends Module {
 
   banPlayer(player: string) {
     if (this.microLobby?.lobbyStatic.isHost !== true) {
-      this.emitError("Only the host can ban players");
+      this.error("Only the host can ban players");
       return;
     }
     let targetSlot = Object.values(this.microLobby.slots).find(
@@ -734,7 +737,7 @@ export class LobbyControl extends Module {
 
   closePlayer(player: string) {
     if (this.microLobby?.lobbyStatic.isHost !== true) {
-      this.emitError("Only the host can close players");
+      this.error("Only the host can close players");
       return;
     }
     let targetSlot = Object.values(this.microLobby.slots).find(
@@ -768,18 +771,18 @@ export class LobbyControl extends Module {
           this.sendGameChat("!swap " + target1 + " " + target2);
         } else {
           this.sendGameChat("Possible invalid swap targets");
-          this.emitError("Possible invalid swap targets: " + target1 + " and " + target2);
+          this.error("Possible invalid swap targets: " + target1 + " and " + target2);
         }
       } else {
         this.sendGameChat("Possible invalid swap targets");
-        this.emitError("Possible invalid swap targets: " + JSON.stringify(data.players));
+        this.error("Possible invalid swap targets: " + JSON.stringify(data.players));
       }
     }
   }
 
   kickPlayer(player: string) {
     if (this.microLobby?.lobbyStatic.isHost !== true) {
-      this.emitError("Only the host can kick players");
+      this.error("Only the host can kick players");
       return;
     }
     let targetSlot = Object.values(this.microLobby.slots).find(
@@ -794,7 +797,7 @@ export class LobbyControl extends Module {
 
   openPlayer(player: string) {
     if (this.microLobby?.lobbyStatic.isHost !== true) {
-      this.emitError("Only the host can open slots");
+      this.error("Only the host can open slots");
       return;
     }
     let targetSlot = Object.values(this.microLobby.slots).find(
@@ -809,7 +812,7 @@ export class LobbyControl extends Module {
 
   setPlayerHandicap(player: string, handicap: number) {
     if (this.microLobby?.lobbyStatic.isHost !== true) {
-      this.emitError("Only the host can set handicaps");
+      this.error("Only the host can set handicaps");
       return;
     }
     let targetSlot = Object.values(this.microLobby.slots).find(
@@ -898,7 +901,7 @@ export class LobbyControl extends Module {
     let lobby = this.microLobby;
     let returnValue = {};
     if (!lobby) {
-      this.emitError("No lobby");
+      this.error("No lobby");
       return returnValue;
     }
     return lobby.exportTeamStructure(playerTeamsOnly);
