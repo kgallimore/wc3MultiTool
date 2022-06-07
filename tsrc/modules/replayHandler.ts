@@ -16,7 +16,7 @@ export interface mmdResults {
   lookup: { [key: string]: string };
 }
 
-class replayHandler extends Module {
+class ReplayHandler extends Module {
   replayFolders = join(app.getPath("documents"), "Warcraft III\\BattleNet");
 
   constructor() {
@@ -142,3 +142,5 @@ class replayHandler extends Module {
     return results;
   }
 }
+
+export const replayHandler = new ReplayHandler();

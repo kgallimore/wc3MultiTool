@@ -52,8 +52,9 @@ class LobbyControl extends Module {
       );
     }
     if (
-      events.MultiplayerGameLeave &&
-      this.gameState.values.menuState !== "LOADING_SCREEN"
+      events.disconnected ||
+      (events.MultiplayerGameLeave &&
+        this.gameState.values.menuState !== "LOADING_SCREEN")
     ) {
       this.clear();
     }
