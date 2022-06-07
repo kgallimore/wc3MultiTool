@@ -186,13 +186,6 @@ export type PickByValue<T, V> = Pick<
   { [K in keyof T]: T[K] extends V ? K : never }[keyof T]
 >;
 
-export interface OpenLobbyParams {
-  lobbyName?: string;
-  gameId?: string;
-  mapFile?: string;
-  region?: Regions;
-}
-
 export function getTargetRegion(
   regionChangeTimeEU: string,
   regionChangeTimeNA: string

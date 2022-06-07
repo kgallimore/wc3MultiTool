@@ -1,13 +1,18 @@
-import { Module } from "../moduleBase";
+import { Global } from "../globalBase";
 
 import { getTargetRegion } from "../utility";
 import { shell, app } from "electron";
+import { settings } from "./settings";
+import { gameState } from "./gameState";
+import { gameSocket } from "./gameSocket";
 
 import Store from "electron-store";
 const store = new Store();
 
 import {
   Window,
+  keyboard,
+  Key,
   screen,
   getActiveWindow,
   mouse,
@@ -23,19 +28,24 @@ import {
 } from "@nut-tree/nut-js";
 import { join } from "path";
 require("@nut-tree/nl-matcher");
+import { clipboard } from "electron";
 import { promisify } from "util";
 
 const exec = promisify(require("child_process").exec);
 
 import type { Regions } from "wc3mt-lobby-container";
 
-class WarControl extends Module {
+class WarControl extends Global {
+  settings = settings;
+  gameState = gameState;
+  gameSocket = gameSocket;
   inFocus: boolean = false;
   isOpen: boolean = false;
   windowRegion: Region | null = null;
   warInstallLoc: string;
   isPackaged: boolean = false;
   appPath: string;
+  sendingInGameChat: { active: boolean; queue: string[] } = { active: false, queue: [] };
 
   constructor() {
     super();
@@ -245,6 +255,69 @@ class WarControl extends Module {
     }
   }
 
+  async handleBnetLogin() {
+    if (
+      this.settings.values.client.bnetUsername &&
+      this.settings.values.client.bnetPassword
+    ) {
+      this.info("Attempting to login to Battle.net.");
+      clipboard.writeText(this.settings.values.client.bnetUsername);
+      await keyboard.type(Key.Tab);
+      await keyboard.type(Key.LeftControl, Key.V);
+      await keyboard.type(Key.Tab);
+      clipboard.writeText(this.settings.values.client.bnetPassword);
+      await keyboard.type(Key.LeftControl, Key.V);
+      await keyboard.type(Key.Enter);
+    }
+  }
+
+  async sendInGameChat(chat: string) {
+    let newChatSplit = chat.match(/.{1,125}/g);
+    if (newChatSplit) {
+      this.sendingInGameChat.queue = this.sendingInGameChat.queue.concat(newChatSplit);
+      this.info("Queued chat: " + chat);
+    }
+    if (this.sendingInGameChat.active) {
+      return;
+    }
+    await warControl.activeWindowWar();
+    try {
+      if (this.gameState.values.inGame && warControl.inFocus) {
+        this.sendingInGameChat.active = true;
+        let nextMessage = this.sendingInGameChat.queue.shift();
+        while (nextMessage) {
+          if (this.gameState.values.inGame && warControl.inFocus) {
+            this.info("Sending chat: " + nextMessage);
+            clipboard.writeText(nextMessage);
+            await mouse.leftClick();
+            await keyboard.type(Key.LeftShift, Key.Enter);
+            await keyboard.type(Key.LeftControl, Key.V);
+            await keyboard.type(Key.Enter);
+            nextMessage = this.sendingInGameChat.queue.shift();
+          } else {
+            this.info(
+              "Forced to stop sending messages. In Game: " +
+                this.gameState.values.inGame +
+                " Warcraft in focus: " +
+                warControl.inFocus
+            );
+            this.sendingInGameChat.queue.unshift(nextMessage);
+            nextMessage = undefined;
+          }
+        }
+      }
+      if (this.sendingInGameChat.queue.length === 0) {
+        this.info("Chat queue now empty.");
+      }
+      this.sendingInGameChat.active = false;
+      return true;
+    } catch (e) {
+      this.error(e);
+      this.sendingInGameChat.active = false;
+      return false;
+    }
+  }
+
   async isWarcraftOpen() {
     return await this.checkProcess("Warcraft III.exe");
   }
@@ -276,7 +349,7 @@ class WarControl extends Module {
         return await this.forceQuitWar();
       } else {
         this.info("Sending Exit Game");
-        this.emitMessage("ExitGame", {});
+        this.gameSocket.sendMessage({ ExitGame: {} });
         await sleep(200);
         return this.exitGame(callCount + 1);
       }
@@ -317,7 +390,7 @@ class WarControl extends Module {
     let activeWindow: Window | false = false;
     if (this.isOpen && !warcraftOpenCheck) {
       this.isOpen = warcraftOpenCheck;
-      this.emitNotification(
+      this.notification(
         "Warcraft is not open",
         "An action was attempted but Warcraft was not open"
       );
@@ -329,7 +402,7 @@ class WarControl extends Module {
       const focused = title === "Warcraft III";
       // Ensure that a notification is only sent the first time, if warcraft was focused before, but is no longer
       if (!focused && this.inFocus) {
-        this.emitNotification(
+        this.notification(
           "Warcraft is not in focus",
           "An action was attempted but Warcraft was not inf focus"
         );
@@ -360,4 +433,4 @@ class WarControl extends Module {
   }
 }
 
-export const WarSingle = new WarControl();
+export const warControl = new WarControl();

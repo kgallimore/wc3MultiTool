@@ -39,9 +39,6 @@ class WebUISocket extends Global {
         this.error("Socket closed");
         this.webUISocket = null;
         this.emitEvent({ disconnected: true });
-        this.emitProgress();
-        this.sendStatus(false);
-        this.handleGlueScreen("OUT_OF_MENUS");
       });
     });
     this.wss.on("error", (err) => {
@@ -81,7 +78,6 @@ class WebUISocket extends Global {
           let newState: GameState = data.data as GameState;
           if (newState.menuState) {
             setTimeout(() => {
-              this.handleGlueScreen(newState.menuState);
               gameState.updateGameState(newState);
             }, 250);
           } else {

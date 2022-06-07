@@ -3,39 +3,49 @@ import { Global } from "../globalBase";
 import WebSocket from "ws";
 import fs from "fs";
 
-import { gameState, GameState } from "./gameState";
+import { gameState, GameState, MenuStates } from "./gameState";
 import { settings } from "./settings";
 import { isInt } from "../utility";
 
-import { WarSingle } from "../modules/warControl";
+import { warControl } from "./warControl";
 import { GameClientLobbyPayload, Regions } from "wc3mt-lobby-container";
 
-export interface GameSocketEvents {
+export interface GameList {
+  games: Array<{ name: string; id: number; mapFile: string }>;
+}
+
+export type AvailableHandicaps = 50 | 60 | 70 | 80 | 90 | 100;
+
+export interface NativeGameSocketEvents {
   UpdateScoreInfo?: {
     scoreInfo: {
       localPlayerWon: boolean;
       isHDModeEnabled: boolean;
       localPlayerRace: number;
       gameName: string;
-      gameId: string;
+      gameId: number;
       players: Array<any>;
       mapInfo: Array<any>;
     };
   };
-  ScreenTransitionInfo?: { screen: string };
-  SetGlueScreen?: { screen: string };
+  ScreenTransitionInfo?: { screen: MenuStates };
+  SetGlueScreen?: { screen: MenuStates };
   GameLobbySetup?: GameClientLobbyPayload;
-  GameList?: { games: Array<{ name: string; id: string; mapFile: string }> };
+  GameList?: GameList;
   ChatMessage?: GameChatMessage;
   UpdateUserInfo?: {
     user: { battleTag: string; userRegion: Regions };
   };
-  SetOverlayScreen: { screen: "AUTHENTICATION_OVERLAY" | string };
+  SetOverlayScreen?: { screen: "AUTHENTICATION_OVERLAY" | string };
   // TODO: Fix these
   OnNetProviderInitialized?: any;
   OnChannelUpdate?: { gameChat: any };
   MultiplayerGameLeave?: any;
   MultiplayerGameCreateResult?: any;
+}
+export interface GameSocketEvents extends NativeGameSocketEvents {
+  connected?: true;
+  disconnected?: true;
 }
 
 export interface CreateLobbyPayload {
@@ -51,10 +61,11 @@ export interface CreateLobbyPayload {
     settingObservers: 0 | 1 | 2 | 3;
     settingVisibility: 0 | 1 | 2 | 3;
   };
+  privateGame?: boolean;
 }
 
 export interface GameChatMessage {
-  message: { sender: string; source: "gameChat" };
+  message: { sender: string; source: "gameChat"; content: string };
 }
 
 export interface SendGameMessage {
@@ -71,7 +82,15 @@ export interface SendGameMessage {
     type: "Screen";
     time: string;
   };
+  SetHandicap?: { slot: number; handicap: AvailableHandicaps };
+  SetTeam?: { slot: number; team: number };
+  CloseSlot?: { slot: number };
+  OpenSlot?: { slot: number };
+  BanPlayerFromGameLobby?: { slot: number };
+  KickPlayerFromGameLobby?: { slot: number };
+  LobbyStart?: {};
   LeaveGame?: {};
+  ExitGame?: {};
   LobbyCancel?: {};
   GetGameList?: {};
   SendGameListing?: {};
@@ -101,140 +120,111 @@ class GameSocket extends Global {
     super();
   }
 
+  emitEvent(event: GameSocketEvents): void {
+    this.emit("gameSocketEvent", event);
+  }
+
   connectGameSocket(connectInfo: string) {
     this.gameWebSocket = new WebSocket(connectInfo);
     this.info("Connecting to game client: ", connectInfo);
-    this.gameWebSocket.on("open", function open() {
+    this.gameWebSocket.on("open", () => {
+      this.emitEvent({ connected: true });
       if (openLobbyParams?.lobbyName) {
         openParamsJoin();
       }
     });
-    this.gameWebSocket.on(
-      "message",
-      (data: {
-        messageType: string;
-        payload:
-          | any
-          | {
-              scoreInfo?: {
-                localPlayerWon: boolean;
-                isHDModeEnabled: boolean;
-                localPlayerRace: number;
-                gameName: string;
-                gameId: string;
-                players: Array<any>;
-                mapInfo: Array<any>;
-              };
-            };
-      }) => {
-        data = JSON.parse(data.toString());
-        switch (data.messageType) {
-          case "UpdateScoreInfo":
-            autoHostGame();
-            break;
-          case "ScreenTransitionInfo":
-            this.gameState.updateGameState({ screenState: data.payload.screen });
-            break;
-          case "SetGlueScreen":
-            if (data.payload.screen) {
-              this.handleGlueScreen(data.payload.screen);
-            }
-            break;
-          case "OnNetProviderInitialized":
-            if (settings.values.client.performanceMode) {
-              setTimeout(autoHostGame, 1000);
-            }
-            break;
-          case "GameLobbySetup":
-            handleLobbyUpdate(data.payload);
-            break;
-          case "GameList":
-            if (
-              openLobbyParams &&
-              (openLobbyParams.lobbyName || openLobbyParams.gameId)
-            ) {
-              this.info("GameList received, trying to find lobby.");
-              handleGameList(data.payload);
-            } else {
+    this.gameWebSocket.on("message", (data) => {
+      let parsedData = JSON.parse(data.toString());
+      this.emitEvent(parsedData);
+      switch (parsedData.messageType) {
+        case "ScreenTransitionInfo":
+          this.gameState.updateGameState({ screenState: parsedData.payload.screen });
+          break;
+        case "GameList":
+          if (openLobbyParams && (openLobbyParams.lobbyName || openLobbyParams.gameId)) {
+            this.info("GameList received, trying to find lobby.");
+            handleGameList(parsedData.payload);
+          } else {
+            this.handleGlueScreen("CUSTOM_LOBBIES");
+          }
+          break;
+        case "OnChannelUpdate":
+          if (parsedData.payload.gameChat) {
+            //console.log(data.payload);
+          }
+          break;
+        case "ChatMessage":
+          this.handleChatMessage(parsedData.payload);
+          break;
+        case "MultiplayerGameLeave":
+          clearLobby();
+          break;
+        case "MultiplayerGameCreateResult":
+          if (this.gameState.values.menuState === "GAME_LOBBY") {
+            setTimeout(() => {
               this.handleGlueScreen("CUSTOM_LOBBIES");
+            }, 1000);
+          }
+          break;
+        case "UpdateUserInfo":
+          this.gameState.updateGameState({
+            selfBattleTag: parsedData.payload.user.battleTag,
+            selfRegion: parsedData.payload.user.userRegion,
+          });
+          break;
+        case "SetOverlayScreen":
+          if (parsedData.payload.screen === "AUTHENTICATION_OVERLAY") {
+            setTimeout(handleBnetLogin, 5000);
+          }
+          break;
+        default:
+          //console.log(data);
+          if (
+            [
+              "FriendsFriendUpdated",
+              "TeamsInformation",
+              "UpdateMapVetos",
+              "UpdateMapPool",
+              "UpdateSelectedGameMode",
+              "UpdateReadyState",
+              "UpdateGameModes",
+              "FriendsInvitationData",
+              "FriendsFriendData",
+              "MultiplayerRecentPlayers",
+              "UpdateLobbySelectedRace",
+              "FriendsFriendRemoved",
+              "GameModeResolved",
+              "ShowAgeRatingScreen",
+              "ClanInfoData",
+              "ProfileAvatarId",
+              "UpdateToonList",
+              "OnGetAgeRatingRequired",
+              "GameModeUpdated",
+              "GameListRemove",
+              "IMEUpdated",
+              "LoadProgressUpdate",
+              "GameListUpdate",
+            ].includes(parsedData.messageType) === false
+          ) {
+            if (parsedData.messageType === "GameList") {
+              //console.log(data.payload.games);
+            } else {
+              //console.log(JSON.stringify(data));
             }
-            break;
-          case "OnChannelUpdate":
-            if (data.payload.gameChat) {
-              //console.log(data.payload);
-            }
-            break;
-          case "ChatMessage":
-            handleChatMessage(data.payload);
-            break;
-          case "MultiplayerGameLeave":
-            clearLobby();
-            break;
-          case "MultiplayerGameCreateResult":
-            if (this.gameState.values.menuState === "GAME_LOBBY") {
-              setTimeout(() => {
-                this.handleGlueScreen("CUSTOM_LOBBIES");
-              }, 1000);
-            }
-            break;
-          case "UpdateUserInfo":
-            this.gameState.updateGameState({
-              selfBattleTag: data.payload.user.battleTag,
-              selfRegion: data.payload.user.userRegion,
-            });
-            break;
-          case "SetOverlayScreen":
-            if (data.payload.screen === "AUTHENTICATION_OVERLAY") {
-              setTimeout(handleBnetLogin, 5000);
-            }
-            break;
-          default:
-            //console.log(data);
-            if (
-              [
-                "FriendsFriendUpdated",
-                "TeamsInformation",
-                "UpdateMapVetos",
-                "UpdateMapPool",
-                "UpdateSelectedGameMode",
-                "UpdateReadyState",
-                "UpdateGameModes",
-                "FriendsInvitationData",
-                "FriendsFriendData",
-                "MultiplayerRecentPlayers",
-                "UpdateLobbySelectedRace",
-                "FriendsFriendRemoved",
-                "GameModeResolved",
-                "ShowAgeRatingScreen",
-                "ClanInfoData",
-                "ProfileAvatarId",
-                "UpdateToonList",
-                "OnGetAgeRatingRequired",
-                "GameModeUpdated",
-                "GameListRemove",
-                "IMEUpdated",
-                "LoadProgressUpdate",
-                "GameListUpdate",
-              ].includes(data.messageType) === false
-            ) {
-              if (data.messageType === "GameList") {
-                //console.log(data.payload.games);
-              } else {
-                //console.log(JSON.stringify(data));
-              }
-            }
-        }
+          }
       }
-    );
-    this.gameWebSocket.on("close", function close() {
+    });
+    this.gameWebSocket.on("close", () => {
+      this.emitEvent({ disconnected: true });
+      // TODO: Remove from global
       clearLobby();
       this.error("Game client connection closed!");
       if (settings.values.client.antiCrash) {
         setTimeout(async () => {
-          if (await WarSingle.checkProcess("BlizzardError.exe")) {
+          if (await warControl.checkProcess("BlizzardError.exe")) {
             this.error("Crash detected: BlizzardError.exe is running, restarting.");
-            await WarSingle.forceQuitProcess("BlizzardError.exe");
-            WarSingle.openWarcraft();
+            await warControl.forceQuitProcess("BlizzardError.exe");
+            warControl.openWarcraft();
           }
         }, 1000);
       }
@@ -243,175 +233,9 @@ class GameSocket extends Global {
 
   handleClientMessage(message: { data: string }) {}
 
-  async handleBnetLogin() {
-    if (settings.values.client.bnetUsername && settings.values.client.bnetPassword) {
-      this.info("Attempting to login to Battle.net.");
-      clipboard.writeText(settings.values.client.bnetUsername);
-      await keyboard.type(Key.Tab);
-      await keyboard.type(Key.LeftControl, Key.V);
-      await keyboard.type(Key.Tab);
-      clipboard.writeText(settings.values.client.bnetPassword);
-      await keyboard.type(Key.LeftControl, Key.V);
-      await keyboard.type(Key.Enter);
-    }
-  }
-
-  handleGameList(data: { games: Array<{ name: string; id: string; mapFile: string }> }) {
-    if (data.games && data.games.length > 0) {
-      data.games.some((game) => {
-        if (openLobbyParams?.lobbyName && game.name === openLobbyParams.lobbyName) {
-          this.info("Found game by name");
-          this.sendMessage("JoinGame", {
-            gameId: game.id,
-            password: "",
-            mapFile: game.mapFile,
-          });
-          return true;
-        } else if (openLobbyParams?.gameId && game.id === openLobbyParams.gameId) {
-          this.info("Found game by Id");
-          this.sendMessage("JoinGame", {
-            gameId: game.id,
-            password: "",
-            mapFile: game.mapFile,
-          });
-          return true;
-        }
-      });
-      openLobbyParams = null;
-    }
-  }
-
-  async sendInGameChat(chat: string) {
-    let newChatSplit = chat.match(/.{1,125}/g);
-    if (newChatSplit) {
-      this.sendingInGameChat.queue = this.sendingInGameChat.queue.concat(newChatSplit);
-      this.info("Queued chat: " + chat);
-    }
-    if (this.sendingInGameChat.active) {
-      return;
-    }
-    await WarSingle.activeWindowWar();
-    try {
-      if (this.gameState.values.inGame && WarSingle.inFocus) {
-        this.sendingInGameChat.active = true;
-        let nextMessage = this.sendingInGameChat.queue.shift();
-        while (nextMessage) {
-          if (this.gameState.values.inGame && WarSingle.inFocus) {
-            this.info("Sending chat: " + nextMessage);
-            clipboard.writeText(nextMessage);
-            await mouse.leftClick();
-            await keyboard.type(Key.LeftShift, Key.Enter);
-            await keyboard.type(Key.LeftControl, Key.V);
-            await keyboard.type(Key.Enter);
-            nextMessage = this.sendingInGameChat.queue.shift();
-          } else {
-            this.info(
-              "Forced to stop sending messages. In Game: " +
-                this.gameState.values.inGame +
-                " Warcraft in focus: " +
-                WarSingle.inFocus
-            );
-            this.sendingInGameChat.queue.unshift(nextMessage);
-            nextMessage = undefined;
-          }
-        }
-      }
-      if (this.sendingInGameChat.queue.length === 0) {
-        this.info("Chat queue now empty.");
-      }
-      this.sendingInGameChat.active = false;
-      return true;
-    } catch (e) {
-      this.error(e);
-      this.sendingInGameChat.active = false;
-      return false;
-    }
-  }
-
   cancelStart() {
     this.info("Cancelling start");
-    this.sendMessage("LobbyCancel", {});
-  }
-
-  startGame(delay: number = 0) {
-    this.lobby?.this.startGame(delay);
-  }
-
-  async leaveGame() {
-    this.info("Leaving Game");
-    if (
-      this.gameState.values.inGame ||
-      ["GAME_LOBBY", "CUSTOM_GAME_LOBBY"].includes(this.gameState.values.menuState)
-    ) {
-      this.sendMessage("LeaveGame", {});
-      if (this.lobby?.microLobby?.lobbyStatic?.lobbyName) {
-        let oldLobbyName = this.lobby?.microLobby?.lobbyStatic.lobbyName;
-        await sleep(1000);
-        if (this.lobby?.microLobby?.lobbyStatic.lobbyName === oldLobbyName) {
-          this.info("Lobby did not leave, trying again");
-          await WarSingle.exitGame();
-          WarSingle.openWarcraft();
-        }
-      }
-    }
-  }
-
-  announcement() {
-    if (
-      (this.gameState.values.menuState === "CUSTOM_GAME_LOBBY" ||
-        this.gameState.values.menuState === "GAME_LOBBY") &&
-      this.lobby?.microLobby?.lobbyStatic.isHost
-    ) {
-      let currentTime = Date.now();
-      if (
-        currentTime >
-        lastAnnounceTime + 1000 * settings.values.autoHost.announceRestingInterval
-      ) {
-        lastAnnounceTime = currentTime;
-        if (["rapidHost", "smartHost"].includes(settings.values.autoHost.type)) {
-          if (settings.values.autoHost.announceIsBot) {
-            let text = "Welcome. I am a bot.";
-            if (
-              this.lobby?.microLobby?.statsAvailable &&
-              settings.values.elo.type !== "off"
-            ) {
-              text += " I will fetch ELO from " + settings.values.elo.type + ".";
-              if (settings.values.elo.balanceTeams) {
-                text += " I will try to balance teams before we start.";
-              }
-            }
-            if (
-              (settings.values.elo.type === "off" || !settings.values.elo.balanceTeams) &&
-              settings.values.autoHost.shufflePlayers
-            ) {
-              text += " I will shuffle players before we start.";
-            }
-            if (["smartHost", "rapidHost".includes(settings.values.autoHost.type)]) {
-              text += " I will start when slots are full.";
-            }
-            if (settings.values.autoHost.voteStart) {
-              text += " You can vote start with ?votestart";
-            }
-            if (settings.values.autoHost.regionChange) {
-              text += " I switch regions.";
-            }
-            this.sendChatMessage(text);
-          }
-          if (
-            settings.values.autoHost.announceCustom &&
-            settings.values.autoHost.customAnnouncement
-          ) {
-            this.sendChatMessage(settings.values.autoHost.customAnnouncement);
-          }
-        } else if (
-          settings.values.autoHost.type === "lobbyHost" &&
-          settings.values.autoHost.announceCustom &&
-          settings.values.autoHost.customAnnouncement
-        ) {
-          this.sendChatMessage(settings.values.autoHost.customAnnouncement);
-        }
-      }
-    }
+    this.sendMessage({ LobbyCancel: {} });
   }
 
   sendChatMessage(content: string) {
@@ -428,8 +252,10 @@ class GameSocket extends Global {
         this.sentMessages = this.sentMessages.concat(newChatSplit);
         newChatSplit.forEach((content) => {
           this.info("Sending chat message: " + content);
-          this.sendMessage("SendGameChatMessage", {
-            content,
+          this.sendMessage({
+            SendGameChatMessage: {
+              content,
+            },
           });
         });
       }
@@ -438,6 +264,7 @@ class GameSocket extends Global {
 
   async handleChatMessage(payload: GameChatMessage) {
     // TODO: logging
+    // TODO: Move into modules
     if (payload.message?.sender && payload.message.source === "gameChat") {
       if (payload.message.sender.includes("#")) {
         var sender = payload.message.sender;
@@ -459,8 +286,8 @@ class GameSocket extends Global {
         }
       }
       if (sender === this.gameState.values.selfBattleTag) {
-        if (sentMessages.includes(payload.message.content)) {
-          sentMessages.splice(sentMessages.indexOf(payload.message.content), 1);
+        if (this.sentMessages.includes(payload.message.content)) {
+          this.sentMessages.splice(this.sentMessages.indexOf(payload.message.content), 1);
           return;
         } else if (
           payload.message.content.match(
@@ -504,14 +331,14 @@ class GameSocket extends Global {
                   this.lobby?.allPlayerTeamsContainPlayers()) ||
                 !settings.values.autoHost.voteStartTeamFill
               ) {
-                voteTimer = setTimeout(cancelVote, 60000);
+                this.voteTimer = setTimeout(cancelVote, 60000);
                 this.sendChatMessage("You have 60 seconds to ?votestart.");
               } else {
                 this.sendChatMessage("Unavailable. Not all teams have players.");
                 return;
               }
             }
-            if (!this.lobby?.voteStartVotes.includes(sender) && voteTimer) {
+            if (!this.lobby?.voteStartVotes.includes(sender) && this.voteTimer) {
               this.lobby?.voteStartVotes.push(sender);
               if (
                 this.lobby?.voteStartVotes.length >=
@@ -606,7 +433,7 @@ class GameSocket extends Global {
             this.lobby?.microLobby?.lobbyStatic.isHost &&
             banWhiteListSingle.checkRole(sender, "moderator")
           ) {
-            cancelStart();
+            this.cancelStart();
           }
         } else if (payload.message.content.match(/^\?closeall$/i)) {
           if (
@@ -1153,7 +980,7 @@ class GameSocket extends Global {
               ) &&
                 detectLangs[0][1] > 0.3))
           ) {
-            log.verbose("Translating '" + payload.message.content);
+            this.verbose("Translating '" + payload.message.content);
             try {
               translatedMessage = await translate(payload.message.content, {
                 to: settings.values.client.language,
@@ -1211,12 +1038,6 @@ class GameSocket extends Global {
           this.sendMessage(data);
         }, 100);
       }
-    }
-  }
-
-  handleLobbyUpdate(payload: GameClientLobbyPayload) {
-    if (payload.teamData.playableSlots > 1) {
-      this.lobby?.ingestLobby(payload, this.gameState.values.selfRegion as Regions);
     }
   }
 }

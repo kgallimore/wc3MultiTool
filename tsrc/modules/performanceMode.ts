@@ -3,6 +3,7 @@ import { Module } from "../moduleBase";
 
 import { existsSync, renameSync } from "fs";
 import Store from "electron-store";
+import { GameSocketEvents } from "./../globals/gameSocket";
 const store = new Store();
 
 class PerformanceMode extends Module {
@@ -16,6 +17,12 @@ class PerformanceMode extends Module {
 
   protected onSettingsUpdate(updates: SettingsUpdates): void {
     if (updates.client?.performanceMode !== undefined) {
+    }
+  }
+
+  protected onGameSocketEvent(events: GameSocketEvents): void {
+    if (events.OnNetProviderInitialized && this.settings.values.client.performanceMode) {
+      setTimeout(autoHostGame, 1000);
     }
   }
 
@@ -40,4 +47,4 @@ class PerformanceMode extends Module {
   }
 }
 
-export const PerformanceModeSingle = new PerformanceMode();
+export const performanceMode = new PerformanceMode();

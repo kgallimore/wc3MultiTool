@@ -3,7 +3,7 @@ import { Module } from "../moduleBase";
 import type { SettingsUpdates } from "./../globals/settings";
 
 import Discord from "discord.js";
-import type { mmdResults } from "../utility";
+import type { mmdResults } from "./autoHost";
 import type { PlayerTeamsData, LobbyUpdates } from "wc3mt-lobby-container";
 import { DeColorName } from "../utility";
 import { app } from "electron";
@@ -100,7 +100,9 @@ class DisClient extends Module {
     this.client.on("message", (msg) => {
       if (msg.channel === this.chatChannel && !msg.author.bot) {
         if (this.settings.values.discord.bidirectionalChat) {
-          this.sendGameChat("(DC)" + msg.author.username + ": " + msg.content);
+          this.gameSocket.sendChatMessage(
+            "(DC)" + msg.author.username + ": " + msg.content
+          );
         }
       }
     });
