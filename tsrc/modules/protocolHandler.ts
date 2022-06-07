@@ -80,7 +80,7 @@ class ProtocolHandler extends Module {
         return;
       }
       if (this.gameState.values.inGame || this.lobby?.microLobby?.lookupName) {
-        this.warControl.leaveGame();
+        this.lobby?.leaveGame();
         return;
       }
       if (this.openLobbyParams.lobbyName) {

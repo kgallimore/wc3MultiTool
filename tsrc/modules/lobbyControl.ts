@@ -30,7 +30,6 @@ class LobbyControl extends Module {
   private refreshing: boolean = false;
   private staleTimer: NodeJS.Timeout | null = null;
 
-  voteStartVotes: Array<string> = [];
   bestCombo: Array<string> | Array<Array<string>> = [];
   microLobby: MicroLobby | null = null;
   eloName: string = "";
@@ -51,6 +50,61 @@ class LobbyControl extends Module {
         events.GameLobbySetup,
         this.gameState.values.selfRegion as Regions
       );
+    }
+    if (events.ChatMessage) {
+      if (events.ChatMessage.message.content.match(/^\?stats/)) {
+        if (
+          this.microLobby?.lobbyStatic?.isHost &&
+          this.settings.values.elo.type !== "off" &&
+          this.microLobby?.statsAvailable
+        ) {
+          let data: false | PlayerData;
+          let playerTarget = events.ChatMessage.message.content.split(" ")[1];
+          if (playerTarget) {
+            let targets = this.microLobby?.searchPlayer(playerTarget);
+            if (targets.length === 1) {
+              // Set the sender to a the target player. Could use a empty string and ?? instead
+              events.ChatMessage.message.sender = targets[0];
+              data = this.getPlayerData(events.ChatMessage.message.sender);
+            } else if (targets.length > 1) {
+              this.gameSocket.sendChatMessage(
+                "Multiple players found. Please be more specific."
+              );
+              return;
+            } else {
+              this.gameSocket.sendChatMessage("No player found.");
+              return;
+            }
+          } else {
+            data = this.getPlayerData(events.ChatMessage.message.sender);
+          }
+          if (data) {
+            if (!data.extra || data.extra?.rating === -1) {
+              this.gameSocket.sendChatMessage("Data pending");
+            } else {
+              this.gameSocket.sendChatMessage(
+                events.ChatMessage.message.sender +
+                  " ELO: " +
+                  data.extra.rating +
+                  ", Rank: " +
+                  data.extra.rank +
+                  ", Played: " +
+                  data.extra.played +
+                  ", Wins: " +
+                  data.extra.wins +
+                  ", Losses: " +
+                  data.extra.losses +
+                  ", Last Change: " +
+                  data.extra.lastChange
+              );
+            }
+          } else {
+            this.gameSocket.sendChatMessage("No data available or pending?");
+          }
+        } else {
+          this.gameSocket.sendChatMessage("Data not available");
+        }
+      }
     }
   }
 
@@ -229,7 +283,6 @@ class LobbyControl extends Module {
   }
 
   clear() {
-    this.voteStartVotes = [];
     this.bestCombo = [];
     this.refreshing = false;
     if (this.staleTimer) {
@@ -979,10 +1032,10 @@ class LobbyControl extends Module {
       ["GAME_LOBBY", "CUSTOM_GAME_LOBBY"].includes(this.gameState.values.menuState)
     ) {
       this.gameSocket.sendMessage({ LeaveGame: {} });
-      if (this.lobby?.microLobby?.lobbyStatic?.lobbyName) {
-        let oldLobbyName = this.lobby?.microLobby?.lobbyStatic.lobbyName;
+      if (this.microLobby?.lobbyStatic?.lobbyName) {
+        let oldLobbyName = this.microLobby?.lobbyStatic.lobbyName;
         await sleep(1000);
-        if (this.lobby?.microLobby?.lobbyStatic.lobbyName === oldLobbyName) {
+        if (this.microLobby?.lobbyStatic.lobbyName === oldLobbyName) {
           this.info("Lobby did not leave, trying again");
           await this.warControl.exitGame();
           this.warControl.openWarcraft();
