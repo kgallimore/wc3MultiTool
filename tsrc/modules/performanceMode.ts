@@ -15,17 +15,6 @@ class PerformanceMode extends Module {
     this.togglePerformanceMode(this.settings.values.client.performanceMode);
   }
 
-  protected onSettingsUpdate(updates: SettingsUpdates): void {
-    if (updates.client?.performanceMode !== undefined) {
-    }
-  }
-
-  protected onGameSocketEvent(events: GameSocketEvents): void {
-    if (events.OnNetProviderInitialized && this.settings.values.client.performanceMode) {
-      setTimeout(autoHostGame, 1000);
-    }
-  }
-
   togglePerformanceMode(enabled: boolean) {
     if (enabled) {
       if (existsSync(this.warInstallLoc + "\\_retail_\\webui\\GlueManagerAltered.js")) {

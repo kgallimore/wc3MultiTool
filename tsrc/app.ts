@@ -1,4 +1,4 @@
-import { screen, keyboard } from "@nut-tree/nut-js";
+import { screen, keyboard, Point, mouse, straightTo } from "@nut-tree/nut-js";
 require("@nut-tree/nl-matcher");
 import {
   app,
@@ -13,9 +13,19 @@ import {
 } from "electron";
 import { autoUpdater } from "electron-updater";
 import * as log from "electron-log";
-import * as path from "path";
+import { join } from "path";
 import Store from "electron-store";
-import fs from "fs";
+import {
+  readdirSync,
+  existsSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  createReadStream,
+  copyFileSync,
+  mkdirSync,
+  writeFileSync,
+} from "fs";
 import { discSingle } from "./modules/disc";
 import { discRPCSingle } from "./modules/discordRPC";
 import { warControl } from "./globals/warControl";
@@ -35,16 +45,17 @@ const FormData = require("form-data");
 const translate = require("translate-google");
 if (!app.isPackaged) {
   require("electron-reload")(__dirname, {
-    electron: path.join(__dirname, "../node_modules", ".bin", "electron.cmd"),
+    electron: join(__dirname, "../node_modules", ".bin", "electron.cmd"),
     awaitWriteFinish: true,
   });
 }
 import { WindowSend, WindowReceive, BanWhiteList } from "./utility";
 
 import { settings } from "./globals/settings";
-import { gameState } from "./globals/gameState";
+import { gameState, GameState } from "./globals/gameState";
 import { webUISocket, WebUIEvents } from "./globals/webUISocket";
 import { gameSocket } from "./globals/gameSocket";
+import { clientState } from "./globals/clientState";
 
 import { CommSingle } from "./modules/comm";
 
@@ -82,10 +93,10 @@ if (!gotLock) {
 
   var warInstallLoc: string = store.get("warInstallLoc") as string;
   if (!warInstallLoc || warInstallLoc.includes(".exe")) {
-    let data = fs.readFileSync("warInstallLoc.txt");
+    let data = readFileSync("warInstallLoc.txt");
     {
       warInstallLoc = data.toString();
-      if (fs.existsSync(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe")) {
+      if (existsSync(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe")) {
         store.set("warInstallLoc", warInstallLoc);
       } else {
         // TODO this needs to be checked to make sure it doesn't mess with WarSingle. Also creating a temp window seems like a bad idea
@@ -218,9 +229,9 @@ if (!gotLock) {
       height: 800,
       title: "WC3 MultiTool v" + app.getVersion(),
       show: false,
-      icon: path.join(__dirname, "images/wc3_auto_balancer_v2.png"),
+      icon: join(__dirname, "images/wc3_auto_balancer_v2.png"),
       webPreferences: {
-        preload: path.join(__dirname, "preload.js"),
+        preload: join(__dirname, "preload.js"),
         nodeIntegration: false,
         contextIsolation: true,
       },
@@ -250,7 +261,7 @@ if (!gotLock) {
     });
     win.on("minimize", function (event: any) {
       event.preventDefault();
-      appIcon = new Tray(path.join(__dirname, "images/wc3_auto_balancer_v2.png"));
+      appIcon = new Tray(join(__dirname, "images/wc3_auto_balancer_v2.png"));
 
       appIcon.setContextMenu(contextMenu);
 
@@ -260,7 +271,7 @@ if (!gotLock) {
       }).show();
       win.hide();
     });
-    win.loadFile(path.join(__dirname, "../public/index.html"));
+    win.loadFile(join(__dirname, "../public/index.html"));
   };
 
   app.on("ready", function () {
@@ -273,9 +284,9 @@ if (!gotLock) {
     }
     log.info("App ready");
 
-    if (fs.existsSync(wc3mtTargetFile)) {
+    if (existsSync(wc3mtTargetFile)) {
       log.info("Removing leftover file");
-      fs.rmSync(wc3mtTargetFile);
+      rmSync(wc3mtTargetFile);
     }
 
     initModules();
@@ -315,13 +326,101 @@ if (!gotLock) {
     sendWindow({ messageType: "statusChange", data: { connected } });
   }
 
-  function sendProgress(step = "Nothing", progress = 0) {
-    sendWindow({ messageType: "progress", data: { progress: { step, progress } } });
+  function sendProgress(
+    progress: { step: string; progress: number } = { step: "Nothing", progress: 0 }
+  ) {
+    sendWindow({ messageType: "progress", data: { progress } });
+  }
+
+  async function handleGlueScreen(newScreen: GameState["menuState"]) {
+    // Create a new game at menu or if previously in game(score screen loads twice)
+    // TODO: Keep tack of previous score screen for above note.
+    if (
+      !newScreen ||
+      newScreen === "null" ||
+      (newScreen === gameState.values.menuState && newScreen !== "SCORE_SCREEN")
+    ) {
+      return;
+    }
+    log.info("Screen changed to: ", newScreen);
+    if (["CUSTOM_LOBBIES", "MAIN_MENU"].includes(newScreen)) {
+      log.info("Checking to see if we should auto host or join a lobby link.");
+      if (protocolHandler.openLobbyParams.lobbyName) {
+        setTimeout(protocolHandler.openParamsJoin, 250);
+      } else {
+        setTimeout(autoHost.autoHostGame, 250);
+      }
+    } else if (newScreen === "LOADING_SCREEN") {
+      if (settings.values.autoHost.type === "rapidHost") {
+        if (settings.values.autoHost.rapidHostTimer === 0) {
+          log.info("Rapid Host leave game immediately");
+          lobbyControl.leaveGame();
+        } else if (settings.values.autoHost.rapidHostTimer === -1) {
+          log.info("Rapid Host exit game immediately");
+          await warControl.forceQuitWar();
+          warControl.openWarcraft();
+        }
+      }
+    } else if (
+      gameState.values.menuState === "LOADING_SCREEN" &&
+      newScreen === "SCORE_SCREEN"
+    ) {
+      log.info("Game has finished loading in.");
+      gameState.updateGameState({ inGame: true, action: "waitingToLeaveGame" });
+      if (settings.values.autoHost.type === "smartHost") {
+        log.info("Setting up smart host.");
+        setTimeout(() => autoHost.smartQuit(), 15000);
+      }
+      if (
+        settings.values.autoHost.type === "rapidHost" &&
+        settings.values.autoHost.rapidHostTimer > 0
+      ) {
+        log.info(
+          "Setting rapid host timer to " + settings.values.autoHost.rapidHostTimer
+        );
+        setTimeout(
+          () => lobbyControl.leaveGame,
+          settings.values.autoHost.rapidHostTimer * 1000 * 60
+        );
+      }
+      let screenHeight = await screen.height();
+      let safeZone = new Point(
+        (await screen.width()) / 2,
+        screenHeight - screenHeight / 4
+      );
+      await mouse.move(straightTo(safeZone));
+      warControl.sendInGameChat("");
+    } else if (newScreen === "LOGIN_DOORS") {
+      if (settings.values.client.performanceMode) {
+        [
+          "GetLocalPlayerName",
+          "FriendsGetInvitations",
+          "FriendsGetFriends",
+          "MultiplayerSendRecentPlayers",
+          "ClanGetClanInfo",
+          "ClanGetMembers",
+          "StopOverworldMusic",
+          "StopAmbientSound",
+          "LoginDoorClose",
+          "StopAmbientSound",
+          "StopAmbientSound",
+          "OnWebUILoad",
+        ].forEach((message, index) => {
+          setTimeout(() => {
+            gameSocket.sendMessage({ [message]: {} });
+          }, 50 * index);
+        });
+      }
+    }
+    gameState.updateGameState({ menuState: newScreen });
+    sendWindow({
+      messageType: "menusChange",
+      data: { value: gameState.values.menuState },
+    });
   }
 
   function clearLobby() {
     // TODO: fix lobby close if game was started
-    gameSocket.sentMessages = [];
     if (
       gameState.values.menuState !== "LOADING_SCREEN" &&
       lobbyControl.microLobby?.lobbyStatic.lobbyName
@@ -331,9 +430,6 @@ if (!gotLock) {
         data: { lobbyData: { leftLobby: true } },
       });
       HubSingle.sendToHub({ lobbyUpdates: { leftLobby: true } });
-      discSingle.lobbyClosed();
-      gameState.updateGameState({ action: "nothing" });
-      lobbyControl.clear();
     }
   }
 
@@ -442,14 +538,14 @@ if (!gotLock) {
                 let copyDir = `${app
                   .getPath("home")
                   .replace(/\\/g, "/")}/Documents/Warcraft III/Maps/MultiTool/`;
-                if (!fs.existsSync(copyDir)) {
-                  fs.mkdirSync(copyDir);
+                if (!existsSync(copyDir)) {
+                  mkdirSync(copyDir);
                 }
                 newMapPath = copyDir + mapName;
                 try {
-                  if (!fs.existsSync(newMapPath)) {
+                  if (!existsSync(newMapPath)) {
                     log.info("Copying map to safe path.");
-                    fs.copyFileSync(result.filePaths[0], newMapPath);
+                    copyFileSync(result.filePaths[0], newMapPath);
                   } else {
                     log.info("Map already exists, not copying.");
                   }
@@ -505,12 +601,12 @@ if (!gotLock) {
           let list = banWhiteListSingle.fetchList({ type: args.exportImport.type });
           if (args.exportImport.type === "banList") {
             let path = app.getPath("documents") + "\\bans.json";
-            fs.writeFileSync(path, JSON.stringify(list));
+            writeFileSync(path, JSON.stringify(list));
             console.log(path);
             shell.showItemInFolder(path);
           } else if (args.exportImport.type === "whiteList") {
             let path = app.getPath("documents") + "\\whiteList.json";
-            fs.writeFileSync(path, JSON.stringify(list));
+            writeFileSync(path, JSON.stringify(list));
             console.log(path);
             shell.showItemInFolder(path);
           }
@@ -527,7 +623,7 @@ if (!gotLock) {
             })
             .then((result) => {
               result.filePaths.forEach((file) => {
-                let bans = JSON.parse(fs.readFileSync(file).toString());
+                let bans = JSON.parse(readFileSync(file).toString());
                 bans.forEach((ban: BanWhiteList) => {
                   if (args.exportImport?.type === "banList") {
                     banWhiteListSingle.banPlayer(
@@ -564,13 +660,16 @@ if (!gotLock) {
   function moduleHandler(command: EmitEvents) {
     if (command.newProgress) {
       log.info(command.newProgress);
-      sendWindow({ messageType: "progress", data: { progress: command.newProgress } });
+      sendProgress(command.newProgress);
     }
     if (command.notification) {
       new Notification(command.notification).show();
     }
     if (command.sendWindow) {
       sendWindow(command.sendWindow);
+    }
+    if (command.mmdResults) {
+      discSingle.lobbyEnded(command.mmdResults);
     }
     if (command.lobbyUpdate) {
       // TODO Move the below code to the module system.
@@ -590,8 +689,8 @@ if (!gotLock) {
           sendWindow({ messageType: "lobbyUpdate", data: { lobbyData: update } });
           HubSingle.sendToHub({ lobbyUpdates: update });
           if (settings.values.obs.textSource) {
-            fs.writeFileSync(
-              path.join(app.getPath("documents"), "wc3mt.txt"),
+            writeFileSync(
+              join(app.getPath("documents"), "wc3mt.txt"),
               lobbyControl.exportTeamStructureString()
             );
           }
@@ -659,7 +758,7 @@ if (!gotLock) {
             announcement();
             if (
               settings.values.autoHost.minPlayers !== 0 &&
-              lobbyControl.microLobby?.nonSpecPlayers.length >=
+              lobbyControl.microLobby.nonSpecPlayers.length >=
                 settings.values.autoHost.minPlayers
             ) {
               startGame(settings.values.autoHost.delayStart);
@@ -668,7 +767,7 @@ if (!gotLock) {
             log.warn("Nameless player joined");
           }
         } else if (update.lobbyReady) {
-          if (lobbyControl.microLobby?.lobbyStatic.isHost) {
+          if (lobbyControl.microLobby.lobbyStatic.isHost) {
             if (settings.values.autoHost.sounds) {
               playSound("ready.wav");
             }
@@ -676,7 +775,7 @@ if (!gotLock) {
               settings.values.autoHost.type === "smartHost" ||
               settings.values.autoHost.type === "rapidHost"
             ) {
-              sendProgress("Starting Game", 100);
+              sendProgress({ step: "Starting Game", progress: 100 });
               if (
                 (settings.values.elo.type == "off" ||
                   !settings.values.elo.balanceTeams) &&
