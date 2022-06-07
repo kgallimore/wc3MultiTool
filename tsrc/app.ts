@@ -23,7 +23,7 @@ import { HubSingle } from "./modules/hub";
 import { obsSocketSingle } from "./modules/obs";
 import { SEClientSingle } from "./modules/stream";
 import { performanceMode } from "./modules/performanceMode";
-import { banWhiteListSingle } from "./modules/banWhiteList";
+import { banWhiteListSingle } from "./modules/administration";
 import { autoHost } from "./modules/autoHost";
 import { protocolHandler, OpenLobbyParams } from "./modules/protocolHandler";
 import { lobbyControl } from "./modules/lobbyControl";

@@ -3,64 +3,122 @@ import { Module } from "./../moduleBase";
 import type { GameState, MenuStates } from "./../globals/gameState";
 import { CreateLobbyPayload, GameSocketEvents } from "./../globals/gameSocket";
 
-import {app} from "electron"
-import {join} from "path"
-import Store from "electron-store"
+import { app } from "electron";
+import { join } from "path";
+import Store from "electron-store";
 const store = new Store();
+const FormData = require("form-data");
 
-import {getTargetRegion} from "./../utility"
-import {readdirSync, statSync, existsSync, readFileSync, rmSync, createReadStream} from "fs";
+import { getTargetRegion } from "./../utility";
+import {
+  readdirSync,
+  statSync,
+  existsSync,
+  readFileSync,
+  rmSync,
+  createReadStream,
+} from "fs";
 import parser from "w3gjs";
 
 import {
-    keyboard,
-    Key,
-    screen,
-    mouse,
-    centerOf,
-    imageResource,
-    Point,
-    sleep,
-    straightTo,
-  } from "@nut-tree/nut-js";
-  require("@nut-tree/nl-matcher");
+  keyboard,
+  Key,
+  screen,
+  mouse,
+  centerOf,
+  imageResource,
+  Point,
+  sleep,
+  straightTo,
+} from "@nut-tree/nut-js";
+require("@nut-tree/nl-matcher");
 
 export interface mmdResults {
-    list: {
-      [key: string]: { pid: string; won: boolean; extra: { [key: string]: string } };
-    };
-    lookup: { [key: string]: string };
-  }
+  list: {
+    [key: string]: { pid: string; won: boolean; extra: { [key: string]: string } };
+  };
+  lookup: { [key: string]: string };
+}
 
 class AutoHost extends Module {
-    replayFolders: string = join(
-        app.getPath("documents"),
-        "Warcraft III\\BattleNet"
-      );
-    
-      wc3mtTargetFile = `${app.getPath(
-        "documents"
-      )}\\Warcraft III\\CustomMapData\\wc3mt.txt`;
-    gameNumber = 1;
-    voteTimer: NodeJS.Timeout | null = null;
-    private lastAnnounceTime: number = 0;
+  voteStartVotes: Array<string> = [];
+  replayFolders: string = join(app.getPath("documents"), "Warcraft III\\BattleNet");
+
+  wc3mtTargetFile = `${app.getPath("documents")}\\Warcraft III\\CustomMapData\\wc3mt.txt`;
+  gameNumber = 1;
+  voteTimer: NodeJS.Timeout | null = null;
+  private lastAnnounceTime: number = 0;
   constructor() {
     super();
   }
 
   protected onGameStateUpdate(updates: Partial<GameState>): void {
-    if(updates.menuState){
-        this.handleGlueScreen(updates.menuState);
-      }
+    if (updates.menuState) {
+      this.handleGlueScreen(updates.menuState);
+    }
   }
 
   protected onGameSocketEvent(events: GameSocketEvents): void {
-      if(events.UpdateScoreInfo){
-          this.autoHostGame();
+    if (events.UpdateScoreInfo) {
+      this.autoHostGame();
+    }
+    if (events.SetGlueScreen) {
+      this.handleGlueScreen(events.SetGlueScreen.screen as MenuStates);
+    }
+    if (events.ChatMessage) {
+      if (events.ChatMessage.message.content.match(/^\?votestart$/i)) {
+        if (
+          this.settings.values.autoHost.voteStart &&
+          this.voteStartVotes &&
+          this.lobby?.microLobby?.lobbyStatic.isHost &&
+          ["rapidHost", "smartHost"].includes(this.settings.values.autoHost.type)
+        ) {
+          if (
+            !this.lobby?.microLobby?.allPlayers.includes(
+              events.ChatMessage.message.sender
+            )
+          ) {
+            this.gameSocket.sendChatMessage("Only players may vote start.");
+            return;
+          }
+          if (this.voteStartVotes.length === 0) {
+            if (
+              (this.settings.values.autoHost.voteStartTeamFill &&
+                this.lobby.allPlayerTeamsContainPlayers()) ||
+              !this.settings.values.autoHost.voteStartTeamFill
+            ) {
+              this.voteTimer = setTimeout(this.cancelVote.bind(this), 60000);
+              this.gameSocket.sendChatMessage("You have 60 seconds to ?votestart.");
+            } else {
+              this.gameSocket.sendChatMessage("Unavailable. Not all teams have players.");
+              return;
+            }
+          }
+          if (
+            !this.voteStartVotes.includes(events.ChatMessage.message.sender) &&
+            this.voteTimer
+          ) {
+            this.voteStartVotes.push(events.ChatMessage.message.sender);
+            if (
+              this.voteStartVotes.length >=
+              this.lobby?.microLobby?.nonSpecPlayers.length *
+                (this.settings.values.autoHost.voteStartPercent / 100)
+            ) {
+              this.info("Vote start succeeded");
+              this.lobby.startGame();
+            } else {
+              this.gameSocket.sendChatMessage(
+                Math.ceil(
+                  this.lobby?.microLobby?.nonSpecPlayers.length *
+                    (this.settings.values.autoHost.voteStartPercent / 100) -
+                    this.voteStartVotes.length
+                ).toString() + " more vote(s) required."
+              );
+            }
+          }
+        }
       }
-      if(events.SetGlueScreen){
-        this.handleGlueScreen(events.SetGlueScreen.screen as MenuStates);
-      }
+    }
   }
 
   async handleGlueScreen(newScreen: GameState["menuState"]) {
@@ -85,7 +143,7 @@ class AutoHost extends Module {
       if (this.settings.values.autoHost.type === "rapidHost") {
         if (this.settings.values.autoHost.rapidHostTimer === 0) {
           this.info("Rapid Host leave game immediately");
-          this.leaveGame();
+          this.lobby?.leaveGame();
         } else if (this.settings.values.autoHost.rapidHostTimer === -1) {
           this.info("Rapid Host exit game immediately");
           await this.warControl.forceQuitWar();
@@ -109,7 +167,10 @@ class AutoHost extends Module {
         this.info(
           "Setting rapid host timer to " + this.settings.values.autoHost.rapidHostTimer
         );
-        setTimeout(this.leaveGame, this.settings.values.autoHost.rapidHostTimer * 1000 * 60);
+        setTimeout(
+          () => this.lobby?.leaveGame,
+          this.settings.values.autoHost.rapidHostTimer * 1000 * 60
+        );
       }
       let screenHeight = await screen.height();
       let safeZone = new Point(
@@ -135,7 +196,7 @@ class AutoHost extends Module {
           "OnWebUILoad",
         ].forEach((message, index) => {
           setTimeout(() => {
-            this.gameSocket.sendMessage({[message]: {}});
+            this.gameSocket.sendMessage({ [message]: {} });
           }, 50 * index);
         });
       }
@@ -168,14 +229,18 @@ class AutoHost extends Module {
           this.analyzeGame(mostModified.file).then((results) => {
             if (discSingle) discSingle.lobbyEnded(results);
           });
-          this.clientState.updateClientState({ latestUploadedReplay: mostModified.mtime });
+          this.clientState.updateClientState({
+            latestUploadedReplay: mostModified.mtime,
+          });
           store.set("latestUploadedReplay", this.clientState.values.latestUploadedReplay);
           if (this.settings.values.elo.type === "wc3stats") {
             let form = new FormData();
             form.append("replay", createReadStream(mostModified.file));
             fetch(
               `https://api.wc3stats.com/upload${
-                this.settings.values.elo.privateKey ? "/" + this.settings.values.elo.privateKey : ""
+                this.settings.values.elo.privateKey
+                  ? "/" + this.settings.values.elo.privateKey
+                  : ""
               }?auto=true`,
               {
                 method: "POST",
@@ -188,15 +253,18 @@ class AutoHost extends Module {
               (response) => {
                 if (response.status !== 200) {
                   this.info(response.statusText);
-                  this.sendWindow({messageType: "error",data: { error: response.statusText }});
+                  this.sendWindow({
+                    messageType: "error",
+                    data: { error: response.statusText },
+                  });
                 } else {
                   this.info("Uploaded replay to wc3stats");
-                  this.emitProgress({step: "Uploaded replay", progress: 0});
+                  this.emitProgress({ step: "Uploaded replay", progress: 0 });
                 }
               },
               (error) => {
                 this.info(error.message);
-                this.sendWindow({messageType: "error", data: { error: error.message });
+                this.sendWindow({ messageType: "error", data: { error: error.message } });
               }
             );
           }
@@ -204,7 +272,10 @@ class AutoHost extends Module {
       }
     }
     this.gameState.updateGameState({ menuState: newScreen });
-    this.sendWindow({messageType: "menusChange", data: { value: this.gameState.values.menuState }});
+    this.sendWindow({
+      messageType: "menusChange",
+      data: { value: this.gameState.values.menuState },
+    });
   }
 
   async autoHostGame(override: boolean = false) {
@@ -238,7 +309,10 @@ class AutoHost extends Module {
   }
 
   async smartQuit() {
-    if (this.gameState.values.inGame || this.gameState.values.menuState === "LOADING_SCREEN") {
+    if (
+      this.gameState.values.inGame ||
+      this.gameState.values.menuState === "LOADING_SCREEN"
+    ) {
       if (existsSync(this.wc3mtTargetFile)) {
         // The library seems to create the file at the start of the game anyways, so if it is going to be written to, don't do ocr.
         if (
@@ -248,7 +322,7 @@ class AutoHost extends Module {
         ) {
           this.info("Game is over, quitting.");
           rmSync(this.wc3mtTargetFile);
-          leaveGame();
+          this.lobby?.leaveGame();
         } else {
           setTimeout(this.smartQuit.bind(this), 1000);
         }
@@ -260,7 +334,8 @@ class AutoHost extends Module {
 
   async findQuit() {
     if (
-      (this.gameState.values.inGame || this.gameState.values.menuState === "LOADING_SCREEN")
+      this.gameState.values.inGame ||
+      this.gameState.values.menuState === "LOADING_SCREEN"
     ) {
       if (await this.warControl.activeWindowWar()) {
         let foundTarget = false;
@@ -278,12 +353,14 @@ class AutoHost extends Module {
           }
         }
         if (foundTarget) {
-          leaveGame();
+          this.lobby?.leaveGame();
           if (this.settings.values.autoHost.sounds) {
-            playSound("quit.wav");
+            this.playSound("quit.wav");
           }
         } else if (
-          !this.lobby?.microLobby?.nonSpecPlayers.includes(this.gameState.values.selfBattleTag)
+          !this.lobby?.microLobby?.nonSpecPlayers.includes(
+            this.gameState.values.selfBattleTag
+          )
         ) {
           if (this.settings.values.autoHost.leaveAlternate) {
             foundTarget = false;
@@ -312,7 +389,7 @@ class AutoHost extends Module {
             }
             keyboard.type(Key.Escape);
             if (foundTarget) {
-              leaveGame();
+              this.lobby?.leaveGame();
               if (this.settings.values.autoHost.sounds) {
                 this.playSound("quit.wav");
               }
@@ -329,9 +406,7 @@ class AutoHost extends Module {
   }
 
   async createGame(
-    customGameData:
-      | CreateLobbyPayload
-      | false = false,
+    customGameData: CreateLobbyPayload | false = false,
     callCount: number = 0,
     lobbyName: string = ""
   ): Promise<boolean> {
@@ -345,7 +420,7 @@ class AutoHost extends Module {
         this.gameState.values.menuState
       )
     ) {
-        this.gameState.updateGameState({ action: "creatingLobby" });
+      this.gameState.updateGameState({ action: "creatingLobby" });
       if ((callCount + 5) % 10 === 0) {
         if (this.settings.values.autoHost.increment) {
           if (callCount > 45) {
@@ -354,7 +429,7 @@ class AutoHost extends Module {
           this.gameNumber += 1;
           this.warn("Failed to create game. Incrementing game name");
         } else {
-            this.warn("Failed to create game. Stopping attempts.");
+          this.warn("Failed to create game. Stopping attempts.");
           return false;
         }
       }
@@ -383,15 +458,23 @@ class AutoHost extends Module {
             flagRandomHero: this.settings.values.autoHost.advancedMapOptions
               ? this.settings.values.autoHost.flagRandomHero
               : false,
-            settingObservers: parseInt(this.settings.values.autoHost.observers) as 0 | 1 | 2 | 3,
+            settingObservers: parseInt(this.settings.values.autoHost.observers) as
+              | 0
+              | 1
+              | 2
+              | 3,
             settingVisibility: this.settings.values.autoHost.advancedMapOptions
-              ? parseInt(this.settings.values.autoHost.settingVisibility) as 0 | 1 | 2 | 3
+              ? (parseInt(this.settings.values.autoHost.settingVisibility) as
+                  | 0
+                  | 1
+                  | 2
+                  | 3)
               : 0,
           },
           privateGame: this.settings.values.autoHost.private,
         };
         this.info("Sending autoHost payload", payloadData);
-        this.gameSocket.sendMessage({"CreateLobby": payloadData});
+        this.gameSocket.sendMessage({ CreateLobby: payloadData });
       }
       await sleep(1000);
       return await this.createGame(false, callCount + 1, lobbyName);
@@ -421,9 +504,7 @@ class AutoHost extends Module {
       this.gameSocket.sendChatMessage("Vote timed out.");
       this.info("Vote timed out");
     }
-    if (this.lobby) {
-      this.lobby.voteStartVotes = [];
-    }
+    this.voteStartVotes = [];
   }
 
   announcement() {
@@ -435,7 +516,8 @@ class AutoHost extends Module {
       let currentTime = Date.now();
       if (
         currentTime >
-        this.lastAnnounceTime + 1000 * this.settings.values.autoHost.announceRestingInterval
+        this.lastAnnounceTime +
+          1000 * this.settings.values.autoHost.announceRestingInterval
       ) {
         this.lastAnnounceTime = currentTime;
         if (["rapidHost", "smartHost"].includes(this.settings.values.autoHost.type)) {
@@ -451,7 +533,8 @@ class AutoHost extends Module {
               }
             }
             if (
-              (this.settings.values.elo.type === "off" || !this.settings.values.elo.balanceTeams) &&
+              (this.settings.values.elo.type === "off" ||
+                !this.settings.values.elo.balanceTeams) &&
               this.settings.values.autoHost.shufflePlayers
             ) {
               text += " I will shuffle players before we start.";
@@ -471,14 +554,18 @@ class AutoHost extends Module {
             this.settings.values.autoHost.announceCustom &&
             this.settings.values.autoHost.customAnnouncement
           ) {
-            this.gameSocket.sendChatMessage(this.settings.values.autoHost.customAnnouncement);
+            this.gameSocket.sendChatMessage(
+              this.settings.values.autoHost.customAnnouncement
+            );
           }
         } else if (
           this.settings.values.autoHost.type === "lobbyHost" &&
           this.settings.values.autoHost.announceCustom &&
           this.settings.values.autoHost.customAnnouncement
         ) {
-          this.gameSocket.sendChatMessage(this.settings.values.autoHost.customAnnouncement);
+          this.gameSocket.sendChatMessage(
+            this.settings.values.autoHost.customAnnouncement
+          );
         }
       }
     }

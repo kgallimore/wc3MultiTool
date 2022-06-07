@@ -4,7 +4,7 @@ import type { AppSettings, SettingsKeys } from "./globals/settings";
 import type { GameState } from "./globals/gameState";
 import type { SettingsUpdates } from "./globals/settings";
 
-import type { FetchListOptions } from "./modules/banWhiteList";
+import type { FetchListOptions } from "./modules/administration";
 
 export interface WindowReceive {
   messageType:

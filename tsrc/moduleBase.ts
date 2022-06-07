@@ -11,7 +11,7 @@ import { gameSocket, GameSocketEvents } from "./globals/gameSocket";
 import { webUISocket, WebUIEvents } from "./globals/webUISocket";
 
 import type { SEEventEvent } from "./modules/stream";
-import type { LobbyControl } from "./modules/lobbyControl";
+import type { lobbyControl } from "./modules/lobbyControl";
 
 import type { SettingsUpdates } from "./globals/settings";
 
@@ -43,7 +43,7 @@ export class Module extends Global {
   protected webUISocket = webUISocket;
   protected gameSocket = gameSocket;
   protected warControl = warControl;
-  protected lobby: LobbyControl | null = null;
+  protected lobby: typeof lobbyControl | null = null;
 
   constructor(includeLobby: boolean = true) {
     super();
@@ -53,7 +53,7 @@ export class Module extends Global {
     this.gameSocket.on("event", this.onGameStateUpdate.bind(this));
     if (includeLobby) {
       import("./modules/lobbyControl").then((exports) => {
-        this.lobby = exports.LobbySingle;
+        this.lobby = exports.lobbyControl;
         this.lobby.on("lobbyUpdate", this.onLobbyUpdate.bind(this));
       });
     }
