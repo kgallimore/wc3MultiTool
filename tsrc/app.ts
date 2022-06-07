@@ -16,16 +16,14 @@ import * as log from "electron-log";
 import { join } from "path";
 import Store from "electron-store";
 import {
-  readdirSync,
   existsSync,
   readFileSync,
   rmSync,
-  statSync,
-  createReadStream,
   copyFileSync,
   mkdirSync,
   writeFileSync,
 } from "fs";
+import { play } from "sound-play";
 import { discSingle } from "./modules/disc";
 import { discRPCSingle } from "./modules/discordRPC";
 import { warControl } from "./globals/warControl";
@@ -419,6 +417,14 @@ if (!gotLock) {
     });
   }
 
+  function playSound(file: string) {
+    if (!app.isPackaged) {
+      play(join(__dirname, "sounds\\" + file));
+    } else {
+      play(join(app.getAppPath(), "\\..\\..\\sounds\\" + file));
+    }
+  }
+
   function clearLobby() {
     // TODO: fix lobby close if game was started
     if (
@@ -668,6 +674,9 @@ if (!gotLock) {
     if (command.sendWindow) {
       sendWindow(command.sendWindow);
     }
+    if (command.playSound) {
+      playSound(command.playSound);
+    }
     if (command.mmdResults) {
       discSingle.lobbyEnded(command.mmdResults);
     }
@@ -755,13 +764,13 @@ if (!gotLock) {
               }
             }
             log.info("Player joined: " + update.playerJoined.name);
-            announcement();
+            autoHost.announcement();
             if (
               settings.values.autoHost.minPlayers !== 0 &&
               lobbyControl.microLobby.nonSpecPlayers.length >=
                 settings.values.autoHost.minPlayers
             ) {
-              startGame(settings.values.autoHost.delayStart);
+              lobbyControl.startGame(settings.values.autoHost.delayStart);
             }
           } else {
             log.warn("Nameless player joined");
@@ -786,7 +795,7 @@ if (!gotLock) {
               // Wait a quarter second to make sure shuffles are done
               setTimeout(() => {
                 if (lobbyControl.isLobbyReady()) {
-                  startGame(settings.values.autoHost.delayStart);
+                  lobbyControl.startGame(settings.values.autoHost.delayStart);
                 }
               }, 250);
             }
