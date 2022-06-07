@@ -16,7 +16,6 @@ import type { lobbyControl } from "./modules/lobbyControl";
 
 import type { SettingsUpdates } from "./globals/settings";
 
-import { play } from "sound-play";
 import { join } from "path";
 import { app } from "electron";
 
@@ -28,6 +27,7 @@ export interface EmitEvents {
   notification?: { title: string; body: string };
   sendWindow?: { messageType: WindowReceive["messageType"]; data: WindowReceive["data"] };
   mmdResults?: mmdResults;
+  playSound?: string;
 }
 
 /**
@@ -113,11 +113,7 @@ export class Module extends Global {
     this.emitEvent({ notification: { title, body } });
   }
 
-  protected playSound(file: string) {
-    if (!app.isPackaged) {
-      play(join(__dirname, "sounds\\" + file));
-    } else {
-      play(join(app.getAppPath(), "\\..\\..\\sounds\\" + file));
-    }
+  protected playSound(playSound: string) {
+    this.emitEvent({ playSound });
   }
 }
