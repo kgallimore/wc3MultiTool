@@ -1,15 +1,29 @@
 import { Module } from "./../moduleBase";
 
-import type { GameState } from "./../globals/gameState";
-import { GameSocketEvents } from "./../globals/gameSocket";
+import type { GameState, MenuStates } from "./../globals/gameState";
+import { CreateLobbyPayload, GameSocketEvents } from "./../globals/gameSocket";
 
 import {app} from "electron"
 import {join} from "path"
+import Store from "electron-store"
+const store = new Store();
 
 import {getTargetRegion} from "./../utility"
 import {readdirSync, statSync, existsSync, readFileSync, rmSync, createReadStream} from "fs";
 import parser from "w3gjs";
 
+import {
+    keyboard,
+    Key,
+    screen,
+    mouse,
+    centerOf,
+    imageResource,
+    Point,
+    sleep,
+    straightTo,
+  } from "@nut-tree/nut-js";
+  require("@nut-tree/nl-matcher");
 
 export interface mmdResults {
     list: {
@@ -28,16 +42,30 @@ class AutoHost extends Module {
         "documents"
       )}\\Warcraft III\\CustomMapData\\wc3mt.txt`;
     gameNumber = 1;
+    voteTimer: NodeJS.Timeout | null = null;
+    private lastAnnounceTime: number = 0;
   constructor() {
     super();
   }
 
+  protected onGameStateUpdate(updates: Partial<GameState>): void {
+    if(updates.menuState){
+        this.handleGlueScreen(updates.menuState);
+      }
+  }
+
   protected onGameSocketEvent(events: GameSocketEvents): void {
-      
+      if(events.UpdateScoreInfo){
+          this.autoHostGame();
+      }
+      if(events.SetGlueScreen){
+        this.handleGlueScreen(events.SetGlueScreen.screen as MenuStates);
+      }
   }
 
   async handleGlueScreen(newScreen: GameState["menuState"]) {
     // Create a new game at menu or if previously in game(score screen loads twice)
+    // TODO: Keep tack of previous score screen for above note.
     if (
       !newScreen ||
       newScreen === "null" ||
@@ -60,8 +88,8 @@ class AutoHost extends Module {
           this.leaveGame();
         } else if (this.settings.values.autoHost.rapidHostTimer === -1) {
           this.info("Rapid Host exit game immediately");
-          await WarSingle.forceQuitWar();
-          WarSingle.openWarcraft();
+          await this.warControl.forceQuitWar();
+          this.warControl.openWarcraft();
         }
       }
     } else if (
@@ -105,9 +133,9 @@ class AutoHost extends Module {
           "StopAmbientSound",
           "StopAmbientSound",
           "OnWebUILoad",
-        ].forEach(function (message, index) {
+        ].forEach((message, index) => {
           setTimeout(() => {
-            this.sendMessage(message);
+            this.gameSocket.sendMessage({[message]: {}});
           }, 50 * index);
         });
       }
@@ -119,7 +147,7 @@ class AutoHost extends Module {
           .filter((dirent) => dirent.isDirectory())
           .map((dirent) => dirent.name)
           .forEach((folder) => {
-            const targetFile = path.join(
+            const targetFile = join(
               this.replayFolders,
               folder,
               "Replays",
@@ -163,12 +191,12 @@ class AutoHost extends Module {
                   this.sendWindow({messageType: "error",data: { error: response.statusText }});
                 } else {
                   this.info("Uploaded replay to wc3stats");
-                  sendProgress("Uploaded replay", 0);
+                  this.emitProgress({step: "Uploaded replay", progress: 0});
                 }
               },
               (error) => {
                 this.info(error.message);
-                this.sendWindow({messageType: "error", { error: error.message });
+                this.sendWindow({messageType: "error", data: { error: error.message });
               }
             );
           }
@@ -176,7 +204,7 @@ class AutoHost extends Module {
       }
     }
     this.gameState.updateGameState({ menuState: newScreen });
-    this.sendWindow({messageType: "menusChange", { value: this.gameState.values.menuState });
+    this.sendWindow({messageType: "menusChange", data: { value: this.gameState.values.menuState }});
   }
 
   async autoHostGame(override: boolean = false) {
@@ -197,14 +225,14 @@ class AutoHost extends Module {
         this.gameState.values.selfRegion !== targetRegion
       ) {
         this.info(`Changing autohost region to ${targetRegion}`);
-        await WarSingle.exitGame();
-        WarSingle.openWarcraft(targetRegion);
+        await this.warControl.exitGame();
+        this.warControl.openWarcraft(targetRegion);
         return true;
       } else {
         if (this.settings.values.autoHost.increment) {
           this.gameNumber += 1;
         }
-        return await createGame();
+        return await this.createGame();
       }
     }
   }
@@ -222,20 +250,19 @@ class AutoHost extends Module {
           rmSync(this.wc3mtTargetFile);
           leaveGame();
         } else {
-          setTimeout(smartQuit, 1000);
+          setTimeout(this.smartQuit.bind(this), 1000);
         }
       } else {
-        findQuit();
+        this.findQuit();
       }
     }
   }
 
   async findQuit() {
     if (
-      (this.gameState.values.inGame || this.gameState.values.menuState === "LOADING_SCREEN") &&
-      webUISocket?.OPEN
+      (this.gameState.values.inGame || this.gameState.values.menuState === "LOADING_SCREEN")
     ) {
-      if (await WarSingle.activeWindowWar()) {
+      if (await this.warControl.activeWindowWar()) {
         let foundTarget = false;
         let searchFiles = ["quitNormal.png", "quitHLW.png"];
         for (const file of searchFiles) {
@@ -256,7 +283,7 @@ class AutoHost extends Module {
             playSound("quit.wav");
           }
         } else if (
-          !LobbySingle.microLobby?.nonSpecPlayers.includes(this.gameState.values.selfBattleTag)
+          !this.lobby?.microLobby?.nonSpecPlayers.includes(this.gameState.values.selfBattleTag)
         ) {
           if (this.settings.values.autoHost.leaveAlternate) {
             foundTarget = false;
@@ -287,11 +314,11 @@ class AutoHost extends Module {
             if (foundTarget) {
               leaveGame();
               if (this.settings.values.autoHost.sounds) {
-                playSound("quit.wav");
+                this.playSound("quit.wav");
               }
             }
           } else if (this.settings.values.obs.autoStream) {
-            if (!sendingInGameChat.active) {
+            if (!this.warControl.sendingInGameChat.active) {
               keyboard.type(Key.Space);
             }
           }
@@ -303,30 +330,16 @@ class AutoHost extends Module {
 
   async createGame(
     customGameData:
-      | {
-          filename: string;
-          gameSpeed: number;
-          gameName: string;
-          mapSettings: {
-            flagLockTeams: boolean;
-            flagPlaceTeamsTogether: boolean;
-            flagFullSharedUnitControl: boolean;
-            flagRandomRaces: boolean;
-            flagRandomHero: boolean;
-            settingObservers: number;
-            settingVisibility: number;
-          };
-          privateGame: boolean;
-        }
+      | CreateLobbyPayload
       | false = false,
     callCount: number = 0,
     lobbyName: string = ""
   ): Promise<boolean> {
-    if (!(await WarSingle.isWarcraftOpen())) {
-      await WarSingle.openWarcraft();
+    if (!(await this.warControl.isWarcraftOpen())) {
+      await this.warControl.openWarcraft();
     }
     if (
-      !LobbySingle.microLobby?.lobbyStatic.lobbyName &&
+      !this.lobby?.microLobby?.lobbyStatic.lobbyName &&
       !this.gameState.values.inGame &&
       !["CUSTOM_GAME_LOBBY", "LOADING_SCREEN", "GAME_LOBBY"].includes(
         this.gameState.values.menuState
@@ -350,7 +363,7 @@ class AutoHost extends Module {
           lobbyName ||
           this.settings.values.autoHost.gameName +
             (this.settings.values.autoHost.increment ? ` #${this.gameNumber}` : "");
-        const payloadData = customGameData || {
+        const payloadData: CreateLobbyPayload = customGameData || {
           filename: this.settings.values.autoHost.mapPath.replace(/\\/g, "/"),
           gameSpeed: 2,
           gameName: lobbyName,
@@ -370,23 +383,23 @@ class AutoHost extends Module {
             flagRandomHero: this.settings.values.autoHost.advancedMapOptions
               ? this.settings.values.autoHost.flagRandomHero
               : false,
-            settingObservers: parseInt(this.settings.values.autoHost.observers),
+            settingObservers: parseInt(this.settings.values.autoHost.observers) as 0 | 1 | 2 | 3,
             settingVisibility: this.settings.values.autoHost.advancedMapOptions
-              ? parseInt(this.settings.values.autoHost.settingVisibility)
+              ? parseInt(this.settings.values.autoHost.settingVisibility) as 0 | 1 | 2 | 3
               : 0,
           },
           privateGame: this.settings.values.autoHost.private,
         };
         this.info("Sending autoHost payload", payloadData);
-        this.sendMessage("CreateLobby", payloadData);
+        this.gameSocket.sendMessage({"CreateLobby": payloadData});
       }
       await sleep(1000);
-      return await this.gameSocket.createGame(false, callCount + 1, lobbyName);
-    } else if (LobbySingle.microLobby?.lobbyStatic.lobbyName === lobbyName) {
+      return await this.createGame(false, callCount + 1, lobbyName);
+    } else if (this.lobby?.microLobby?.lobbyStatic.lobbyName === lobbyName) {
       this.info("Game successfully created");
       return true;
     } else if (
-      !LobbySingle.microLobby?.lobbyStatic.lobbyName.includes(
+      !this.lobby?.microLobby?.lobbyStatic.lobbyName.includes(
         this.settings.values.autoHost.gameName
       )
     ) {
@@ -399,17 +412,75 @@ class AutoHost extends Module {
   }
 
   cancelVote() {
-    if (voteTimer) {
-      clearTimeout(voteTimer);
-      voteTimer = null;
-      this.sendChatMessage("Vote cancelled.");
+    if (this.voteTimer) {
+      clearTimeout(this.voteTimer);
+      this.voteTimer = null;
+      this.gameSocket.sendChatMessage("Vote cancelled.");
       this.info("Vote cancelled");
     } else {
-      this.sendChatMessage("Vote timed out.");
+      this.gameSocket.sendChatMessage("Vote timed out.");
       this.info("Vote timed out");
     }
     if (this.lobby) {
-      this.lobby?.voteStartVotes = [];
+      this.lobby.voteStartVotes = [];
+    }
+  }
+
+  announcement() {
+    if (
+      (this.gameState.values.menuState === "CUSTOM_GAME_LOBBY" ||
+        this.gameState.values.menuState === "GAME_LOBBY") &&
+      this.lobby?.microLobby?.lobbyStatic.isHost
+    ) {
+      let currentTime = Date.now();
+      if (
+        currentTime >
+        this.lastAnnounceTime + 1000 * this.settings.values.autoHost.announceRestingInterval
+      ) {
+        this.lastAnnounceTime = currentTime;
+        if (["rapidHost", "smartHost"].includes(this.settings.values.autoHost.type)) {
+          if (this.settings.values.autoHost.announceIsBot) {
+            let text = "Welcome. I am a bot.";
+            if (
+              this.lobby?.microLobby?.statsAvailable &&
+              this.settings.values.elo.type !== "off"
+            ) {
+              text += " I will fetch ELO from " + this.settings.values.elo.type + ".";
+              if (this.settings.values.elo.balanceTeams) {
+                text += " I will try to balance teams before we start.";
+              }
+            }
+            if (
+              (this.settings.values.elo.type === "off" || !this.settings.values.elo.balanceTeams) &&
+              this.settings.values.autoHost.shufflePlayers
+            ) {
+              text += " I will shuffle players before we start.";
+            }
+            if (["smartHost", "rapidHost".includes(this.settings.values.autoHost.type)]) {
+              text += " I will start when slots are full.";
+            }
+            if (this.settings.values.autoHost.voteStart) {
+              text += " You can vote start with ?votestart";
+            }
+            if (this.settings.values.autoHost.regionChange) {
+              text += " I switch regions.";
+            }
+            this.gameSocket.sendChatMessage(text);
+          }
+          if (
+            this.settings.values.autoHost.announceCustom &&
+            this.settings.values.autoHost.customAnnouncement
+          ) {
+            this.gameSocket.sendChatMessage(this.settings.values.autoHost.customAnnouncement);
+          }
+        } else if (
+          this.settings.values.autoHost.type === "lobbyHost" &&
+          this.settings.values.autoHost.announceCustom &&
+          this.settings.values.autoHost.customAnnouncement
+        ) {
+          this.gameSocket.sendChatMessage(this.settings.values.autoHost.customAnnouncement);
+        }
+      }
     }
   }
 
@@ -462,3 +533,5 @@ class AutoHost extends Module {
     return results;
   }
 }
+
+export const autoHost = new AutoHost();

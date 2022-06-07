@@ -16,16 +16,17 @@ import * as log from "electron-log";
 import * as path from "path";
 import Store from "electron-store";
 import fs from "fs";
-import { play } from "sound-play";
 import { discSingle } from "./modules/disc";
-import { LobbySingle } from "./modules/lobbyControl";
 import { discRPCSingle } from "./modules/discordRPC";
-import { WarSingle } from "./modules/warControl";
+import { warControl } from "./globals/warControl";
 import { HubSingle } from "./modules/hub";
 import { obsSocketSingle } from "./modules/obs";
 import { SEClientSingle } from "./modules/stream";
-import { PerformanceModeSingle } from "./modules/performanceMode";
+import { performanceMode } from "./modules/performanceMode";
 import { banWhiteListSingle } from "./modules/banWhiteList";
+import { autoHost } from "./modules/autoHost";
+import { protocolHandler, OpenLobbyParams } from "./modules/protocolHandler";
+import { lobbyControl } from "./modules/lobbyControl";
 
 import type { EmitEvents } from "./moduleBase";
 import LanguageDetect from "languagedetect";
@@ -38,11 +39,12 @@ if (!app.isPackaged) {
     awaitWriteFinish: true,
   });
 }
-import { WindowSend, WindowReceive, OpenLobbyParams, BanWhiteList } from "./utility";
+import { WindowSend, WindowReceive, BanWhiteList } from "./utility";
 
 import { settings } from "./globals/settings";
 import { gameState } from "./globals/gameState";
 import { webUISocket, WebUIEvents } from "./globals/webUISocket";
+import { gameSocket } from "./globals/gameSocket";
 
 import { CommSingle } from "./modules/comm";
 
@@ -68,10 +70,6 @@ if (!gotLock) {
   log.info("App starting...");
 
   const store = new Store();
-  const replayFolders: string = path.join(
-    app.getPath("documents"),
-    "Warcraft III\\BattleNet"
-  );
 
   const wc3mtTargetFile = `${app.getPath(
     "documents"
@@ -80,7 +78,6 @@ if (!gotLock) {
   var win: BrowserWindow;
   var appIcon: Tray | null;
   var currentStatus = false;
-  var gameNumber = 0;
   var openLobbyParams: OpenLobbyParams | null;
 
   var warInstallLoc: string = store.get("warInstallLoc") as string;
@@ -123,17 +120,26 @@ if (!gotLock) {
 
   let modules = [
     discSingle,
-    LobbySingle,
+    lobbyControl,
     discRPCSingle,
-    WarSingle,
+    warControl,
     HubSingle,
     obsSocketSingle,
     SEClientSingle,
-    PerformanceModeSingle,
+    performanceMode,
+    protocolHandler,
+    autoHost,
   ];
 
   webUISocket.on("event", (event: WebUIEvents) => {
-    sendStatus(true);
+    if (event.disconnected) {
+      sendProgress();
+      sendStatus(false);
+      handleGlueScreen("OUT_OF_MENUS");
+    }
+    if (event.connected) {
+      sendStatus(true);
+    }
   });
 
   var lastAnnounceTime = 0;
@@ -143,7 +149,7 @@ if (!gotLock) {
   app.on("open-url", function (event, url) {
     if (url.substring(0, 5) === "wc3mt") {
       event.preventDefault();
-      protocolHandler(url);
+      protocolHandler.processURL(url);
       log.info("Handling Protocol Once Ready");
     }
   });
@@ -151,59 +157,15 @@ if (!gotLock) {
   app.on("second-instance", (event, args) => {
     if (args[2] && args[2].substring(0, 5) === "wc3mt") {
       log.info("Handling Protocol Now");
-      protocolHandler(args[2]);
+      protocolHandler.processURL(args[2]);
     }
   });
 
   app.on("before-quit", () => {
     HubSingle.sendToHub({ lobbyUpdates: { leftLobby: true } });
     discSingle.lobbyClosed();
-    LobbySingle.clear();
+    lobbyControl.clear();
   });
-
-  async function protocolHandler(url: string) {
-    if (url) {
-      openLobbyParams = getQueryVariables(url.split("?", 2)[1]);
-      if (openLobbyParams.lobbyName || openLobbyParams.gameId) {
-        log.info(openLobbyParams);
-        if (await WarSingle.isWarcraftOpen()) {
-          if (
-            openLobbyParams?.region &&
-            openLobbyParams?.region !== gameState.values.selfRegion
-          ) {
-            log.info(`Changing region to ${openLobbyParams.region}`);
-            await WarSingle.exitGame();
-            WarSingle.openWarcraft(openLobbyParams?.region);
-          } else {
-            openParamsJoin();
-          }
-        } else {
-          log.info(
-            "Warcraft is not open, opening. " + openLobbyParams?.region
-              ? openLobbyParams?.region
-              : ""
-          );
-          try {
-            WarSingle.openWarcraft(openLobbyParams?.region);
-          } catch (e) {
-            log.warn(e);
-          }
-        }
-      }
-    }
-  }
-
-  function getQueryVariables(url: string) {
-    var vars = url?.split("&");
-    let pairs: { [key: string]: string } = {};
-    if (vars) {
-      for (var i = 0; i < vars.length; i++) {
-        if (vars[i]) pairs[vars[i].split("=")[0]] = decodeURI(vars[i].split("=")[1]);
-      }
-    }
-
-    return pairs;
-  }
 
   ipcMain.on("toMain", (event, args: WindowSend) => {
     commandClient(args);
@@ -327,17 +289,17 @@ if (!gotLock) {
 
     if (process.argv[1] && process.argv[1] !== ".") {
       setTimeout(() => {
-        protocolHandler(process.argv[1]);
+        protocolHandler.processURL(process.argv[1]);
       }, 3000);
     } else if (settings.values.client.openWarcraftOnStart) {
-      setTimeout(WarSingle.openWarcraft, 3000);
+      setTimeout(warControl.openWarcraft, 3000);
     }
   });
 
   app.on("window-all-closed", () => {
     HubSingle.sendToHub({ lobbyUpdates: { leftLobby: true } });
     discSingle.lobbyClosed();
-    LobbySingle?.clear();
+    lobbyControl?.clear();
     if (process.platform !== "darwin") {
       app.quit();
     }
@@ -359,10 +321,10 @@ if (!gotLock) {
 
   function clearLobby() {
     // TODO: fix lobby close if game was started
-    sentMessages = [];
+    gameSocket.sentMessages = [];
     if (
       gameState.values.menuState !== "LOADING_SCREEN" &&
-      LobbySingle.microLobby?.lobbyStatic.lobbyName
+      lobbyControl.microLobby?.lobbyStatic.lobbyName
     ) {
       sendWindow({
         messageType: "lobbyUpdate",
@@ -371,45 +333,7 @@ if (!gotLock) {
       HubSingle.sendToHub({ lobbyUpdates: { leftLobby: true } });
       discSingle.lobbyClosed();
       gameState.updateGameState({ action: "nothing" });
-      LobbySingle.clear();
-    }
-  }
-
-  async function openParamsJoin() {
-    // TODO: make this more robust
-    if (
-      openLobbyParams?.lobbyName ||
-      (openLobbyParams?.gameId && openLobbyParams.mapFile)
-    ) {
-      log.info("Setting autoHost to off to join a lobby link.");
-      settings.updateSettings({ autoHost: { type: "off" } });
-      if (
-        (openLobbyParams.region &&
-          openLobbyParams.region !== gameState.values.selfRegion) ||
-        gameState.values.menuState === "LOADING_SCREEN"
-      ) {
-        log.info(`Changing region to match lobby of region ${openLobbyParams.region}`);
-        await WarSingle.exitGame();
-        WarSingle.openWarcraft(openLobbyParams.region);
-        return;
-      }
-      if (gameState.values.inGame || LobbySingle.microLobby?.lookupName) {
-        leaveGame();
-        return;
-      }
-      if (openLobbyParams.lobbyName) {
-        sendMessage("SendGameListing", {});
-        setTimeout(() => {
-          sendMessage("GetGameList", {});
-        }, 500);
-      } else if (openLobbyParams.gameId && openLobbyParams.mapFile) {
-        sendMessage("JoinGame", {
-          gameId: openLobbyParams.gameId,
-          password: "",
-          mapFile: openLobbyParams.mapFile,
-        });
-        openLobbyParams = null;
-      }
+      lobbyControl.clear();
     }
   }
 
@@ -417,14 +341,6 @@ if (!gotLock) {
     CommSingle.commSend(data.data);
     if (win?.webContents) {
       win.webContents.send("fromMain", data);
-    }
-  }
-
-  function playSound(file: string) {
-    if (!app.isPackaged) {
-      play(path.join(__dirname, "sounds\\" + file));
-    } else {
-      play(path.join(app.getAppPath(), "\\..\\..\\sounds\\" + file));
     }
   }
 
@@ -479,11 +395,11 @@ if (!gotLock) {
           messageType: "updateSettings",
           data: { settings: settings.values },
         });
-        if (LobbySingle.microLobby) {
+        if (lobbyControl.microLobby) {
           sendWindow({
             messageType: "lobbyUpdate",
             data: {
-              lobbyData: { newLobby: LobbySingle.microLobby?.exportMin() },
+              lobbyData: { newLobby: lobbyControl.microLobby?.exportMin() },
             },
           });
         }
@@ -492,7 +408,7 @@ if (!gotLock) {
         shell.openPath(log.transports.file.getFile().path);
         break;
       case "openWar":
-        WarSingle.openWarcraft();
+        warControl.openWarcraft();
         break;
       case "fetchWhiteBanList":
         if (args.fetch) {
@@ -559,14 +475,13 @@ if (!gotLock) {
                     },
                   },
                 });
-                LobbySingle.eloMapName(
-                  settings.values.autoHost.mapName,
-                  settings.values.elo.type
-                ).then((data) => {
-                  settings.updateSettings({
-                    elo: { available: data.elo, lookupName: data.name },
+                lobbyControl
+                  .eloMapName(settings.values.autoHost.mapName, settings.values.elo.type)
+                  .then((data) => {
+                    settings.updateSettings({
+                      elo: { available: data.elo, lookupName: data.name },
+                    });
                   });
-                });
               }
             }
           })
@@ -583,7 +498,7 @@ if (!gotLock) {
         break;
       case "autoHostLobby":
         log.info("Comm AutoHost lobby");
-        autoHostGame(true);
+        autoHost.autoHostGame(true);
         break;
       case "exportWhitesBans":
         if (args.exportImport) {
@@ -651,12 +566,6 @@ if (!gotLock) {
       log.info(command.newProgress);
       sendWindow({ messageType: "progress", data: { progress: command.newProgress } });
     }
-    if (command.sendGameChat) {
-      sendChatMessage(command.sendGameChat);
-    }
-    if (command.sendGameMessage) {
-      sendMessage(command.sendGameMessage.type, command.sendGameMessage.payload);
-    }
     if (command.notification) {
       new Notification(command.notification).show();
     }
@@ -666,7 +575,7 @@ if (!gotLock) {
     if (command.lobbyUpdate) {
       // TODO Move the below code to the module system.
       let update = command.lobbyUpdate;
-      if (LobbySingle.microLobby) {
+      if (lobbyControl.microLobby) {
         if (
           update.playerPayload ||
           update.playerData ||
@@ -683,13 +592,13 @@ if (!gotLock) {
           if (settings.values.obs.textSource) {
             fs.writeFileSync(
               path.join(app.getPath("documents"), "wc3mt.txt"),
-              LobbySingle.exportTeamStructureString()
+              lobbyControl.exportTeamStructureString()
             );
           }
           if (update.playerData) {
             if (update.playerData.extraData) {
               if (settings.values.elo.announce) {
-                sendChatMessage(
+                gameSocket.sendChatMessage(
                   update.playerData.name +
                     " ELO: " +
                     update.playerData.extraData.rating +
@@ -710,15 +619,15 @@ if (!gotLock) {
             }
           }
         } else if (update.stale) {
-          leaveGame();
+          lobbyControl.leaveGame();
         } else if (update.playerLeft) {
           log.info("Player left: " + update.playerLeft);
         } else if (update.playerJoined) {
           if (update.playerJoined.name) {
             let row = banWhiteListSingle.isBanned(update.playerJoined.name);
             if (row) {
-              LobbySingle.banSlot(update.playerJoined.slot);
-              sendChatMessage(
+              lobbyControl.banSlot(update.playerJoined.slot);
+              gameSocket.sendChatMessage(
                 update.playerJoined.name +
                   " is permanently banned" +
                   (row.reason ? ": " + row.reason : "")
@@ -736,8 +645,10 @@ if (!gotLock) {
                 update.playerJoined.name !== gameState.values.selfBattleTag &&
                 !banWhiteListSingle.isWhiteListed(update.playerJoined.name)
               ) {
-                LobbySingle.banSlot(update.playerJoined.slot);
-                sendChatMessage(update.playerJoined.name + " is not whitelisted");
+                lobbyControl.banSlot(update.playerJoined.slot);
+                gameSocket.sendChatMessage(
+                  update.playerJoined.name + " is not whitelisted"
+                );
                 log.info(
                   "Kicked " + update.playerJoined.name + " for not being whitelisted"
                 );
@@ -748,7 +659,7 @@ if (!gotLock) {
             announcement();
             if (
               settings.values.autoHost.minPlayers !== 0 &&
-              LobbySingle.microLobby?.nonSpecPlayers.length >=
+              lobbyControl.microLobby?.nonSpecPlayers.length >=
                 settings.values.autoHost.minPlayers
             ) {
               startGame(settings.values.autoHost.delayStart);
@@ -757,7 +668,7 @@ if (!gotLock) {
             log.warn("Nameless player joined");
           }
         } else if (update.lobbyReady) {
-          if (LobbySingle.microLobby?.lobbyStatic.isHost) {
+          if (lobbyControl.microLobby?.lobbyStatic.isHost) {
             if (settings.values.autoHost.sounds) {
               playSound("ready.wav");
             }
@@ -771,11 +682,11 @@ if (!gotLock) {
                   !settings.values.elo.balanceTeams) &&
                 settings.values.autoHost.shufflePlayers
               ) {
-                LobbySingle.shufflePlayers();
+                lobbyControl.shufflePlayers();
               }
               // Wait a quarter second to make sure shuffles are done
               setTimeout(() => {
-                if (LobbySingle.isLobbyReady()) {
+                if (lobbyControl.isLobbyReady()) {
                   startGame(settings.values.autoHost.delayStart);
                 }
               }, 250);

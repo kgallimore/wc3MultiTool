@@ -6,6 +6,7 @@ import { gameState, GameState } from "./globals/gameState";
 import { settings } from "./globals/settings";
 import { identifier } from "./globals/identifier";
 import { clientState } from "./globals/clientState";
+import { warControl } from "./globals/warControl";
 import { gameSocket, GameSocketEvents } from "./globals/gameSocket";
 import { webUISocket, WebUIEvents } from "./globals/webUISocket";
 
@@ -14,11 +15,14 @@ import type { LobbyControl } from "./modules/lobbyControl";
 
 import type { SettingsUpdates } from "./globals/settings";
 
+import { play } from "sound-play";
+import { join } from "path";
+import { app } from "electron";
+
 export interface EmitEvents {
   lobbyUpdate?: LobbyUpdates;
-  sendGameChat?: string;
   newProgress?: { step: string; progress: number };
-  sendGameMessage?: { type: string; payload: any };
+  sendInGameChat?: string;
   newTip?: SEEventEvent | SEEventEvent[];
   notification?: { title: string; body: string };
   sendWindow?: { messageType: WindowReceive["messageType"]; data: WindowReceive["data"] };
@@ -38,6 +42,7 @@ export class Module extends Global {
   protected clientState = clientState;
   protected webUISocket = webUISocket;
   protected gameSocket = gameSocket;
+  protected warControl = warControl;
   protected lobby: LobbyControl | null = null;
 
   constructor(includeLobby: boolean = true) {
@@ -90,21 +95,12 @@ export class Module extends Global {
     this.emitEvent({ sendWindow });
   }
 
-  protected sendGameChat(sendGameChat: string) {
-    this.emitEvent({ sendGameChat });
+  protected sendInGameChat(sendInGameChat: string) {
+    this.emitEvent({ sendInGameChat });
   }
 
   protected emitProgress(newProgress?: { step: string; progress: number }) {
     this.emitEvent({ newProgress });
-  }
-
-  protected emitMessage(type: string, payload: any) {
-    this.emitEvent({
-      sendGameMessage: {
-        type,
-        payload,
-      },
-    });
   }
 
   protected emitNewTip(newTip: SEEventEvent | SEEventEvent[]) {
@@ -113,5 +109,13 @@ export class Module extends Global {
 
   protected emitNotification(title: string, body: string) {
     this.emitEvent({ notification: { title, body } });
+  }
+
+  protected playSound(file: string) {
+    if (!app.isPackaged) {
+      play(join(__dirname, "sounds\\" + file));
+    } else {
+      play(join(app.getAppPath(), "\\..\\..\\sounds\\" + file));
+    }
   }
 }

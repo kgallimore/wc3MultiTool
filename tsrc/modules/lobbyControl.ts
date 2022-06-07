@@ -13,11 +13,19 @@ import {
   LobbyUpdates,
 } from "wc3mt-lobby-container";
 import { ensureInt } from "../utility";
+import { GameSocketEvents, AvailableHandicaps } from "./../globals/gameSocket";
+import { sleep } from "@nut-tree/nut-js";
 
 require = require("esm")(module);
 var { Combination, Permutation } = require("js-combinatorics");
 
-export class LobbyControl extends Module {
+export type SlotInteractions =
+  | "CloseSlot"
+  | "BanPlayerFromGameLobby"
+  | "KickPlayerFromGameLobby"
+  | "OpenSlot";
+
+class LobbyControl extends Module {
   // TODO move autohost logic to a separate module
   private refreshing: boolean = false;
   private staleTimer: NodeJS.Timeout | null = null;
@@ -35,6 +43,15 @@ export class LobbyControl extends Module {
 
   constructor() {
     super(false);
+  }
+
+  protected onGameSocketEvent(events: GameSocketEvents): void {
+    if (events.GameLobbySetup && events.GameLobbySetup.teamData.playableSlots > 1) {
+      this.ingestLobby(
+        events.GameLobbySetup,
+        this.gameState.values.selfRegion as Regions
+      );
+    }
   }
 
   ingestLobby(payload: GameClientLobbyPayload, region: Regions) {
@@ -98,13 +115,13 @@ export class LobbyControl extends Module {
             if (this.microLobby?.nonSpecPlayers.includes(event.playerJoined.name)) {
             }
             if (this.startTimer) {
-              this.sendGameChat(`Lobby start was cancelled`);
+              this.gameSocket.sendChatMessage(`Lobby start was cancelled`);
               clearTimeout(this.startTimer);
               this.startTimer = null;
             }
           } else if (event.playerLeft) {
             if (this.startTimer) {
-              this.sendGameChat(`Lobby start was cancelled`);
+              this.gameSocket.sendChatMessage(`Lobby start was cancelled`);
               clearTimeout(this.startTimer);
               this.startTimer = null;
             }
@@ -191,9 +208,11 @@ export class LobbyControl extends Module {
         if (target) {
           this.info("Found spec slot to move to: " + target[0]);
           console.log("Moving to spec", target[0], selfSlot);
-          this.emitMessage("SetTeam", {
-            slot: selfSlot,
-            team: ensureInt(target[0]),
+          this.gameSocket.sendMessage({
+            SetTeam: {
+              slot: selfSlot,
+              team: ensureInt(target[0]),
+            },
           });
           if (this.settings.values.autoHost.closeSlots.includes(selfSlot)) {
             setTimeout(() => {
@@ -247,6 +266,8 @@ export class LobbyControl extends Module {
         return { name: "Tree%20Tag", elo: true };
       } else if (mapName.match(/Battleships.*Crossfire/i)) {
         return { name: "Battleships%20Crossfire", elo: true };
+      } else if (mapName.match(/Risk.*Europe/i)) {
+        return { name: "Risk%20Europe", elo: true };
       } else {
         let name = encodeURI(
           mapName.trim().replace(/\s*v?\.?(\d+\.)?(\*|\d+)\w*\s*$/gi, "")
@@ -393,9 +414,11 @@ export class LobbyControl extends Module {
   startGame(delay: number = 0) {
     if (delay > 0) {
       if (this.startTimer) {
-        this.sendGameChat("Lobby changed. Starting game in " + delay + " second(s)!");
+        this.gameSocket.sendChatMessage(
+          "Lobby changed. Starting game in " + delay + " second(s)!"
+        );
       } else {
-        this.sendGameChat("Starting game in " + delay + " second(s)!");
+        this.gameSocket.sendChatMessage("Starting game in " + delay + " second(s)!");
       }
     }
     if (this.startTimer) {
@@ -405,8 +428,10 @@ export class LobbyControl extends Module {
       this.startTimer = null;
       if (this.microLobby?.lobbyStatic?.isHost) {
         this.info("Starting game");
-        this.sendGameChat("AutoHost functionality provided by WC3 MultiTool.");
-        this.emitMessage("LobbyStart", {});
+        this.gameSocket.sendChatMessage(
+          "AutoHost functionality provided by WC3 MultiTool."
+        );
+        this.gameSocket.sendMessage({ LobbyStart: {} });
       }
     }, delay * 1000 + 250);
   }
@@ -564,7 +589,9 @@ export class LobbyControl extends Module {
           }
           swaps = [swapsFromTeam1, swapsFromTeam2];
           if (!lobbyCopy.lobbyStatic.isHost) {
-            this.sendGameChat(leastSwapTeam + " should be: " + this.bestCombo.join(", "));
+            this.gameSocket.sendChatMessage(
+              leastSwapTeam + " should be: " + this.bestCombo.join(", ")
+            );
           } else {
             for (let i = 0; i < swaps[0].length; i++) {
               if (!this.isLobbyReady()) {
@@ -638,7 +665,7 @@ export class LobbyControl extends Module {
               (team) => team.type === "playerTeams"
             );
             for (let i = 0; i < playerTeamNames.length; i++) {
-              this.sendGameChat(
+              this.gameSocket.sendChatMessage(
                 playerTeamNames[i] + " should be " + this.bestCombo[i].join(", ")
               );
             }
@@ -646,7 +673,9 @@ export class LobbyControl extends Module {
         }
         this.info("Players should now be balanced.");
         this.emitLobbyUpdate({ lobbyReady: true });
-        this.sendGameChat("ELO data provided by: " + this.settings.values.elo.type);
+        this.gameSocket.sendChatMessage(
+          "ELO data provided by: " + this.settings.values.elo.type
+        );
       }
     } else {
       this.emitLobbyUpdate({ lobbyReady: true });
@@ -692,7 +721,7 @@ export class LobbyControl extends Module {
 
   shufflePlayers(shuffleTeams: boolean = true) {
     if (this.microLobby?.lobbyStatic.isHost) {
-      this.sendGameChat("Shuffling players...");
+      this.gameSocket.sendChatMessage("Shuffling players...");
       let players = this.microLobby.nonSpecPlayers;
       let swappedPlayers: Array<string> = [];
       Object.values(players).forEach((player) => {
@@ -731,7 +760,7 @@ export class LobbyControl extends Module {
     if (targetSlot) {
       this.banSlot(targetSlot.slot);
     } else {
-      this.sendGameChat("Player not found");
+      this.gameSocket.sendChatMessage("Player not found");
     }
   }
 
@@ -746,7 +775,7 @@ export class LobbyControl extends Module {
     if (targetSlot) {
       this.closeSlot(targetSlot.slot);
     } else {
-      this.sendGameChat("Player not found");
+      this.gameSocket.sendChatMessage("Player not found");
     }
   }
 
@@ -768,13 +797,13 @@ export class LobbyControl extends Module {
         let target2 = this.microLobby.searchPlayer(data.players[1])[0];
         if (target1 && target2 && target1 !== target2) {
           this.expectedSwaps.push([target1, target2].sort() as [string, string]);
-          this.sendGameChat("!swap " + target1 + " " + target2);
+          this.gameSocket.sendChatMessage("!swap " + target1 + " " + target2);
         } else {
-          this.sendGameChat("Possible invalid swap targets");
+          this.gameSocket.sendChatMessage("Possible invalid swap targets");
           this.error("Possible invalid swap targets: " + target1 + " and " + target2);
         }
       } else {
-        this.sendGameChat("Possible invalid swap targets");
+        this.gameSocket.sendChatMessage("Possible invalid swap targets");
         this.error("Possible invalid swap targets: " + JSON.stringify(data.players));
       }
     }
@@ -791,7 +820,7 @@ export class LobbyControl extends Module {
     if (targetSlot) {
       this.kickSlot(targetSlot.slot);
     } else {
-      this.sendGameChat("Player not found");
+      this.gameSocket.sendChatMessage("Player not found");
     }
   }
 
@@ -806,11 +835,11 @@ export class LobbyControl extends Module {
     if (targetSlot) {
       this.closeSlot(targetSlot.slot);
     } else {
-      this.sendGameChat("Player not found");
+      this.gameSocket.sendChatMessage("Player not found");
     }
   }
 
-  setPlayerHandicap(player: string, handicap: number) {
+  setPlayerHandicap(player: string, handicap: AvailableHandicaps) {
     if (this.microLobby?.lobbyStatic.isHost !== true) {
       this.error("Only the host can set handicaps");
       return;
@@ -821,7 +850,7 @@ export class LobbyControl extends Module {
     if (targetSlot) {
       this.setHandicapSlot(targetSlot.slot, handicap);
     } else {
-      this.sendGameChat("Player not found");
+      this.gameSocket.sendChatMessage("Player not found");
     }
   }
 
@@ -841,22 +870,26 @@ export class LobbyControl extends Module {
     return this.slotInteraction("OpenSlot", slotNumber);
   }
 
-  setHandicapSlot(slotNumber: number, handicap: number) {
+  setHandicapSlot(slotNumber: number, handicap: AvailableHandicaps) {
     //50|60|70|80|90|100
-    this.emitMessage("SetHandicap", {
-      slot: slotNumber,
-      handicap,
+    this.gameSocket.sendMessage({
+      SetHandicap: {
+        slot: slotNumber,
+        handicap,
+      },
     });
   }
 
-  private slotInteraction(action: string, slotNumber: number) {
+  private slotInteraction(action: SlotInteractions, slotNumber: number) {
     if (this.microLobby?.lobbyStatic.isHost) {
       let targetSlot = Object.values(this.microLobby.slots).find(
         (slot) => slot.slot === slotNumber && !slot.isSelf && slot.slotTypeChangeEnabled
       );
       if (targetSlot) {
-        this.emitMessage(action, {
-          slot: slotNumber,
+        this.gameSocket.sendMessage({
+          [action]: {
+            slot: slotNumber,
+          },
         });
         return targetSlot;
       }
@@ -938,5 +971,24 @@ export class LobbyControl extends Module {
   emitLobbyUpdate(update: LobbyUpdates) {
     this.emit("lobbyUpdate", update);
   }
+
+  async leaveGame() {
+    this.info("Leaving Game");
+    if (
+      this.gameState.values.inGame ||
+      ["GAME_LOBBY", "CUSTOM_GAME_LOBBY"].includes(this.gameState.values.menuState)
+    ) {
+      this.gameSocket.sendMessage({ LeaveGame: {} });
+      if (this.lobby?.microLobby?.lobbyStatic?.lobbyName) {
+        let oldLobbyName = this.lobby?.microLobby?.lobbyStatic.lobbyName;
+        await sleep(1000);
+        if (this.lobby?.microLobby?.lobbyStatic.lobbyName === oldLobbyName) {
+          this.info("Lobby did not leave, trying again");
+          await this.warControl.exitGame();
+          this.warControl.openWarcraft();
+        }
+      }
+    }
+  }
 }
-export const LobbySingle = new LobbyControl();
+export const lobbyControl = new LobbyControl();

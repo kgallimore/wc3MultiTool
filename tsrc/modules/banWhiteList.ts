@@ -85,7 +85,9 @@ class banWhiteList extends Module {
         });
         if (this.lobby?.microLobby?.allPlayers.includes(player)) {
           this.lobby?.banPlayer(player);
-          this.sendGameChat(player + " banned" + (reason ? " for " + reason : ""));
+          this.gameSocket.sendChatMessage(
+            player + " banned" + (reason ? " for " + reason : "")
+          );
         }
       } else {
         this.error("Failed to ban, invalid battleTag: " + player);
@@ -112,7 +114,9 @@ class banWhiteList extends Module {
           },
         });
         if (this.lobby?.microLobby?.allPlayers.includes(player)) {
-          this.sendGameChat(player + " whitelisted" + (reason ? " for " + reason : ""));
+          this.gameSocket.sendChatMessage(
+            player + " whitelisted" + (reason ? " for " + reason : "")
+          );
         }
       } else {
         this.error("Failed to whitelist, invalid battleTag: " + player);
