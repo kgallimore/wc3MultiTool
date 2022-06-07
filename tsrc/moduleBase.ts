@@ -9,6 +9,7 @@ import { clientState } from "./globals/clientState";
 import { warControl } from "./globals/warControl";
 import { gameSocket, GameSocketEvents } from "./globals/gameSocket";
 import { webUISocket, WebUIEvents } from "./globals/webUISocket";
+import type { mmdResults } from "./modules/replayHandler";
 
 import type { SEEventEvent } from "./modules/stream";
 import type { lobbyControl } from "./modules/lobbyControl";
@@ -26,6 +27,7 @@ export interface EmitEvents {
   newTip?: SEEventEvent | SEEventEvent[];
   notification?: { title: string; body: string };
   sendWindow?: { messageType: WindowReceive["messageType"]; data: WindowReceive["data"] };
+  mmdResults?: mmdResults;
 }
 
 /**

@@ -137,6 +137,10 @@ class GameSocket extends Global {
     });
     this.gameWebSocket.on("message", (data) => {
       let parsedData = JSON.parse(data.toString());
+      if (parsedData.messageType === "MultiplayerGameLeave") {
+        this.sentMessages = [];
+        gameState.updateGameState({ action: "nothing" });
+      }
       if (parsedData.messageType === "ChatMessage") {
         this.handleChatMessage(parsedData.payload);
       } else {
@@ -147,15 +151,9 @@ class GameSocket extends Global {
           this.gameState.updateGameState({ screenState: parsedData.payload.screen });
           break;
         case "GameList":
-          if (openLobbyParams && (openLobbyParams.lobbyName || openLobbyParams.gameId)) {
-            this.info("GameList received, trying to find lobby.");
-            handleGameList(parsedData.payload);
-          } else {
+          {
             this.handleGlueScreen("CUSTOM_LOBBIES");
           }
-          break;
-        case "MultiplayerGameLeave":
-          clearLobby();
           break;
         case "MultiplayerGameCreateResult":
           if (this.gameState.values.menuState === "GAME_LOBBY") {

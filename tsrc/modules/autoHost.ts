@@ -1,24 +1,11 @@
 import { Module } from "./../moduleBase";
 
-import type { GameState, MenuStates } from "./../globals/gameState";
 import { CreateLobbyPayload, GameSocketEvents } from "./../globals/gameSocket";
 
 import { app } from "electron";
-import { join } from "path";
-import Store from "electron-store";
-const store = new Store();
-const FormData = require("form-data");
 
 import { getTargetRegion } from "./../utility";
-import {
-  readdirSync,
-  statSync,
-  existsSync,
-  readFileSync,
-  rmSync,
-  createReadStream,
-} from "fs";
-import parser from "w3gjs";
+import { existsSync, readFileSync, rmSync } from "fs";
 
 import {
   keyboard,
@@ -27,23 +14,12 @@ import {
   mouse,
   centerOf,
   imageResource,
-  Point,
   sleep,
-  straightTo,
 } from "@nut-tree/nut-js";
 require("@nut-tree/nl-matcher");
 
-export interface mmdResults {
-  list: {
-    [key: string]: { pid: string; won: boolean; extra: { [key: string]: string } };
-  };
-  lookup: { [key: string]: string };
-}
-
 class AutoHost extends Module {
   voteStartVotes: Array<string> = [];
-  replayFolders: string = join(app.getPath("documents"), "Warcraft III\\BattleNet");
-
   wc3mtTargetFile = `${app.getPath("documents")}\\Warcraft III\\CustomMapData\\wc3mt.txt`;
   gameNumber = 1;
   voteTimer: NodeJS.Timeout | null = null;
@@ -52,19 +28,14 @@ class AutoHost extends Module {
     super();
   }
 
-  protected onGameStateUpdate(updates: Partial<GameState>): void {
-    if (updates.menuState) {
-      this.handleGlueScreen(updates.menuState);
-    }
-  }
-
   protected onGameSocketEvent(events: GameSocketEvents): void {
+    if (events.OnNetProviderInitialized && this.settings.values.client.performanceMode) {
+      setTimeout(this.autoHostGame.bind(this), 1000);
+    }
     if (events.UpdateScoreInfo) {
       this.autoHostGame();
     }
-    if (events.SetGlueScreen) {
-      this.handleGlueScreen(events.SetGlueScreen.screen as MenuStates);
-    }
+
     if (events.ChatMessage) {
       if (events.ChatMessage.message.content.match(/^\?votestart$/i)) {
         if (
@@ -119,163 +90,6 @@ class AutoHost extends Module {
         }
       }
     }
-  }
-
-  async handleGlueScreen(newScreen: GameState["menuState"]) {
-    // Create a new game at menu or if previously in game(score screen loads twice)
-    // TODO: Keep tack of previous score screen for above note.
-    if (
-      !newScreen ||
-      newScreen === "null" ||
-      (newScreen === this.gameState.values.menuState && newScreen !== "SCORE_SCREEN")
-    ) {
-      return;
-    }
-    this.info("Screen changed to: ", newScreen);
-    if (["CUSTOM_LOBBIES", "MAIN_MENU"].includes(newScreen)) {
-      this.info("Checking to see if we should auto host or join a lobby link.");
-      if (openLobbyParams?.lobbyName) {
-        setTimeout(openParamsJoin, 250);
-      } else {
-        setTimeout(this.autoHostGame.bind(this), 250);
-      }
-    } else if (newScreen === "LOADING_SCREEN") {
-      if (this.settings.values.autoHost.type === "rapidHost") {
-        if (this.settings.values.autoHost.rapidHostTimer === 0) {
-          this.info("Rapid Host leave game immediately");
-          this.lobby?.leaveGame();
-        } else if (this.settings.values.autoHost.rapidHostTimer === -1) {
-          this.info("Rapid Host exit game immediately");
-          await this.warControl.forceQuitWar();
-          this.warControl.openWarcraft();
-        }
-      }
-    } else if (
-      this.gameState.values.menuState === "LOADING_SCREEN" &&
-      newScreen === "SCORE_SCREEN"
-    ) {
-      this.info("Game has finished loading in.");
-      this.gameState.updateGameState({ inGame: true, action: "waitingToLeaveGame" });
-      if (this.settings.values.autoHost.type === "smartHost") {
-        this.info("Setting up smart host.");
-        setTimeout(() => this.smartQuit(), 15000);
-      }
-      if (
-        this.settings.values.autoHost.type === "rapidHost" &&
-        this.settings.values.autoHost.rapidHostTimer > 0
-      ) {
-        this.info(
-          "Setting rapid host timer to " + this.settings.values.autoHost.rapidHostTimer
-        );
-        setTimeout(
-          () => this.lobby?.leaveGame,
-          this.settings.values.autoHost.rapidHostTimer * 1000 * 60
-        );
-      }
-      let screenHeight = await screen.height();
-      let safeZone = new Point(
-        (await screen.width()) / 2,
-        screenHeight - screenHeight / 4
-      );
-      await mouse.move(straightTo(safeZone));
-      this.sendInGameChat("");
-    } else if (newScreen === "LOGIN_DOORS") {
-      if (this.settings.values.client.performanceMode) {
-        [
-          "GetLocalPlayerName",
-          "FriendsGetInvitations",
-          "FriendsGetFriends",
-          "MultiplayerSendRecentPlayers",
-          "ClanGetClanInfo",
-          "ClanGetMembers",
-          "StopOverworldMusic",
-          "StopAmbientSound",
-          "LoginDoorClose",
-          "StopAmbientSound",
-          "StopAmbientSound",
-          "OnWebUILoad",
-        ].forEach((message, index) => {
-          setTimeout(() => {
-            this.gameSocket.sendMessage({ [message]: {} });
-          }, 50 * index);
-        });
-      }
-    } else {
-      this.gameState.updateGameState({ inGame: false, action: "nothing" });
-      if (this.settings.values.elo.handleReplays) {
-        let mostModified = { file: "", mtime: 0 };
-        readdirSync(this.replayFolders, { withFileTypes: true })
-          .filter((dirent) => dirent.isDirectory())
-          .map((dirent) => dirent.name)
-          .forEach((folder) => {
-            const targetFile = join(
-              this.replayFolders,
-              folder,
-              "Replays",
-              "LastReplay.w3g"
-            );
-            if (existsSync(targetFile)) {
-              const stats = statSync(targetFile);
-              if (stats.mtimeMs > mostModified.mtime) {
-                mostModified.mtime = stats.mtimeMs;
-                mostModified.file = targetFile;
-              }
-            }
-          });
-        if (
-          mostModified.file &&
-          mostModified.mtime > this.clientState.values.latestUploadedReplay
-        ) {
-          this.analyzeGame(mostModified.file).then((results) => {
-            if (discSingle) discSingle.lobbyEnded(results);
-          });
-          this.clientState.updateClientState({
-            latestUploadedReplay: mostModified.mtime,
-          });
-          store.set("latestUploadedReplay", this.clientState.values.latestUploadedReplay);
-          if (this.settings.values.elo.type === "wc3stats") {
-            let form = new FormData();
-            form.append("replay", createReadStream(mostModified.file));
-            fetch(
-              `https://api.wc3stats.com/upload${
-                this.settings.values.elo.privateKey
-                  ? "/" + this.settings.values.elo.privateKey
-                  : ""
-              }?auto=true`,
-              {
-                method: "POST",
-                body: form,
-                headers: {
-                  ...form.getHeaders(),
-                },
-              }
-            ).then(
-              (response) => {
-                if (response.status !== 200) {
-                  this.info(response.statusText);
-                  this.sendWindow({
-                    messageType: "error",
-                    data: { error: response.statusText },
-                  });
-                } else {
-                  this.info("Uploaded replay to wc3stats");
-                  this.emitProgress({ step: "Uploaded replay", progress: 0 });
-                }
-              },
-              (error) => {
-                this.info(error.message);
-                this.sendWindow({ messageType: "error", data: { error: error.message } });
-              }
-            );
-          }
-        }
-      }
-    }
-    this.gameState.updateGameState({ menuState: newScreen });
-    this.sendWindow({
-      messageType: "menusChange",
-      data: { value: this.gameState.values.menuState },
-    });
   }
 
   async autoHostGame(override: boolean = false) {
@@ -569,55 +383,6 @@ class AutoHost extends Module {
         }
       }
     }
-  }
-
-  async analyzeGame(file: string) {
-    let data = new Set();
-    let dataTypes = new Set();
-    let parse = new parser();
-    let results: mmdResults = { list: {}, lookup: {} };
-    parse.on("gamedatablock", (block) => {
-      if (block.id === 0x1f) {
-        block.commandBlocks.forEach((commandBlock) => {
-          if (
-            commandBlock.actions.length > 0 &&
-            // @ts-ignore
-            commandBlock.actions[0].filename === "MMD.Dat"
-          ) {
-            commandBlock.actions.forEach((block) => {
-              // @ts-ignore
-              let key = block.key as string;
-              if (key && !/^\d+$/.test(key)) {
-                if (!/^DefVarP/i.test(key)) {
-                  if (key.match(/^init pid/i)) {
-                    results.list[key.split(" ")[3]] = {
-                      pid: key.split(" ")[2],
-                      won: false,
-                      extra: {},
-                    };
-                    results.lookup[key.split(" ")[2]] = key.split(" ")[3];
-                  } else if (key.match(/^FlagP/i)) {
-                    results.list[results.lookup[key.split(" ")[1]]].won =
-                      key.split(" ")[2] === "winner";
-                  } else if (key.match(/^VarP /i)) {
-                    if (results.list[results.lookup[key.split(" ")[1]]]) {
-                      results.list[results.lookup[key.split(" ")[1]]].extra[
-                        key.split(" ")[2]
-                      ] = key.split("=")[1].trim();
-                    }
-                  }
-                  data.add(key);
-                } else {
-                  dataTypes.add(key);
-                }
-              }
-            });
-          }
-        });
-      }
-    });
-    await parse.parse(readFileSync(file));
-    return results;
   }
 }
 

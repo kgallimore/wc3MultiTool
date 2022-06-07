@@ -51,6 +51,12 @@ class LobbyControl extends Module {
         this.gameState.values.selfRegion as Regions
       );
     }
+    if (
+      events.MultiplayerGameLeave &&
+      this.gameState.values.menuState !== "LOADING_SCREEN"
+    ) {
+      this.clear();
+    }
     if (events.ChatMessage) {
       if (events.ChatMessage.message.content.match(/^\?stats/)) {
         if (

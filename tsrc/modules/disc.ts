@@ -3,11 +3,12 @@ import { Module } from "../moduleBase";
 import type { SettingsUpdates } from "./../globals/settings";
 
 import Discord from "discord.js";
-import type { mmdResults } from "./autoHost";
+import type { mmdResults } from "./replayHandler";
 import type { PlayerTeamsData, LobbyUpdates } from "wc3mt-lobby-container";
 import { DeColorName } from "../utility";
 import { app } from "electron";
 import { GameState } from "./../globals/gameState";
+import { GameSocketEvents } from "./../globals/gameSocket";
 
 class DisClient extends Module {
   client: Discord.Client | null = null;
@@ -68,6 +69,15 @@ class DisClient extends Module {
     }
     if (!updates.inGame) {
       this.lobbyEnded(null);
+    }
+  }
+
+  protected onGameSocketEvent(events: GameSocketEvents): void {
+    if (
+      events.MultiplayerGameLeave &&
+      this.gameState.values.menuState !== "LOADING_SCREEN"
+    ) {
+      this.lobbyClosed();
     }
   }
 
