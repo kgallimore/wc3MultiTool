@@ -33,14 +33,12 @@ import { SEClientSingle } from "./modules/stream";
 import { performanceMode } from "./modules/performanceMode";
 import { banWhiteListSingle } from "./modules/administration";
 import { autoHost } from "./modules/autoHost";
-import { protocolHandler, OpenLobbyParams } from "./modules/protocolHandler";
+import { protocolHandler } from "./modules/protocolHandler";
 import { lobbyControl } from "./modules/lobbyControl";
+import { replayHandler } from "./modules/replayHandler";
 
 import type { EmitEvents } from "./moduleBase";
-import LanguageDetect from "languagedetect";
 
-const FormData = require("form-data");
-const translate = require("translate-google");
 if (!app.isPackaged) {
   require("electron-reload")(__dirname, {
     electron: join(__dirname, "../node_modules", ".bin", "electron.cmd"),
@@ -73,9 +71,6 @@ if (!gotLock) {
     screen.config.highlightOpacity = 0.75;
   }
 
-  let detectLang = new LanguageDetect();
-  detectLang.setLanguageType("iso2");
-
   log.info("App starting...");
 
   const store = new Store();
@@ -87,7 +82,6 @@ if (!gotLock) {
   var win: BrowserWindow;
   var appIcon: Tray | null;
   var currentStatus = false;
-  var openLobbyParams: OpenLobbyParams | null;
 
   var warInstallLoc: string = store.get("warInstallLoc") as string;
   if (!warInstallLoc || warInstallLoc.includes(".exe")) {
@@ -138,6 +132,7 @@ if (!gotLock) {
     performanceMode,
     protocolHandler,
     autoHost,
+    replayHandler,
   ];
 
   webUISocket.on("event", (event: WebUIEvents) => {
@@ -150,8 +145,6 @@ if (!gotLock) {
       sendStatus(true);
     }
   });
-
-  var lastAnnounceTime = 0;
 
   app.setAsDefaultProtocolClient("wc3mt");
 

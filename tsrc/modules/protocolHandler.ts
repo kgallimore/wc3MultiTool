@@ -16,6 +16,11 @@ class ProtocolHandler extends Module {
     super();
   }
   protected onGameSocketEvent(events: GameSocketEvents): void {
+    if (events.connected) {
+      if (this.openLobbyParams.lobbyName) {
+        this.openParamsJoin();
+      }
+    }
     if (events.GameList) {
       if (
         this.openLobbyParams &&

@@ -74,8 +74,9 @@ class DisClient extends Module {
 
   protected onGameSocketEvent(events: GameSocketEvents): void {
     if (
-      events.MultiplayerGameLeave &&
-      this.gameState.values.menuState !== "LOADING_SCREEN"
+      events.disconnected ||
+      (events.MultiplayerGameLeave &&
+        this.gameState.values.menuState !== "LOADING_SCREEN")
     ) {
       this.lobbyClosed();
     }

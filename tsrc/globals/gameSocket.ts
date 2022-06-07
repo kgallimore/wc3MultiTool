@@ -1,15 +1,18 @@
 import { Global } from "../globalBase";
 
 import WebSocket from "ws";
-import fs from "fs";
 
-import { gameState, GameState, MenuStates } from "./gameState";
+import { gameState, MenuStates } from "./gameState";
 import { settings } from "./settings";
-import { isInt } from "../utility";
 import { lobbyControl } from "./../modules/lobbyControl";
 
 import { warControl } from "./warControl";
 import { GameClientLobbyPayload, Regions } from "wc3mt-lobby-container";
+
+const translate = require("translate-google");
+import LanguageDetect from "languagedetect";
+let detectLang = new LanguageDetect();
+detectLang.setLanguageType("iso2");
 
 export interface GameList {
   games: Array<{ name: string; id: number; mapFile: string }>;
@@ -17,6 +20,32 @@ export interface GameList {
 
 export type AvailableHandicaps = 50 | 60 | 70 | 80 | 90 | 100;
 
+/*
+Other Native Game events:
+  "FriendsFriendUpdated",
+  "TeamsInformation",
+  "UpdateMapVetos",
+  "UpdateMapPool",
+  "UpdateSelectedGameMode",
+  "UpdateReadyState",
+  "UpdateGameModes",
+  "FriendsInvitationData",
+  "FriendsFriendData",
+  "MultiplayerRecentPlayers",
+  "UpdateLobbySelectedRace",
+  "FriendsFriendRemoved",
+  "GameModeResolved",
+  "ShowAgeRatingScreen",
+  "ClanInfoData",
+  "ProfileAvatarId",
+  "UpdateToonList",
+  "OnGetAgeRatingRequired",
+  "GameModeUpdated",
+  "GameListRemove",
+  "IMEUpdated",
+  "LoadProgressUpdate",
+  "GameListUpdate",
+*/
 export interface NativeGameSocketEvents {
   UpdateScoreInfo?: {
     scoreInfo: {
@@ -131,9 +160,6 @@ class GameSocket extends Global {
     this.info("Connecting to game client: ", connectInfo);
     this.gameWebSocket.on("open", () => {
       this.emitEvent({ connected: true });
-      if (openLobbyParams?.lobbyName) {
-        openParamsJoin();
-      }
     });
     this.gameWebSocket.on("message", (data) => {
       let parsedData = JSON.parse(data.toString());
@@ -151,9 +177,7 @@ class GameSocket extends Global {
           this.gameState.updateGameState({ screenState: parsedData.payload.screen });
           break;
         case "GameList":
-          {
-            this.handleGlueScreen("CUSTOM_LOBBIES");
-          }
+          this.handleGlueScreen("CUSTOM_LOBBIES");
           break;
         case "MultiplayerGameCreateResult":
           if (this.gameState.values.menuState === "GAME_LOBBY") {
@@ -170,51 +194,13 @@ class GameSocket extends Global {
           break;
         case "SetOverlayScreen":
           if (parsedData.payload.screen === "AUTHENTICATION_OVERLAY") {
-            setTimeout(handleBnetLogin, 5000);
+            setTimeout(warControl.handleBnetLogin, 5000);
           }
           break;
-        default:
-          //console.log(data);
-          if (
-            [
-              "FriendsFriendUpdated",
-              "TeamsInformation",
-              "UpdateMapVetos",
-              "UpdateMapPool",
-              "UpdateSelectedGameMode",
-              "UpdateReadyState",
-              "UpdateGameModes",
-              "FriendsInvitationData",
-              "FriendsFriendData",
-              "MultiplayerRecentPlayers",
-              "UpdateLobbySelectedRace",
-              "FriendsFriendRemoved",
-              "GameModeResolved",
-              "ShowAgeRatingScreen",
-              "ClanInfoData",
-              "ProfileAvatarId",
-              "UpdateToonList",
-              "OnGetAgeRatingRequired",
-              "GameModeUpdated",
-              "GameListRemove",
-              "IMEUpdated",
-              "LoadProgressUpdate",
-              "GameListUpdate",
-            ].includes(parsedData.messageType) === false
-          ) {
-            if (parsedData.messageType === "GameList") {
-              //console.log(data.payload.games);
-            } else {
-              //console.log(JSON.stringify(data));
-            }
-          }
       }
     });
     this.gameWebSocket.on("close", () => {
-      this.emitEvent({ disconnected: true });
-      // TODO: Remove from global
-      clearLobby();
-      this.error("Game client connection closed!");
+      this.sentMessages = [];
       if (settings.values.client.antiCrash) {
         setTimeout(async () => {
           if (await warControl.checkProcess("BlizzardError.exe")) {
@@ -224,10 +210,10 @@ class GameSocket extends Global {
           }
         }, 1000);
       }
+      this.emitEvent({ disconnected: true });
+      this.error("Game client connection closed!");
     });
   }
-
-  handleClientMessage(message: { data: string }) {}
 
   cancelStart() {
     this.info("Cancelling start");
@@ -359,20 +345,18 @@ class GameSocket extends Global {
                 message:
                   payload.message.content +
                   ": " +
-                  (translatedMessage ? translatedMessage : payload.message.content),
+                  (translatedMessage ?? payload.message.content),
               },
             },
           });
         }
-        if (discSingle) {
-          discSingle.this.sendMessage(
-            sender +
-              ": " +
-              (translatedMessage
-                ? `${translatedMessage} ||${payload.message.content}||`
-                : payload.message.content)
-          );
-        }
+        discSingle.sendMessage(
+          sender +
+            ": " +
+            (translatedMessage
+              ? `${translatedMessage} ||${payload.message.content}||`
+              : payload.message.content)
+        );
       }
     }
   }
