@@ -77,6 +77,8 @@ This tool adds a registry key to AllowLocalFiles and then modifies both the inde
 ## Installing
 
 You can grab a download for the tool at either [Hive](https://www.hiveworkshop.com/threads/wc3-multi-tool.335492/) or [the hub site](https://war.trenchguns.com/) (You may need to Ctrl + Shift + R to initiate the download until the revamp hub is finished). The tool will automatically update itself as needed.
+- If you run into an error on open, you may need to manually install the [Microsoft C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe)
+- If you are running this on a VM with no audio device, it is recommended to install a [virtual audio device](https://vb-audio.com/Cable/) otherwise Warcraft will show an error on start.
 
 ## Setup
 
@@ -85,8 +87,6 @@ You can grab a download for the tool at either [Hive](https://www.hiveworkshop.c
 OBS Websockets (Recommended)
 
 - [Download and install the latest full release from the Github repo](https://github.com/obsproject/obs-websocket/releases)
-- If you run into an error on open, you may need to manually install the [Microsoft C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe)
-- If you are running this on a VM with no audio device, it is recommended to install a [virtual audio device](https://vb-audio.com/Cable/) otherwise Warcraft will show an error on start.
 - If OBS is running locally and the port is unchanged leave the OBS address blank and use the default address.
 - Input the password if you specified any
 - Input the desired scene names (Case sensitive)
