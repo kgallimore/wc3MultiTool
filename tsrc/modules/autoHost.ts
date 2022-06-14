@@ -1,4 +1,4 @@
-import { Module } from "./../moduleBase";
+import { ModuleBase } from "./../moduleBase";
 
 import { CreateLobbyPayload, GameSocketEvents } from "./../globals/gameSocket";
 
@@ -18,7 +18,7 @@ import {
 } from "@nut-tree/nut-js";
 require("@nut-tree/nl-matcher");
 
-class AutoHost extends Module {
+class AutoHost extends ModuleBase {
   voteStartVotes: Array<string> = [];
   wc3mtTargetFile = `${app.getPath("documents")}\\Warcraft III\\CustomMapData\\wc3mt.txt`;
   gameNumber = 1;
@@ -41,13 +41,11 @@ class AutoHost extends Module {
         if (
           this.settings.values.autoHost.voteStart &&
           this.voteStartVotes &&
-          this.lobby?.microLobby?.lobbyStatic.isHost &&
+          this.lobby.microLobby?.lobbyStatic.isHost &&
           ["rapidHost", "smartHost"].includes(this.settings.values.autoHost.type)
         ) {
           if (
-            !this.lobby?.microLobby?.allPlayers.includes(
-              events.ChatMessage.message.sender
-            )
+            !this.lobby.microLobby?.allPlayers.includes(events.ChatMessage.message.sender)
           ) {
             this.gameSocket.sendChatMessage("Only players may vote start.");
             return;
@@ -72,7 +70,7 @@ class AutoHost extends Module {
             this.voteStartVotes.push(events.ChatMessage.message.sender);
             if (
               this.voteStartVotes.length >=
-              this.lobby?.microLobby?.nonSpecPlayers.length *
+              this.lobby.microLobby?.nonSpecPlayers.length *
                 (this.settings.values.autoHost.voteStartPercent / 100)
             ) {
               this.info("Vote start succeeded");
@@ -80,7 +78,7 @@ class AutoHost extends Module {
             } else {
               this.gameSocket.sendChatMessage(
                 Math.ceil(
-                  this.lobby?.microLobby?.nonSpecPlayers.length *
+                  this.lobby.microLobby?.nonSpecPlayers.length *
                     (this.settings.values.autoHost.voteStartPercent / 100) -
                     this.voteStartVotes.length
                 ).toString() + " more vote(s) required."
@@ -136,7 +134,7 @@ class AutoHost extends Module {
         ) {
           this.info("Game is over, quitting.");
           rmSync(this.wc3mtTargetFile);
-          this.lobby?.leaveGame();
+          this.lobby.leaveGame();
         } else {
           setTimeout(this.smartQuit.bind(this), 1000);
         }
@@ -167,12 +165,12 @@ class AutoHost extends Module {
           }
         }
         if (foundTarget) {
-          this.lobby?.leaveGame();
+          this.lobby.leaveGame();
           if (this.settings.values.autoHost.sounds) {
             this.playSound("quit.wav");
           }
         } else if (
-          !this.lobby?.microLobby?.nonSpecPlayers.includes(
+          !this.lobby.microLobby?.nonSpecPlayers.includes(
             this.gameState.values.selfBattleTag
           )
         ) {
@@ -203,7 +201,7 @@ class AutoHost extends Module {
             }
             keyboard.type(Key.Escape);
             if (foundTarget) {
-              this.lobby?.leaveGame();
+              this.lobby.leaveGame();
               if (this.settings.values.autoHost.sounds) {
                 this.playSound("quit.wav");
               }
@@ -228,7 +226,7 @@ class AutoHost extends Module {
       await this.warControl.openWarcraft();
     }
     if (
-      !this.lobby?.microLobby?.lobbyStatic.lobbyName &&
+      !this.lobby.microLobby?.lobbyStatic.lobbyName &&
       !this.gameState.values.inGame &&
       !["CUSTOM_GAME_LOBBY", "LOADING_SCREEN", "GAME_LOBBY"].includes(
         this.gameState.values.menuState
@@ -292,11 +290,11 @@ class AutoHost extends Module {
       }
       await sleep(1000);
       return await this.createGame(false, callCount + 1, lobbyName);
-    } else if (this.lobby?.microLobby?.lobbyStatic.lobbyName === lobbyName) {
+    } else if (this.lobby.microLobby?.lobbyStatic.lobbyName === lobbyName) {
       this.info("Game successfully created");
       return true;
     } else if (
-      !this.lobby?.microLobby?.lobbyStatic.lobbyName.includes(
+      !this.lobby.microLobby?.lobbyStatic.lobbyName.includes(
         this.settings.values.autoHost.gameName
       )
     ) {
@@ -325,7 +323,7 @@ class AutoHost extends Module {
     if (
       (this.gameState.values.menuState === "CUSTOM_GAME_LOBBY" ||
         this.gameState.values.menuState === "GAME_LOBBY") &&
-      this.lobby?.microLobby?.lobbyStatic.isHost
+      this.lobby.microLobby?.lobbyStatic.isHost
     ) {
       let currentTime = Date.now();
       if (
@@ -338,7 +336,7 @@ class AutoHost extends Module {
           if (this.settings.values.autoHost.announceIsBot) {
             let text = "Welcome. I am a bot.";
             if (
-              this.lobby?.microLobby?.statsAvailable &&
+              this.lobby.microLobby?.statsAvailable &&
               this.settings.values.elo.type !== "off"
             ) {
               text += " I will fetch ELO from " + this.settings.values.elo.type + ".";

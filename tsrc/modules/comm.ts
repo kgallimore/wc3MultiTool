@@ -1,4 +1,4 @@
-import { Module } from "../moduleBase";
+import { ModuleBase } from "../moduleBase";
 
 import type { SettingsUpdates } from "./../globals/settings";
 import { GameState } from "./../globals/gameState";
@@ -7,7 +7,7 @@ import { WebSocket } from "ws";
 import { HubReceive, isValidUrl } from "../utility";
 import type { LobbyUpdates } from "wc3mt-lobby-container";
 
-export class Comm extends Module {
+export class Comm extends ModuleBase {
   commSocket: WebSocket | null = null;
   retrySetup: NodeJS.Timeout | null = null;
 

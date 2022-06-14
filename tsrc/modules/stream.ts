@@ -1,4 +1,4 @@
-import { Module } from "../moduleBase";
+import { ModuleBase } from "../moduleBase";
 
 import { settings } from "./../globals/settings";
 
@@ -35,7 +35,7 @@ export interface SEEventEvent {
   message?: string;
 }
 
-class SEClient extends Module {
+class SEClient extends ModuleBase {
   socket: any;
 
   constructor() {

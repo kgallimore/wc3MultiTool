@@ -1,4 +1,4 @@
-import { Module } from "../moduleBase";
+import { ModuleBase } from "../moduleBase";
 
 import type { GameState } from "./../globals/gameState";
 
@@ -14,7 +14,7 @@ export interface NewActivity {
   inGame: boolean;
 }
 
-class DiscordRPC extends Module {
+class DiscordRPC extends ModuleBase {
   private clientId = "876866700644073533";
   private client: Client;
   private ready: boolean = false;

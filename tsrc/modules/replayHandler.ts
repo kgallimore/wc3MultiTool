@@ -1,4 +1,4 @@
-import { Module } from "./../moduleBase";
+import { ModuleBase } from "./../moduleBase";
 
 import { app } from "electron";
 import Store from "electron-store";
@@ -6,7 +6,7 @@ const store = new Store();
 const FormData = require("form-data");
 import parser from "w3gjs";
 import { readFileSync, readdirSync, existsSync, statSync, createReadStream } from "fs";
-import { GameState } from "./../globals/gameState";
+import type { GameState } from "./../globals/gameState";
 import { join } from "path";
 
 export interface mmdResults {
@@ -16,7 +16,7 @@ export interface mmdResults {
   lookup: { [key: string]: string };
 }
 
-class ReplayHandler extends Module {
+class ReplayHandler extends ModuleBase {
   replayFolders = join(app.getPath("documents"), "Warcraft III\\BattleNet");
 
   constructor() {

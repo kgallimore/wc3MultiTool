@@ -1,11 +1,11 @@
-import { Module } from "../moduleBase";
+import { ModuleBase } from "../moduleBase";
 
 import type { Regions, SlotNumbers } from "wc3mt-lobby-container";
 import sqlite3 from "better-sqlite3";
 import { app } from "electron";
 
 import Store from "electron-store";
-import { GameSocketEvents, AvailableHandicaps } from "./../globals/gameSocket";
+import type { GameSocketEvents, AvailableHandicaps } from "./../globals/gameSocket";
 import { isInt, ensureInt } from "./../utility";
 import type { AutoHostSettings } from "./../globals/settings";
 const store = new Store();
@@ -25,7 +25,7 @@ export interface FetchListOptions {
   activeOnly?: boolean;
 }
 
-class banWhiteList extends Module {
+class banWhiteList extends ModuleBase {
   db = new sqlite3(app.getPath("userData") + "/wc3mt.db");
 
   constructor() {
@@ -76,42 +76,42 @@ class banWhiteList extends Module {
       let sender = events.ChatMessage.message.sender;
       if (events.ChatMessage.message.content.match(/^\?sp$/i)) {
         if (
-          this.lobby?.microLobby?.lobbyStatic.isHost &&
+          this.lobby.microLobby?.lobbyStatic.isHost &&
           banWhiteListSingle.checkRole(sender, "moderator")
         ) {
-          this.lobby?.shufflePlayers();
+          this.lobby.shufflePlayers();
         }
       } else if (events.ChatMessage.message.content.match(/^\?st$/i)) {
         if (
-          this.lobby?.microLobby?.lobbyStatic?.isHost &&
+          this.lobby.microLobby?.lobbyStatic?.isHost &&
           banWhiteListSingle.checkRole(sender, "moderator")
         ) {
-          this.lobby?.shufflePlayers(false);
+          this.lobby.shufflePlayers(false);
         }
       } else if (events.ChatMessage.message.content.match(/^\?start$/i)) {
         if (
-          this.lobby?.microLobby?.lobbyStatic.isHost &&
+          this.lobby.microLobby?.lobbyStatic.isHost &&
           banWhiteListSingle.checkRole(sender, "moderator")
         ) {
           this.lobby.startGame();
         }
       } else if (events.ChatMessage.message.content.match(/^\?a$/i)) {
         if (
-          this.lobby?.microLobby?.lobbyStatic.isHost &&
+          this.lobby.microLobby?.lobbyStatic.isHost &&
           banWhiteListSingle.checkRole(sender, "moderator")
         ) {
           this.gameSocket.cancelStart();
         }
       } else if (events.ChatMessage.message.content.match(/^\?closeall$/i)) {
         if (
-          this.lobby?.microLobby?.lobbyStatic.isHost &&
+          this.lobby.microLobby?.lobbyStatic.isHost &&
           banWhiteListSingle.checkRole(sender, "moderator")
         ) {
           this.gameSocket.sendChatMessage("!closeall");
         }
       } else if (events.ChatMessage.message.content.match(/^\?hold$/i)) {
         if (
-          this.lobby?.microLobby?.lobbyStatic.isHost &&
+          this.lobby.microLobby?.lobbyStatic.isHost &&
           banWhiteListSingle.checkRole(sender, "moderator")
         ) {
           let targetPlayer = events.ChatMessage.message.content.split(" ")[1];
@@ -143,29 +143,29 @@ class banWhiteList extends Module {
         }
       } else if (events.ChatMessage.message.content.match(/^\?openall$/i)) {
         if (
-          this.lobby?.microLobby?.lobbyStatic.isHost &&
+          this.lobby.microLobby?.lobbyStatic.isHost &&
           banWhiteListSingle.checkRole(sender, "moderator")
         ) {
           this.gameSocket.sendChatMessage("!openall");
         }
       } else if (events.ChatMessage.message.content.match(/^\?swap/i)) {
         if (
-          this.lobby?.microLobby?.lobbyStatic.isHost &&
+          this.lobby.microLobby?.lobbyStatic.isHost &&
           banWhiteListSingle.checkRole(sender, "baswapper")
         ) {
           let [command, ...args] = events.ChatMessage.message.content.split(" ");
           if (args.length === 2) {
-            let playerData = this.lobby?.microLobby?.getAllPlayerData();
+            let playerData = this.lobby.microLobby?.getAllPlayerData();
             let tenMinutesAgo = Date.now() - 10 * 60 * 1000;
             if (isInt(args[1], 24, 1) && isInt(args[0], 24, 1)) {
               if (
                 banWhiteListSingle.checkRole(sender, "swapper") ||
-                (playerData[this.lobby?.microLobby?.slots[parseInt(args[0]) - 1].name]
+                (playerData[this.lobby.microLobby?.slots[parseInt(args[0]) - 1].name]
                   .joinedAt > tenMinutesAgo &&
-                  playerData[this.lobby?.microLobby?.slots[parseInt(args[1]) - 1].name]
+                  playerData[this.lobby.microLobby?.slots[parseInt(args[1]) - 1].name]
                     .joinedAt > tenMinutesAgo)
               ) {
-                this.lobby?.swapPlayers({
+                this.lobby.swapPlayers({
                   slots: [
                     ensureInt(args[0]) as SlotNumbers,
                     ensureInt(args[1]) as SlotNumbers,
@@ -177,17 +177,17 @@ class banWhiteList extends Module {
                 );
               }
             } else if (
-              this.lobby?.microLobby?.searchPlayer(args[1]).length === 1 &&
-              this.lobby?.microLobby?.searchPlayer(args[0]).length === 1
+              this.lobby.microLobby?.searchPlayer(args[1]).length === 1 &&
+              this.lobby.microLobby?.searchPlayer(args[0]).length === 1
             ) {
               if (
                 banWhiteListSingle.checkRole(sender, "swapper") ||
-                (playerData[this.lobby?.microLobby?.searchPlayer(args[1])[0]].joinedAt >
+                (playerData[this.lobby.microLobby?.searchPlayer(args[1])[0]].joinedAt >
                   tenMinutesAgo &&
-                  playerData[this.lobby?.microLobby?.searchPlayer(args[0])[0]].joinedAt >
+                  playerData[this.lobby.microLobby?.searchPlayer(args[0])[0]].joinedAt >
                     tenMinutesAgo)
               ) {
-                this.lobby?.swapPlayers({ players: [args[0], args[1]] });
+                this.lobby.swapPlayers({ players: [args[0], args[1]] });
               } else {
                 this.gameSocket.sendChatMessage(
                   "You can only swap players who joined within the last 10 minutes."
@@ -204,7 +204,7 @@ class banWhiteList extends Module {
         }
       } else if (events.ChatMessage.message.content.match(/^\?handi/i)) {
         if (
-          this.lobby?.microLobby?.lobbyStatic.isHost &&
+          this.lobby.microLobby?.lobbyStatic.isHost &&
           banWhiteListSingle.checkRole(sender, "moderator")
         ) {
           if (events.ChatMessage.message.content.split(" ").length === 3) {
@@ -215,9 +215,9 @@ class banWhiteList extends Module {
             ) as AvailableHandicaps;
             if (isInt(target, 24, 1)) {
               if (handicap) {
-                this.lobby?.setHandicapSlot(parseInt(target) - 1, handicap);
+                this.lobby.setHandicapSlot(parseInt(target) - 1, handicap);
               } else {
-                this.lobby?.setPlayerHandicap(target, handicap);
+                this.lobby.setPlayerHandicap(target, handicap);
               }
             } else {
               this.gameSocket.sendChatMessage("Invalid handicap");
@@ -228,17 +228,17 @@ class banWhiteList extends Module {
         }
       } else if (events.ChatMessage.message.content.match(/^\?close/i)) {
         if (
-          this.lobby?.microLobby?.lobbyStatic.isHost &&
+          this.lobby.microLobby?.lobbyStatic.isHost &&
           banWhiteListSingle.checkRole(sender, "moderator")
         ) {
           var target = events.ChatMessage.message.content.split(" ")[1];
           if (target) {
             if (isInt(target, 24, 1)) {
-              this.lobby?.closeSlot(parseInt(target) - 1);
+              this.lobby.closeSlot(parseInt(target) - 1);
             } else {
-              let targets = this.lobby?.microLobby?.searchPlayer(target);
+              let targets = this.lobby.microLobby?.searchPlayer(target);
               if (targets.length === 1) {
-                this.lobby?.closePlayer(targets[0]);
+                this.lobby.closePlayer(targets[0]);
               } else if (targets.length > 1) {
                 this.gameSocket.sendChatMessage(
                   "Multiple matches found. Please be more specific."
@@ -253,17 +253,17 @@ class banWhiteList extends Module {
         }
       } else if (events.ChatMessage.message.content.match(/^\?open/i)) {
         if (
-          this.lobby?.microLobby?.lobbyStatic.isHost &&
+          this.lobby.microLobby?.lobbyStatic.isHost &&
           banWhiteListSingle.checkRole(sender, "moderator")
         ) {
           var target = events.ChatMessage.message.content.split(" ")[1];
           if (target) {
             if (isInt(target, 24, 1)) {
-              this.lobby?.openSlot(parseInt(target) - 1);
+              this.lobby.openSlot(parseInt(target) - 1);
             } else {
-              let targets = this.lobby?.microLobby?.searchPlayer(target);
+              let targets = this.lobby.microLobby?.searchPlayer(target);
               if (targets.length === 1) {
-                this.lobby?.kickPlayer(targets[0]);
+                this.lobby.kickPlayer(targets[0]);
               } else if (targets.length > 1) {
                 this.gameSocket.sendChatMessage(
                   "Multiple matches found. Please be more specific."
@@ -278,17 +278,17 @@ class banWhiteList extends Module {
         }
       } else if (events.ChatMessage.message.content.match(/^\?kick/i)) {
         if (
-          this.lobby?.microLobby?.lobbyStatic.isHost &&
+          this.lobby.microLobby?.lobbyStatic.isHost &&
           banWhiteListSingle.checkRole(sender, "moderator")
         ) {
           var target = events.ChatMessage.message.content.split(" ")[1];
           if (target) {
             if (isInt(target, 24, 1)) {
-              this.lobby?.kickSlot(parseInt(target) - 1);
+              this.lobby.kickSlot(parseInt(target) - 1);
             } else {
-              let targets = this.lobby?.microLobby?.searchPlayer(target);
+              let targets = this.lobby.microLobby?.searchPlayer(target);
               if (targets.length === 1) {
-                this.lobby?.kickPlayer(targets[0]);
+                this.lobby.kickPlayer(targets[0]);
               } else if (targets.length > 1) {
                 this.gameSocket.sendChatMessage(
                   "Multiple matches found. Please be more specific."
@@ -303,7 +303,7 @@ class banWhiteList extends Module {
         }
       } else if (events.ChatMessage.message.content.match(/^\?ban/i)) {
         if (
-          this.lobby?.microLobby?.lobbyStatic.isHost &&
+          this.lobby.microLobby?.lobbyStatic.isHost &&
           banWhiteListSingle.checkRole(sender, "moderator")
         ) {
           var targetPlayer = events.ChatMessage.message.content.split(" ")[1];
@@ -311,11 +311,11 @@ class banWhiteList extends Module {
             var reason =
               events.ChatMessage.message.content.split(" ").slice(2).join(" ") || "";
             if (isInt(targetPlayer, 24, 1)) {
-              this.lobby?.banSlot(parseInt(targetPlayer) - 1);
+              this.lobby.banSlot(parseInt(targetPlayer) - 1);
               banWhiteListSingle.banPlayer(
-                this.lobby?.microLobby?.slots[targetPlayer].name,
+                this.lobby.microLobby?.slots[targetPlayer].name,
                 sender,
-                this.lobby?.microLobby?.region,
+                this.lobby.microLobby?.region,
                 reason
               );
             } else {
@@ -324,16 +324,16 @@ class banWhiteList extends Module {
                 banWhiteListSingle.banPlayer(
                   targetPlayer,
                   sender,
-                  this.lobby?.microLobby?.region,
+                  this.lobby.microLobby?.region,
                   reason
                 );
               } else {
-                let targets = this.lobby?.microLobby?.searchPlayer(targetPlayer);
+                let targets = this.lobby.microLobby?.searchPlayer(targetPlayer);
                 if (targets.length === 1) {
                   banWhiteListSingle.banPlayer(
                     targets[0],
                     sender,
-                    this.lobby?.microLobby?.region,
+                    this.lobby.microLobby?.region,
                     reason
                   );
                 } else if (targets.length > 1) {
@@ -351,7 +351,7 @@ class banWhiteList extends Module {
         }
       } else if (events.ChatMessage.message.content.match(/^\?unban/i)) {
         if (
-          this.lobby?.microLobby?.lobbyStatic.isHost &&
+          this.lobby.microLobby?.lobbyStatic.isHost &&
           banWhiteListSingle.checkRole(sender, "moderator")
         ) {
           var target = events.ChatMessage.message.content.split(" ")[1];
@@ -370,7 +370,7 @@ class banWhiteList extends Module {
         }
       } else if (events.ChatMessage.message.content.match(/^\?white/i)) {
         if (
-          this.lobby?.microLobby?.lobbyStatic?.isHost &&
+          this.lobby.microLobby?.lobbyStatic?.isHost &&
           banWhiteListSingle.checkRole(sender, "moderator")
         ) {
           var targetPlayer = events.ChatMessage.message.content.split(" ")[1];
@@ -379,9 +379,9 @@ class banWhiteList extends Module {
               events.ChatMessage.message.content.split(" ").slice(2).join(" ") || "";
             if (isInt(targetPlayer, 24, 1)) {
               banWhiteListSingle.whitePlayer(
-                this.lobby?.microLobby?.slots[targetPlayer].name,
+                this.lobby.microLobby?.slots[targetPlayer].name,
                 sender,
-                this.lobby?.microLobby?.region,
+                this.lobby.microLobby?.region,
                 reason
               );
             } else {
@@ -390,16 +390,16 @@ class banWhiteList extends Module {
                 banWhiteListSingle.whitePlayer(
                   targetPlayer,
                   sender,
-                  this.lobby?.microLobby?.region,
+                  this.lobby.microLobby?.region,
                   reason
                 );
               } else {
-                let targets = this.lobby?.microLobby?.searchPlayer(targetPlayer);
+                let targets = this.lobby.microLobby?.searchPlayer(targetPlayer);
                 if (targets.length === 1) {
                   banWhiteListSingle.whitePlayer(
                     targets[0],
                     sender,
-                    this.lobby?.microLobby?.region,
+                    this.lobby.microLobby?.region,
                     reason
                   );
                 } else if (targets.length > 1) {
@@ -418,7 +418,7 @@ class banWhiteList extends Module {
       } else if (events.ChatMessage.message.content.match(/^\?unwhite/i)) {
         // TODO: In lobby search and removal
         if (
-          this.lobby?.microLobby?.lobbyStatic.isHost &&
+          this.lobby.microLobby?.lobbyStatic.isHost &&
           banWhiteListSingle.checkRole(sender, "moderator")
         ) {
           var target = events.ChatMessage.message.content.split(" ")[1];
@@ -437,7 +437,7 @@ class banWhiteList extends Module {
         }
       } else if (events.ChatMessage.message.content.match(/^\?perm/i)) {
         if (
-          this.lobby?.microLobby?.lobbyStatic.isHost &&
+          this.lobby.microLobby?.lobbyStatic.isHost &&
           banWhiteListSingle.checkRole(sender, "admin")
         ) {
           var target = events.ChatMessage.message.content.split(" ")[1];
@@ -458,17 +458,17 @@ class banWhiteList extends Module {
                 banWhiteListSingle.addAdmin(
                   target,
                   sender,
-                  this.lobby?.microLobby?.region,
+                  this.lobby.microLobby?.region,
                   perm
                 );
               } else {
-                let targets = this.lobby?.microLobby?.searchPlayer(target);
+                let targets = this.lobby.microLobby?.searchPlayer(target);
                 if (targets.length === 1) {
                   if (
                     banWhiteListSingle.addAdmin(
                       targets[0],
                       sender,
-                      this.lobby?.microLobby?.region,
+                      this.lobby.microLobby?.region,
                       perm
                     )
                   ) {
@@ -497,7 +497,7 @@ class banWhiteList extends Module {
         }
       } else if (events.ChatMessage.message.content.match(/^\?unperm/i)) {
         if (
-          this.lobby?.microLobby?.lobbyStatic?.isHost &&
+          this.lobby.microLobby?.lobbyStatic?.isHost &&
           banWhiteListSingle.checkRole(sender, "admin")
         ) {
           var target = events.ChatMessage.message.content.split(" ")[1];
@@ -513,7 +513,7 @@ class banWhiteList extends Module {
                 );
               }
             } else {
-              let targets = this.lobby?.microLobby?.searchPlayer(target);
+              let targets = this.lobby.microLobby?.searchPlayer(target);
               if (targets.length === 1) {
                 if (banWhiteListSingle.removeAdmin(targets[0], sender)) {
                   this.gameSocket.sendChatMessage(targets[0] + " has been demoted.");
@@ -534,7 +534,7 @@ class banWhiteList extends Module {
         }
       } else if (events.ChatMessage.message.content.match(/^\?autohost/i)) {
         if (
-          this.lobby?.microLobby?.lobbyStatic.isHost &&
+          this.lobby.microLobby?.lobbyStatic.isHost &&
           banWhiteListSingle.checkRole(sender, "admin")
         ) {
           var target = events.ChatMessage.message.content.split(" ")[1];
@@ -563,7 +563,7 @@ class banWhiteList extends Module {
         }
       } else if (events.ChatMessage.message.content.match(/^\?autostart/i)) {
         if (
-          this.lobby?.microLobby?.lobbyStatic.isHost &&
+          this.lobby.microLobby?.lobbyStatic.isHost &&
           banWhiteListSingle.checkRole(sender, "admin")
         ) {
           var target = events.ChatMessage.message.content.split(" ")[1];
@@ -591,8 +591,8 @@ class banWhiteList extends Module {
           );
         }
       } else if (events.ChatMessage.message.content.match(/^\?(help)|(commands)/i)) {
-        if (this.lobby?.microLobby?.lobbyStatic.isHost) {
-          if (this.lobby?.microLobby?.statsAvailable) {
+        if (this.lobby.microLobby?.lobbyStatic.isHost) {
+          if (this.lobby.microLobby?.statsAvailable) {
             this.gameSocket.sendChatMessage(
               "?stats <?player>: Return back your stats, or target player stats"
             );
@@ -670,8 +670,8 @@ class banWhiteList extends Module {
             value: "Banned " + player + " by " + admin + (reason ? " for " + reason : ""),
           },
         });
-        if (this.lobby?.microLobby?.allPlayers.includes(player)) {
-          this.lobby?.banPlayer(player);
+        if (this.lobby.microLobby?.allPlayers.includes(player)) {
+          this.lobby.banPlayer(player);
           this.gameSocket.sendChatMessage(
             player + " banned" + (reason ? " for " + reason : "")
           );
@@ -700,7 +700,7 @@ class banWhiteList extends Module {
               "Whitelisted " + player + " by " + admin + (reason ? " for " + reason : ""),
           },
         });
-        if (this.lobby?.microLobby?.allPlayers.includes(player)) {
+        if (this.lobby.microLobby?.allPlayers.includes(player)) {
           this.gameSocket.sendChatMessage(
             player + " whitelisted" + (reason ? " for " + reason : "")
           );

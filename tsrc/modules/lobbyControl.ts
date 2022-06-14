@@ -1,4 +1,4 @@
-import { Module } from "../moduleBase";
+import { Module } from "../moduleBasePre";
 
 import fetch from "cross-fetch";
 import {
@@ -13,7 +13,7 @@ import {
   LobbyUpdates,
 } from "wc3mt-lobby-container";
 import { ensureInt } from "../utility";
-import { GameSocketEvents, AvailableHandicaps } from "./../globals/gameSocket";
+import type { GameSocketEvents, AvailableHandicaps } from "./../globals/gameSocket";
 import { sleep } from "@nut-tree/nut-js";
 
 require = require("esm")(module);
@@ -25,8 +25,7 @@ export type SlotInteractions =
   | "KickPlayerFromGameLobby"
   | "OpenSlot";
 
-class LobbyControl extends Module {
-  // TODO move autohost logic to a separate module
+export class LobbyControl extends Module {
   private refreshing: boolean = false;
   private staleTimer: NodeJS.Timeout | null = null;
 
@@ -41,7 +40,7 @@ class LobbyControl extends Module {
   private expectedSwaps: Array<[string, string]> = [];
 
   constructor() {
-    super(false);
+    super();
   }
 
   protected onGameSocketEvent(events: GameSocketEvents): void {
