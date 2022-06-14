@@ -25,6 +25,13 @@ export type GameStateActions =
   | "leavingLobby"
   | "closingWarcraft";
 
+export interface OpenLobbyParams {
+  lobbyName?: string;
+  gameId?: number;
+  mapFile?: string;
+  region?: Regions;
+}
+
 export interface GameState {
   selfRegion: Regions | "";
   menuState: MenuStates;
@@ -32,6 +39,7 @@ export interface GameState {
   selfBattleTag: string;
   inGame: boolean;
   action: GameStateActions;
+  openLobbyParams: OpenLobbyParams;
 }
 
 class GameStateContainer extends EventEmitter {
@@ -42,10 +50,12 @@ class GameStateContainer extends EventEmitter {
     selfRegion: "",
     inGame: false,
     action: "nothing",
+    openLobbyParams: {},
   };
 
   constructor() {
     super();
+    // TODO: Anything else?
   }
 
   get values(): GameState {

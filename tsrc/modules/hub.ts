@@ -1,4 +1,4 @@
-import { Module } from "../moduleBase";
+import { ModuleBase } from "../moduleBase";
 
 import type { SettingsUpdates } from "./../globals/settings";
 import type { GameState } from "./../globals/gameState";
@@ -8,7 +8,7 @@ import { HubReceive } from "../utility";
 import type { LobbyUpdates } from "wc3mt-lobby-container";
 import { app } from "electron";
 
-class HubControl extends Module {
+class HubControl extends ModuleBase {
   hubWebSocket: WebSocket | null = null;
   isPackaged: boolean;
   appVersion: string;

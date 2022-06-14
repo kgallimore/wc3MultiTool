@@ -1,4 +1,4 @@
-import { Module } from "../moduleBase";
+import { ModuleBase } from "../moduleBase";
 
 import type { SettingsUpdates } from "./../globals/settings";
 
@@ -10,7 +10,7 @@ import { app } from "electron";
 import { GameState } from "./../globals/gameState";
 import { GameSocketEvents } from "./../globals/gameSocket";
 
-class DisClient extends Module {
+class DisClient extends ModuleBase {
   client: Discord.Client | null = null;
   announceChannel: Discord.TextChannel | null = null;
   chatChannel: Discord.TextChannel | null = null;

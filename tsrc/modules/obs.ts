@@ -1,4 +1,4 @@
-import { Module } from "../moduleBase";
+import { ModuleBase } from "../moduleBase";
 
 import type { SettingsUpdates } from "./../globals/settings";
 
@@ -13,7 +13,7 @@ export interface ObsHotkeys {
   shiftKey: boolean;
 }
 
-class OBSSocket extends Module {
+class OBSSocket extends ModuleBase {
   socket: OBSWebSocket | null = null;
 
   constructor() {

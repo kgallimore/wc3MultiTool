@@ -1,12 +1,10 @@
-import { SettingsUpdates } from "./../globals/settings";
-import { Module } from "../moduleBase";
+import { ModuleBase } from "../moduleBase";
 
 import { existsSync, renameSync } from "fs";
 import Store from "electron-store";
-import { GameSocketEvents } from "./../globals/gameSocket";
 const store = new Store();
 
-class PerformanceMode extends Module {
+class PerformanceMode extends ModuleBase {
   warInstallLoc: string;
 
   constructor() {

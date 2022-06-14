@@ -1,61 +1,62 @@
-import { Module } from "../moduleBase";
+import { ModuleBase } from "../moduleBase";
 
-import { GameSocketEvents, GameList } from "./../globals/gameSocket";
-import { Regions } from "wc3mt-lobby-container";
+import type { GameSocketEvents, GameList } from "./../globals/gameSocket";
 
-export interface OpenLobbyParams {
-  lobbyName?: string;
-  gameId?: number;
-  mapFile?: string;
-  region?: Regions;
-}
-
-class ProtocolHandler extends Module {
-  openLobbyParams: OpenLobbyParams = {};
+class ProtocolHandler extends ModuleBase {
   constructor() {
     super();
   }
   protected onGameSocketEvent(events: GameSocketEvents): void {
     if (events.connected) {
-      if (this.openLobbyParams.lobbyName) {
+      if (this.gameState.values.openLobbyParams.lobbyName) {
         this.openParamsJoin();
       }
     }
-    if (events.GameList) {
-      if (
-        this.openLobbyParams &&
-        (this.openLobbyParams.lobbyName || this.openLobbyParams.gameId)
-      ) {
-        this.info("GameList received, trying to find lobby.");
-        this.handleGameList(events.GameList);
-      }
+    if (
+      events.GameList &&
+      (this.gameState.values.openLobbyParams.lobbyName ||
+        this.gameState.values.openLobbyParams.gameId)
+    ) {
+      this.info("GameList received, trying to find lobby.");
+      this.handleGameList(events.GameList);
     }
   }
 
   async processURL(url: string) {
     if (url) {
-      this.openLobbyParams = this.getQueryVariables(url.split("?", 2)[1]);
-      if (this.openLobbyParams.lobbyName || this.openLobbyParams.gameId) {
-        this.info(this.openLobbyParams);
+      this.gameState.values.openLobbyParams = this.getQueryVariables(
+        url.split("?", 2)[1]
+      );
+      if (
+        this.gameState.values.openLobbyParams.lobbyName ||
+        this.gameState.values.openLobbyParams.gameId
+      ) {
+        this.info(this.gameState.values.openLobbyParams);
         if (await this.warControl.isWarcraftOpen()) {
           if (
-            this.openLobbyParams.region &&
-            this.openLobbyParams.region !== this.gameState.values.selfRegion
+            this.gameState.values.openLobbyParams.region &&
+            this.gameState.values.openLobbyParams.region !==
+              this.gameState.values.selfRegion
           ) {
-            this.info(`Changing region to ${this.openLobbyParams.region}`);
+            this.info(
+              `Changing region to ${this.gameState.values.openLobbyParams.region}`
+            );
             await this.warControl.exitGame();
-            this.warControl.openWarcraft(this.openLobbyParams.region);
+            this.warControl.openWarcraft(this.gameState.values.openLobbyParams.region);
           } else {
             this.openParamsJoin();
           }
         } else {
           this.info(
-            "Warcraft is not open, opening. " + this.openLobbyParams.region
-              ? this.openLobbyParams.region
+            "Warcraft is not open, opening. " +
+              this.gameState.values.openLobbyParams.region
+              ? this.gameState.values.openLobbyParams.region
               : ""
           );
           try {
-            await this.warControl.openWarcraft(this.openLobbyParams.region);
+            await this.warControl.openWarcraft(
+              this.gameState.values.openLobbyParams.region
+            );
           } catch (e) {
             this.warn(e);
           }
@@ -67,41 +68,46 @@ class ProtocolHandler extends Module {
   async openParamsJoin() {
     // TODO: make this more robust
     if (
-      this.openLobbyParams.lobbyName ||
-      (this.openLobbyParams.gameId && this.openLobbyParams.mapFile)
+      this.gameState.values.openLobbyParams.lobbyName ||
+      (this.gameState.values.openLobbyParams.gameId &&
+        this.gameState.values.openLobbyParams.mapFile)
     ) {
       this.info("Setting autoHost to off to join a lobby link.");
       this.settings.updateSettings({ autoHost: { type: "off" } });
       if (
-        (this.openLobbyParams.region &&
-          this.openLobbyParams.region !== this.gameState.values.selfRegion) ||
+        (this.gameState.values.openLobbyParams.region &&
+          this.gameState.values.openLobbyParams.region !==
+            this.gameState.values.selfRegion) ||
         this.gameState.values.menuState === "LOADING_SCREEN"
       ) {
         this.info(
-          `Changing region to match lobby of region ${this.openLobbyParams.region}`
+          `Changing region to match lobby of region ${this.gameState.values.openLobbyParams.region}`
         );
         await this.warControl.exitGame();
-        this.warControl.openWarcraft(this.openLobbyParams.region);
+        this.warControl.openWarcraft(this.gameState.values.openLobbyParams.region);
         return;
       }
       if (this.gameState.values.inGame || this.lobby?.microLobby?.lookupName) {
         this.lobby?.leaveGame();
         return;
       }
-      if (this.openLobbyParams.lobbyName) {
+      if (this.gameState.values.openLobbyParams.lobbyName) {
         this.gameSocket.sendMessage({ SendGameListing: {} });
         setTimeout(() => {
           this.gameSocket.sendMessage({ GetGameList: {} });
         }, 500);
-      } else if (this.openLobbyParams.gameId && this.openLobbyParams.mapFile) {
+      } else if (
+        this.gameState.values.openLobbyParams.gameId &&
+        this.gameState.values.openLobbyParams.mapFile
+      ) {
         this.gameSocket.sendMessage({
           JoinGame: {
-            gameId: this.openLobbyParams.gameId,
+            gameId: this.gameState.values.openLobbyParams.gameId,
             password: "",
-            mapFile: this.openLobbyParams.mapFile,
+            mapFile: this.gameState.values.openLobbyParams.mapFile,
           },
         });
-        this.openLobbyParams = {};
+        this.gameState.values.openLobbyParams = {};
       }
     }
   }
@@ -122,8 +128,8 @@ class ProtocolHandler extends Module {
     if (List.games && List.games.length > 0) {
       List.games.some((game) => {
         if (
-          this.openLobbyParams.lobbyName &&
-          game.name === this.openLobbyParams.lobbyName
+          this.gameState.values.openLobbyParams.lobbyName &&
+          game.name === this.gameState.values.openLobbyParams.lobbyName
         ) {
           this.info("Found game by name");
           this.gameSocket.sendMessage({
@@ -135,8 +141,8 @@ class ProtocolHandler extends Module {
           });
           return true;
         } else if (
-          this.openLobbyParams.gameId &&
-          game.id === this.openLobbyParams.gameId
+          this.gameState.values.openLobbyParams.gameId &&
+          game.id === this.gameState.values.openLobbyParams.gameId
         ) {
           this.info("Found game by Id");
           this.gameSocket.sendMessage({
@@ -149,7 +155,7 @@ class ProtocolHandler extends Module {
           return true;
         }
       });
-      this.openLobbyParams = {};
+      this.gameState.values.openLobbyParams = {};
     }
   }
 }

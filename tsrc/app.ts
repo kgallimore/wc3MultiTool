@@ -37,7 +37,7 @@ import { protocolHandler } from "./modules/protocolHandler";
 import { lobbyControl } from "./modules/lobbyControl";
 import { replayHandler } from "./modules/replayHandler";
 
-import type { EmitEvents } from "./moduleBase";
+import type { EmitEvents } from "./moduleBasePre";
 
 if (!app.isPackaged) {
   require("electron-reload")(__dirname, {
@@ -336,7 +336,7 @@ if (!gotLock) {
     log.info("Screen changed to: ", newScreen);
     if (["CUSTOM_LOBBIES", "MAIN_MENU"].includes(newScreen)) {
       log.info("Checking to see if we should auto host or join a lobby link.");
-      if (protocolHandler.openLobbyParams.lobbyName) {
+      if (gameState.values.openLobbyParams.lobbyName) {
         setTimeout(protocolHandler.openParamsJoin, 250);
       } else {
         setTimeout(autoHost.autoHostGame, 250);

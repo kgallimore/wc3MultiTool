@@ -11,6 +11,7 @@ export class Global extends EventEmitter {
   protected verbose = verbose;
   constructor() {
     super();
+    this.setMaxListeners(15);
   }
 
   protected notification(title: string, body: string) {
