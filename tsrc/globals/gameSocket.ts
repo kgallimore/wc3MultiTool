@@ -70,6 +70,7 @@ export interface NativeGameSocketEvents {
 export interface GameSocketEvents extends NativeGameSocketEvents {
   connected?: true;
   disconnected?: true;
+  processedChat?: BaseMessage & { translated?: string };
 }
 
 export interface CreateLobbyPayload {
@@ -87,9 +88,12 @@ export interface CreateLobbyPayload {
   };
   privateGame?: boolean;
 }
-
+interface BaseMessage {
+  sender: string;
+  content: string;
+}
 export interface GameChatMessage {
-  message: { sender: string; source: "gameChat"; content: string };
+  message: BaseMessage & { source: "gameChat" };
 }
 
 export interface SendGameMessage {

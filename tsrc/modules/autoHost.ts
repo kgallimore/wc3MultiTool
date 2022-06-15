@@ -36,17 +36,15 @@ class AutoHost extends ModuleBase {
       this.autoHostGame();
     }
 
-    if (events.ChatMessage) {
-      if (events.ChatMessage.message.content.match(/^\?votestart$/i)) {
+    if (events.processedChat) {
+      if (events.processedChat.content.match(/^\?votestart$/i)) {
         if (
           this.settings.values.autoHost.voteStart &&
           this.voteStartVotes &&
           this.lobby.microLobby?.lobbyStatic.isHost &&
           ["rapidHost", "smartHost"].includes(this.settings.values.autoHost.type)
         ) {
-          if (
-            !this.lobby.microLobby?.allPlayers.includes(events.ChatMessage.message.sender)
-          ) {
+          if (!this.lobby.microLobby?.allPlayers.includes(events.processedChat.sender)) {
             this.gameSocket.sendChatMessage("Only players may vote start.");
             return;
           }
@@ -64,10 +62,10 @@ class AutoHost extends ModuleBase {
             }
           }
           if (
-            !this.voteStartVotes.includes(events.ChatMessage.message.sender) &&
+            !this.voteStartVotes.includes(events.processedChat.sender) &&
             this.voteTimer
           ) {
-            this.voteStartVotes.push(events.ChatMessage.message.sender);
+            this.voteStartVotes.push(events.processedChat.sender);
             if (
               this.voteStartVotes.length >=
               this.lobby.microLobby?.nonSpecPlayers.length *

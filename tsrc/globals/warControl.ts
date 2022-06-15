@@ -56,6 +56,7 @@ class WarControl extends Global {
     this.appPath = app.getAppPath();
     this.isPackaged = app.isPackaged;
   }
+
   async openWarcraft(
     region: Regions | "" = "",
     callCount = 0,
@@ -425,10 +426,10 @@ class WarControl extends Global {
       targetRes = "720/";
     }
     mouse.config.mouseSpeed = parseInt(targetRes) * 2;
-    if (!this.isPackaged) {
+    if (this.isPackaged) {
       screen.config.resourceDirectory = join(__dirname, "images", targetRes);
     } else {
-      screen.config.resourceDirectory = join(this.appPath, "\\..\\..\\images", targetRes);
+      screen.config.resourceDirectory = join(this.appPath, "\\src\\images", targetRes);
     }
   }
 }
