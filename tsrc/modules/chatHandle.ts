@@ -104,11 +104,12 @@ class ChatHandler extends ModuleBase {
           if (this.settings.values.client.translateToLobby && translatedMessage) {
             this.gameSocket.sendChatMessage(sender + ": " + translatedMessage);
           }
-          this.emitProcessedChat({
-            sender,
-            content: events.ChatMessage.message.content,
-            source: "gameChat",
-            translated: translatedMessage,
+          this.gameSocket.emitEvent({
+            processedChat: {
+              sender,
+              content: events.ChatMessage.message.content,
+              translated: translatedMessage,
+            },
           });
         }
       }
