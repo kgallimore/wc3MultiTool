@@ -31,7 +31,14 @@ class DisClient extends ModuleBase {
   };
 
   constructor() {
-    super();
+    super({
+      listeners: [
+        "gameSocketEvent",
+        "settingsUpdate",
+        "gameSocketEvent",
+        "gameStateUpdates",
+      ],
+    });
     this.dev = app.isPackaged;
   }
 

@@ -22,7 +22,7 @@ class DiscordRPC extends ModuleBase {
   private previousActivity: NewActivity = { state: "OUT_OF_MENUS", inGame: false };
 
   constructor() {
-    super();
+    super({ listeners: ["gameStateUpdates", "lobbyUpdate"] });
     this.client = new Client({ transport: "ipc" });
     register(this.clientId);
     this.client.on("ready", () => {

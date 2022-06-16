@@ -40,7 +40,7 @@ export class LobbyControl extends Module {
   private expectedSwaps: Array<[string, string]> = [];
 
   constructor() {
-    super();
+    super({ listeners: ["gameSocketEvent"] });
   }
 
   protected onGameSocketEvent(events: GameSocketEvents): void {

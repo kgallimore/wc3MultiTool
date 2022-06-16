@@ -66,7 +66,7 @@ class WebUISocket extends Global {
   }
 
   protected emitEvent(event: WebUIEvents) {
-    this.emit("event", event);
+    this.emit("webUIEvent", event);
   }
 
   protected async handleWebUIMessage(message: string) {

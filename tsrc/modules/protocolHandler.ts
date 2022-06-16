@@ -4,7 +4,7 @@ import type { GameSocketEvents, GameList } from "./../globals/gameSocket";
 
 class ProtocolHandler extends ModuleBase {
   constructor() {
-    super();
+    super({ listeners: ["gameSocketEvent"] });
   }
   protected onGameSocketEvent(events: GameSocketEvents): void {
     if (events.connected) {

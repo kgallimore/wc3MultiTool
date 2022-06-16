@@ -20,7 +20,7 @@ class ReplayHandler extends ModuleBase {
   replayFolders = join(app.getPath("documents"), "Warcraft III\\BattleNet");
 
   constructor() {
-    super();
+    super({ listeners: ["gameStateUpdates"] });
   }
 
   protected onGameStateUpdate(updates: Partial<GameState>): void {
@@ -100,6 +100,7 @@ class ReplayHandler extends ModuleBase {
       }
     }
   }
+
   async analyzeGame(file: string) {
     let data = new Set();
     let dataTypes = new Set();

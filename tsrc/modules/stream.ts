@@ -36,10 +36,14 @@ export interface SEEventEvent {
 }
 
 class SEClient extends ModuleBase {
+  // TODO: Fix setup
   socket: any;
 
   constructor() {
-    super();
+    super({ listeners: ["settingsUpdate"] });
+    if (!this.settings.values.streaming.seToken) {
+      return;
+    }
     this.socket = io("https://realtime.streamelements.com", {
       transports: ["websocket"],
     });
