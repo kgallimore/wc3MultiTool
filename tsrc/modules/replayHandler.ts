@@ -76,17 +76,24 @@ class ReplayHandler extends ModuleBase {
               if (response.status !== 200) {
                 this.info(response.statusText);
                 this.sendWindow({
-                  messageType: "error",
-                  data: { error: response.statusText },
+                  legacy: {
+                    messageType: "error",
+                    data: { error: response.statusText },
+                  },
                 });
               } else {
                 this.info("Uploaded replay to wc3stats");
-                this.emitProgress({ step: "Uploaded replay", progress: 0 });
+                this.clientState.updateClientState({
+                  currentStep: "Uploaded replay",
+                  currentStepProgress: 0,
+                });
               }
             },
             (error) => {
               this.info(error.message);
-              this.sendWindow({ messageType: "error", data: { error: error.message } });
+              this.sendWindow({
+                legacy: { messageType: "error", data: { error: error.message } },
+              });
             }
           );
         }

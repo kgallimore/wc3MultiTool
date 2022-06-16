@@ -663,9 +663,12 @@ class banWhiteList extends ModuleBase {
           .run(player, admin, region, reason);
         this.info("Banned " + player + " by " + admin + (reason ? " for " + reason : ""));
         this.sendWindow({
-          messageType: "action",
-          data: {
-            value: "Banned " + player + " by " + admin + (reason ? " for " + reason : ""),
+          legacy: {
+            messageType: "action",
+            data: {
+              value:
+                "Banned " + player + " by " + admin + (reason ? " for " + reason : ""),
+            },
           },
         });
         if (this.lobby.microLobby?.allPlayers.includes(player)) {
@@ -692,10 +695,16 @@ class banWhiteList extends ModuleBase {
           "Whitelisted " + player + " by " + admin + (reason ? " for " + reason : "")
         );
         this.sendWindow({
-          messageType: "action",
-          data: {
-            value:
-              "Whitelisted " + player + " by " + admin + (reason ? " for " + reason : ""),
+          legacy: {
+            messageType: "action",
+            data: {
+              value:
+                "Whitelisted " +
+                player +
+                " by " +
+                admin +
+                (reason ? " for " + reason : ""),
+            },
           },
         });
         if (this.lobby.microLobby?.allPlayers.includes(player)) {
@@ -717,8 +726,10 @@ class banWhiteList extends ModuleBase {
       .run(player);
     this.info("Un-whitelisted " + player + " by " + admin);
     this.sendWindow({
-      messageType: "action",
-      data: { value: "Un-whitelisted " + player + " by " + admin },
+      legacy: {
+        messageType: "action",
+        data: { value: "Un-whitelisted " + player + " by " + admin },
+      },
     });
   }
 
@@ -730,8 +741,10 @@ class banWhiteList extends ModuleBase {
       .run(player);
     this.info("Unbanned " + player + " by " + admin);
     this.sendWindow({
-      messageType: "action",
-      data: { value: "Unbanned " + player + " by " + admin },
+      legacy: {
+        messageType: "action",
+        data: { value: "Unbanned " + player + " by " + admin },
+      },
     });
   }
 
@@ -750,9 +763,11 @@ class banWhiteList extends ModuleBase {
               .run(role, admin, player);
             this.info("Updated " + player + " to " + role + " by " + admin);
             this.sendWindow({
-              messageType: "action",
-              data: {
-                value: "Updated " + player + " to " + role + " by " + admin,
+              legacy: {
+                messageType: "action",
+                data: {
+                  value: "Updated " + player + " to " + role + " by " + admin,
+                },
               },
             });
             return true;
@@ -764,9 +779,11 @@ class banWhiteList extends ModuleBase {
               .run(player, admin, region, role);
             this.info("Added " + player + " to " + role + " by " + admin);
             this.sendWindow({
-              messageType: "action",
-              data: {
-                value: "Added " + player + " to " + role + " by " + admin,
+              legacy: {
+                messageType: "action",
+                data: {
+                  value: "Added " + player + " to " + role + " by " + admin,
+                },
               },
             });
             return true;
@@ -792,8 +809,10 @@ class banWhiteList extends ModuleBase {
           this.db.prepare("DELETE FROM adminList WHERE username = ?").run(player);
           this.info("Removed permissions from " + player);
           this.sendWindow({
-            messageType: "action",
-            data: { value: "Removed permissions from " + player },
+            legacy: {
+              messageType: "action",
+              data: { value: "Removed permissions from " + player },
+            },
           });
         } else {
           this.info(player + " is not a moderator");

@@ -12,6 +12,9 @@
   import CloseSlot from "./components/CloseSlot.svelte";
   import SettingsCheckbox from "./components/SettingsCheckbox.svelte";
   import WhiteBanList from "./components/WhiteBanList.svelte";
+  import type { GameState } from "../../tsrc/globals/gameState";
+  import type { ClientState } from "../../tsrc/globals/clientState";
+
   let settings: AppSettings = {
     autoHost: {
       type: "off",
@@ -109,19 +112,24 @@
       minInGameTip: 1,
     },
   };
-  let currentStatus: {
-    connected: boolean;
-    menu: string;
-    progress: { percent: number; step: string };
-    lobby: MicroLobby | null;
-    updater: string;
-  } = {
-    connected: false,
-    menu: "Out of menus",
-    progress: { percent: 0, step: "Waiting" },
-    lobby: null,
-    updater: "Up to date",
+  let clientState: ClientState = {
+    tableVersion: 0,
+    latestUploadedReplay: 0,
+    currentStep: "",
+    currentStepProgress: 0,
   };
+  let gameState: GameState = {
+    selfRegion: "",
+    menuState: "OUT_OF_MENUS",
+    screenState: "",
+    selfBattleTag: "",
+    inGame: false,
+    action: "openingWarcraft",
+    openLobbyParams: undefined,
+    connected: false,
+  };
+  let updateStatus: string = "";
+  let lobby: MicroLobby;
   let wc3statsOptions = wc3EloModes(settings.elo.lookupName);
   let battleTag = "";
   let banReason = "";
@@ -201,7 +209,7 @@
   }
 
   function updatestructuredTeamData() {
-    let exported = currentStatus.lobby.exportTeamStructure(false);
+    let exported = lobby.exportTeamStructure(false);
     if (exported) {
       structuredTeamData = Object.entries(exported);
     } else {
@@ -223,88 +231,86 @@
   }
   // @ts-ignore
   window.api.receive("fromMain", (data: WindowReceive) => {
-    let newData = data.data;
-    switch (data.messageType) {
-      case "action":
-        lastAction = newData.value;
-        banReason = "";
-        battleTag = "";
-        break;
-      case "updater":
-        currentStatus.updater = newData.value;
-        break;
-      case "statusChange":
-        currentStatus.connected = newData.connected;
-        break;
-      case "updateSettings":
-        settings = newData.settings;
-        wc3statsOptions = wc3EloModes(settings.elo.lookupName);
-        break;
-      case "updateSettingSingle":
-        let update = newData.update;
-        if (update) {
-          // @ts-ignore
-          settings[update.setting][update.key] = update.value;
-          if (update.key === "lookupName") {
-            wc3statsOptions = wc3EloModes(settings.elo.lookupName);
+    if (data.globalUpdate) {
+      if (data.globalUpdate.clientState) {
+        Object.entries(data.globalUpdate.clientState).forEach(([key, value]) => {
+          clientState[key] = value;
+        });
+      }
+      if (data.globalUpdate.gameState) {
+        Object.entries(data.globalUpdate.gameState).forEach(([key, value]) => {
+          gameState[key] = value;
+        });
+      }
+      if (data.globalUpdate.settings) {
+        Object.entries(data.globalUpdate.settings).forEach(([key, value]) => {
+          settings[key] = value;
+        });
+        if (data.globalUpdate.settings.elo) {
+          wc3statsOptions = wc3EloModes(settings.elo.lookupName);
+        }
+      }
+    } else if (data.init) {
+      clientState = data.init.clientState;
+      gameState = data.init.gameState;
+      settings = data.init.settings;
+    } else if (data.legacy) {
+      let newData = data.legacy.data;
+      switch (data.legacy.messageType) {
+        case "action":
+          lastAction = newData.value;
+          banReason = "";
+          battleTag = "";
+          break;
+        case "updater":
+          updateStatus = newData.value;
+          break;
+        case "lobbyUpdate":
+          let lobbyData = newData.lobbyData;
+          if (lobbyData.newLobby) {
+            lobby = new MicroLobby({
+              region: "us",
+              fullData: lobbyData.newLobby,
+            });
+            updatestructuredTeamData();
+          } else if (lobbyData.playerPayload || lobbyData.playerData) {
+            if (lobby) {
+              let updated = lobby.ingestUpdate(lobbyData).isUpdated;
+              if (updated) updatestructuredTeamData();
+            }
+          } else if (lobbyData.leftLobby) {
+            lobby = null;
+            structuredTeamData = [];
           }
-        }
-        break;
-      case "lobbyUpdate":
-        let lobbyData = newData.lobbyData;
-        if (lobbyData.newLobby) {
-          currentStatus.lobby = new MicroLobby({
-            region: "us",
-            fullData: lobbyData.newLobby,
-          });
-          updatestructuredTeamData();
-        } else if (lobbyData.playerPayload || lobbyData.playerData) {
-          if (currentStatus.lobby) {
-            let updated = currentStatus.lobby.ingestUpdate(lobbyData).isUpdated;
-            if (updated) updatestructuredTeamData();
+          break;
+        case "error":
+          let alertDiv = document.createElement("div");
+          alertDiv.classList.add(
+            "alert",
+            "alert-danger",
+            "alert-dismissible",
+            "fade",
+            "show"
+          );
+          alertDiv.setAttribute("role", "alert");
+          alertDiv.innerHTML = `<strong>Error!</strong> ${data.legacy.data.error} <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>`;
+          document.body.prepend(alertDiv);
+          break;
+        case "gotMapPath":
+          settings.autoHost.mapPath = newData.value;
+          break;
+        case "fetchedWhiteBanList":
+          if (newData.fetched) {
+            if (newData.fetched.type === "banList") {
+              banList = { data: newData.fetched.list, page: newData.fetched.page };
+            } else if (newData.fetched.type === "whiteList") {
+              whiteList = { data: newData.fetched.list, page: newData.fetched.page };
+            }
           }
-        } else if (lobbyData.leftLobby) {
-          currentStatus.lobby = null;
-          structuredTeamData = [];
-        }
-        break;
-      case "progress":
-        let progress = newData.progress;
-        if (progress) {
-          currentStatus.progress.step = progress.step;
-          currentStatus.progress.percent = progress.progress;
-        }
-        break;
-      case "menusChange":
-        currentStatus.menu = newData.value ?? "OUT_OF_MENUS";
-        break;
-      case "error":
-        let alertDiv = document.createElement("div");
-        alertDiv.classList.add(
-          "alert",
-          "alert-danger",
-          "alert-dismissible",
-          "fade",
-          "show"
-        );
-        alertDiv.setAttribute("role", "alert");
-        alertDiv.innerHTML = `<strong>Error!</strong> ${data.data.error} <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>`;
-        document.body.prepend(alertDiv);
-        break;
-      case "gotMapPath":
-        settings.autoHost.mapPath = newData.value;
-        break;
-      case "fetchedWhiteBanList":
-        if (newData.fetched) {
-          if (newData.fetched.type === "banList") {
-            banList = { data: newData.fetched.list, page: newData.fetched.page };
-          } else if (newData.fetched.type === "whiteList") {
-            whiteList = { data: newData.fetched.list, page: newData.fetched.page };
-          }
-        }
-        break;
-      default:
-        console.log("Unknown:", data);
+          break;
+        default:
+          console.log("Unknown:", data);
+      }
     }
   });
   function generateHotkeys(e: KeyboardEvent, key: string) {
@@ -1993,7 +1999,7 @@
 
   <div class="container-lg">
     <div class="d-flex justify-content-center p-2">
-      {#if currentStatus.connected}
+      {#if gameState.connected}
         <span class="badge bg-success" id="mainStatus">
           <h2 id="statusText">Connected to Warcraft</h2>
         </span>
@@ -2005,7 +2011,7 @@
     </div>
     <div class="d-flex justify-content-center p-2">
       <span class="badge bg-primary" id="mainStatus">
-        {currentStatus.updater}
+        {updateStatus}
       </span>
     </div>
     <div class="d-flex justify-content-center pt-1">
@@ -2071,15 +2077,24 @@
         Discord
       </a>
     </div>
-    <h4>Menu State: <span id="menuStateLabel">{currentStatus.menu}</span></h4>
-    <h4>Current Step: <span />{currentStatus.progress.step}</h4>
+    {#each Object.entries(gameState) as [key, value]}
+      {#if key !== "connected" && !key.includes("currentStep")}
+        <div class="d-flex justify-content-center pt-1">
+          <details>
+            <summary>{key}</summary>
+            <pre>{JSON.stringify(value, null, 2)}</pre>
+          </details>
+        </div>
+      {/if}
+    {/each}
+    <h4>Current Step: <span />{clientState.currentStepProgress}</h4>
     <div class="progress">
       <div
         id="progressBar"
         class="progress-bar progress-bar-striped progress-bar-animated"
         role="progressbar"
-        aria-valuenow={currentStatus.progress.percent}
-        style="width: {currentStatus.progress.percent.toString()}%"
+        aria-valuenow={clientState.currentStepProgress}
+        style="width: {clientState.currentStepProgress.toString()}%"
       />
     </div>
     <form class="border p-2">
@@ -2279,11 +2294,11 @@
       </thead>
       <tbody>
         <tr>
-          {#if currentStatus.lobby}
-            <td id="mapName">{currentStatus.lobby.lobbyStatic.mapData.mapName}</td>
-            <td id="lobbyName">{currentStatus.lobby.lobbyStatic.lobbyName}</td>
-            <td id="gameHost">{currentStatus.lobby.lobbyStatic.playerHost}</td>
-            <td id="eloAvailable">{currentStatus.lobby.statsAvailable}</td>
+          {#if lobby}
+            <td id="mapName">{lobby.lobbyStatic.mapData.mapName}</td>
+            <td id="lobbyName">{lobby.lobbyStatic.lobbyName}</td>
+            <td id="gameHost">{lobby.lobbyStatic.playerHost}</td>
+            <td id="eloAvailable">{lobby.statsAvailable}</td>
           {:else}
             <td id="mapName" />
             <td id="lobbyName" />

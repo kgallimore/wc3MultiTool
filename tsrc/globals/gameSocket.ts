@@ -172,16 +172,6 @@ class GameSocket extends Global {
         case "ScreenTransitionInfo":
           this.gameState.updateGameState({ screenState: parsedData.payload.screen });
           break;
-        /*case "GameList":
-          this.handleGlueScreen("CUSTOM_LOBBIES");
-          break;
-        case "MultiplayerGameCreateResult":
-          if (this.gameState.values.menuState === "GAME_LOBBY") {
-            setTimeout(() => {
-              this.handleGlueScreen("CUSTOM_LOBBIES");
-            }, 1000);
-          }
-          break;*/
         case "UpdateUserInfo":
           this.gameState.updateGameState({
             selfBattleTag: parsedData.payload.user.battleTag,

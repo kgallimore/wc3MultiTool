@@ -657,9 +657,9 @@ export class LobbyControl extends Module {
                 this.info("Lobby no longer ready.");
                 break;
               }
-              this.emitProgress({
-                step: "Swapping " + swaps[0][i] + " and " + swaps[1][i],
-                progress: 100,
+              this.clientState.updateClientState({
+                currentStep: "Swapping " + swaps[0][i] + " and " + swaps[1][i],
+                currentStepProgress: 100,
               });
               this.swapPlayers({ players: [swaps[0][i], swaps[1][i]] });
             }
@@ -694,9 +694,10 @@ export class LobbyControl extends Module {
                 ) {
                   for (let currentPlayer of currentTeam) {
                     if (!this.bestCombo[i].includes(currentPlayer.name)) {
-                      this.emitProgress({
-                        step: "Swapping " + currentPlayer.name + " and " + targetPlayer,
-                        progress: 100,
+                      this.clientState.updateClientState({
+                        currentStep:
+                          "Swapping " + currentPlayer.name + " and " + targetPlayer,
+                        currentStepProgress: 100,
                       });
                       this.swapPlayers({ players: [currentPlayer.name, targetPlayer] });
                       // Swap the data of the two players
