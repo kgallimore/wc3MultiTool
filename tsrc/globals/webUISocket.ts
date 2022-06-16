@@ -33,12 +33,12 @@ class WebUISocket extends Global {
       this.info("Connection");
       this.webUISocket = ws;
       this.sendSocket("autoHost", settings.values.autoHost);
-      this.emitEvent({ connected: true });
+      gameState.updateGameState({ connected: true });
       ws.on("message", this.handleWebUIMessage.bind(this));
       ws.on("close", () => {
         this.error("Socket closed");
         this.webUISocket = null;
-        this.emitEvent({ disconnected: true });
+        gameState.updateGameState({ connected: false });
       });
     });
     this.wss.on("error", (err) => {

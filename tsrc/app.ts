@@ -79,7 +79,6 @@ if (!gotLock) {
 
   var win: BrowserWindow;
   var appIcon: Tray | null;
-  var currentStatus = false;
 
   var warInstallLoc: string = store.get("warInstallLoc") as string;
   if (!warInstallLoc || warInstallLoc.includes(".exe")) {
