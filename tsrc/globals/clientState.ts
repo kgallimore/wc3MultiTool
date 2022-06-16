@@ -6,6 +6,8 @@ import type { PickByValue } from "./../utility";
 export interface ClientState {
   tableVersion: number;
   latestUploadedReplay: number;
+  currentStep: string;
+  currentStepProgress: number;
 }
 
 class ClientStateSingle extends EventEmitter {
@@ -22,6 +24,8 @@ class ClientStateSingle extends EventEmitter {
     this._values = {
       tableVersion,
       latestUploadedReplay: (this._store.get("latestUploadedReplay") as number) ?? 0,
+      currentStep: "",
+      currentStepProgress: 0,
     };
   }
 
@@ -48,7 +52,9 @@ class ClientStateSingle extends EventEmitter {
         typeof this._values[key] === typeof value &&
         this._values[key] !== value
       ) {
+        // @ts-expect-error This works
         updates[key] = value;
+        // @ts-expect-error This works
         this._values[key] = value;
       }
     });

@@ -17,11 +17,10 @@ import type { SettingsUpdates } from "./globals/settings";
 
 export interface EmitEvents {
   lobbyUpdate?: LobbyUpdates;
-  newProgress?: { step: string; progress: number };
   sendInGameChat?: string;
   newTip?: SEEventEvent | SEEventEvent[];
   notification?: { title: string; body: string };
-  sendWindow?: { messageType: WindowReceive["messageType"]; data: WindowReceive["data"] };
+  sendWindow?: WindowReceive;
   mmdResults?: mmdResults;
   playSound?: string;
   processedChat?: GameChatMessage["message"] & { translated?: string };
@@ -78,19 +77,12 @@ export class Module extends Global {
     this.emit("event", data);
   }
 
-  protected sendWindow(sendWindow: {
-    messageType: WindowReceive["messageType"];
-    data: WindowReceive["data"];
-  }) {
+  protected sendWindow(sendWindow: WindowReceive) {
     this.emitEvent({ sendWindow });
   }
 
   protected sendInGameChat(sendInGameChat: string) {
     this.emitEvent({ sendInGameChat });
-  }
-
-  protected emitProgress(newProgress?: { step: string; progress: number }) {
-    this.emitEvent({ newProgress });
   }
 
   protected emitNewTip(newTip: SEEventEvent | SEEventEvent[]) {

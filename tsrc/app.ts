@@ -47,13 +47,11 @@ if (!app.isPackaged) {
 }
 import { WindowSend, WindowReceive, BanWhiteList } from "./utility";
 
-import { settings } from "./globals/settings";
+import { settings, SettingsUpdates } from "./globals/settings";
 import { gameState, GameState } from "./globals/gameState";
 import { webUISocket, WebUIEvents } from "./globals/webUISocket";
 import { gameSocket } from "./globals/gameSocket";
-import { clientState } from "./globals/clientState";
-
-import { CommSingle } from "./modules/comm";
+import { clientState, ClientState } from "./globals/clientState";
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -125,7 +123,6 @@ if (!gotLock) {
     discSingle,
     lobbyControl,
     discRPCSingle,
-    warControl,
     HubSingle,
     obsSocketSingle,
     SEClientSingle,
@@ -135,16 +132,17 @@ if (!gotLock) {
     replayHandler,
   ];
 
-  webUISocket.on("event", (event: WebUIEvents) => {
-    if (event.disconnected) {
-      sendProgress();
-      sendStatus(false);
-      handleGlueScreen("OUT_OF_MENUS");
-    }
-    if (event.connected) {
-      sendStatus(true);
-    }
-  });
+  webUISocket.on("event", (data: WebUIEvents) => sendWindow);
+
+  settings.on("settingsUpdate", (newSettings: SettingsUpdates) =>
+    sendWindow({ globalUpdate: { settings: newSettings } })
+  );
+  gameState.on("gameStateUpdates", (gameState: Partial<GameState>) =>
+    sendWindow({ globalUpdate: { gameState } })
+  );
+  clientState.on("clientStateUpdates", (clientState: Partial<ClientState>) =>
+    sendWindow({ globalUpdate: { clientState } })
+  );
 
   app.setAsDefaultProtocolClient("wc3mt");
 
@@ -184,14 +182,16 @@ if (!gotLock) {
       body: "There was an error with the auto updater!",
     }).show();
     log.warn(err);
-    sendWindow({ messageType: "updater", data: { value: "Update error! Check logs." } });
+    sendWindow({
+      legacy: { messageType: "updater", data: { value: "Update error! Check logs." } },
+    });
   });
   autoUpdater.on("download-progress", (progressObj) => {
     let log_message = "Download speed: " + progressObj.bytesPerSecond;
     log_message = log_message + " - Downloaded " + progressObj.percent + "%";
     log_message =
       log_message + " (" + progressObj.transferred + "/" + progressObj.total + ")";
-    sendWindow({ messageType: "updater", data: { value: log_message } });
+    sendWindow({ legacy: { messageType: "updater", data: { value: log_message } } });
   });
   autoUpdater.on("update-downloaded", (info) => {
     log.info("Update downloaded");
@@ -208,8 +208,10 @@ if (!gotLock) {
         body: "The latest version has been downloaded. Please restart the app",
       }).show();
       sendWindow({
-        messageType: "updater",
-        data: { value: "Update downloaded. Please restart the app." },
+        legacy: {
+          messageType: "updater",
+          data: { value: "Update downloaded. Please restart the app." },
+        },
       });
     }
   });
@@ -247,7 +249,13 @@ if (!gotLock) {
       },
     ]);
     win.once("ready-to-show", () => {
-      sendStatus(currentStatus);
+      sendWindow({
+        init: {
+          settings: settings.values,
+          gameState: gameState.values,
+          clientState: clientState.values,
+        },
+      });
       win.show();
     });
     win.on("minimize", function (event: any) {
@@ -312,16 +320,6 @@ if (!gotLock) {
       createWindow();
     }
   });
-
-  function sendStatus(connected: boolean) {
-    sendWindow({ messageType: "statusChange", data: { connected } });
-  }
-
-  function sendProgress(
-    progress: { step: string; progress: number } = { step: "Nothing", progress: 0 }
-  ) {
-    sendWindow({ messageType: "progress", data: { progress } });
-  }
 
   async function handleGlueScreen(newScreen: GameState["menuState"]) {
     // Create a new game at menu or if previously in game(score screen loads twice)
@@ -405,8 +403,10 @@ if (!gotLock) {
     }
     gameState.updateGameState({ menuState: newScreen });
     sendWindow({
-      messageType: "menusChange",
-      data: { value: gameState.values.menuState },
+      legacy: {
+        messageType: "menusChange",
+        data: { value: gameState.values.menuState },
+      },
     });
   }
 
@@ -414,7 +414,7 @@ if (!gotLock) {
     if (!app.isPackaged) {
       play(join(__dirname, "sounds\\" + file));
     } else {
-      play(join(app.getAppPath(), "\\..\\..\\sounds\\" + file));
+      play(join(app.getAppPath(), "\\src\\sounds\\" + file));
     }
   }
 
@@ -425,15 +425,16 @@ if (!gotLock) {
       lobbyControl.microLobby?.lobbyStatic.lobbyName
     ) {
       sendWindow({
-        messageType: "lobbyUpdate",
-        data: { lobbyData: { leftLobby: true } },
+        legacy: {
+          messageType: "lobbyUpdate",
+          data: { lobbyData: { leftLobby: true } },
+        },
       });
       HubSingle.sendToHub({ lobbyUpdates: { leftLobby: true } });
     }
   }
 
   function sendWindow(data: WindowReceive) {
-    CommSingle.commSend(data.data);
     if (win?.webContents) {
       win.webContents.send("fromMain", data);
     }
@@ -487,14 +488,19 @@ if (!gotLock) {
         break;
       case "init":
         sendWindow({
-          messageType: "updateSettings",
-          data: { settings: settings.values },
+          init: {
+            settings: settings.values,
+            gameState: gameState.values,
+            clientState: clientState.values,
+          },
         });
         if (lobbyControl.microLobby) {
           sendWindow({
-            messageType: "lobbyUpdate",
-            data: {
-              lobbyData: { newLobby: lobbyControl.microLobby?.exportMin() },
+            legacy: {
+              messageType: "lobbyUpdate",
+              data: {
+                lobbyData: { newLobby: lobbyControl.microLobby?.exportMin() },
+              },
             },
           });
         }
@@ -509,12 +515,14 @@ if (!gotLock) {
         if (args.fetch) {
           const whiteBanList = banWhiteListSingle.fetchList(args.fetch);
           sendWindow({
-            messageType: "fetchedWhiteBanList",
-            data: {
-              fetched: {
-                type: args.fetch.type,
-                list: whiteBanList,
-                page: args.fetch.page ?? 0,
+            legacy: {
+              messageType: "fetchedWhiteBanList",
+              data: {
+                fetched: {
+                  type: args.fetch.type,
+                  list: whiteBanList,
+                  page: args.fetch.page ?? 0,
+                },
               },
             },
           });
@@ -553,23 +561,11 @@ if (!gotLock) {
                   return;
                 }
               }
-              settings.values.autoHost.mapPath = newMapPath;
+              settings.updateSettings({ autoHost: { mapPath: newMapPath } });
               log.info(`Change map to ${settings.values.autoHost.mapPath}`);
-              store.set("autoHost.mapPath", settings.values.autoHost.mapPath);
               if (mapName) {
                 mapName = mapName.substring(0, mapName.length - 4);
-                settings.values.autoHost.mapName = mapName;
-                store.set("autoHost.mapName", mapName);
-                sendWindow({
-                  messageType: "updateSettingSingle",
-                  data: {
-                    update: {
-                      setting: "autoHost",
-                      key: "mapPath",
-                      value: settings.values.autoHost.mapPath,
-                    },
-                  },
-                });
+                settings.updateSettings({ autoHost: { mapName } });
                 lobbyControl
                   .eloMapName(settings.values.autoHost.mapName, settings.values.elo.type)
                   .then((data) => {
@@ -657,10 +653,6 @@ if (!gotLock) {
   }
 
   function moduleHandler(command: EmitEvents) {
-    if (command.newProgress) {
-      log.info(command.newProgress);
-      sendProgress(command.newProgress);
-    }
     if (command.notification) {
       new Notification(command.notification).show();
     }
@@ -688,7 +680,9 @@ if (!gotLock) {
           } else {
             gameState.updateGameState({ action: "waitingInLobby" });
           }
-          sendWindow({ messageType: "lobbyUpdate", data: { lobbyData: update } });
+          sendWindow({
+            legacy: { messageType: "lobbyUpdate", data: { lobbyData: update } },
+          });
           HubSingle.sendToHub({ lobbyUpdates: update });
           if (settings.values.obs.textSource) {
             writeFileSync(
@@ -777,7 +771,10 @@ if (!gotLock) {
               settings.values.autoHost.type === "smartHost" ||
               settings.values.autoHost.type === "rapidHost"
             ) {
-              sendProgress({ step: "Starting Game", progress: 100 });
+              clientState.updateClientState({
+                currentStep: "Starting Game",
+                currentStepProgress: 100,
+              });
               if (
                 (settings.values.elo.type == "off" ||
                   !settings.values.elo.balanceTeams) &&

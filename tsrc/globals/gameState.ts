@@ -40,6 +40,7 @@ export interface GameState {
   inGame: boolean;
   action: GameStateActions;
   openLobbyParams: OpenLobbyParams;
+  connected: boolean;
 }
 
 class GameStateContainer extends EventEmitter {
@@ -51,6 +52,7 @@ class GameStateContainer extends EventEmitter {
     inGame: false,
     action: "nothing",
     openLobbyParams: {},
+    connected: false,
   };
 
   constructor() {

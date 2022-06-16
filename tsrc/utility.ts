@@ -2,35 +2,41 @@ import type { LobbyUpdates, Regions, MicroLobbyData } from "wc3mt-lobby-containe
 import type { AppSettings, SettingsKeys } from "./globals/settings";
 
 import type { GameState } from "./globals/gameState";
+import type { ClientState } from "./globals/clientState";
 import type { SettingsUpdates } from "./globals/settings";
 
 import type { FetchListOptions } from "./modules/administration";
 
 export interface WindowReceive {
-  messageType:
-    | "action"
-    | "statusChange"
-    | "updateSettingSingle"
-    | "lobbyUpdate"
-    | "menusChange"
-    | "error"
-    | "progress"
-    | "gotMapPath"
-    | "updateSettings"
-    | "updater"
-    | "fetchedWhiteBanList";
-  data: {
-    update?: { setting: keyof AppSettings; key: SettingsKeys; value: any };
-    settings?: AppSettings;
-    connected?: boolean;
-    progress?: { step: string; progress: number };
-    error?: string;
-    value?: string;
-    lobbyData?: LobbyUpdates;
-    fetched?: {
-      type: "banList" | "whiteList";
-      page: number;
-      list?: Array<BanWhiteList>;
+  globalUpdate?: {
+    clientState?: Partial<ClientState>;
+    gameState?: Partial<GameState>;
+    settings?: SettingsUpdates;
+  };
+  init?: {
+    clientState: ClientState;
+    gameState: GameState;
+    settings: AppSettings;
+  };
+  legacy?: {
+    messageType:
+      | "statusChange"
+      | "lobbyUpdate"
+      | "menusChange"
+      | "error"
+      | "gotMapPath"
+      | "updater"
+      | "action"
+      | "fetchedWhiteBanList";
+    data: {
+      error?: string;
+      value?: string;
+      lobbyData?: LobbyUpdates;
+      fetched?: {
+        type: "banList" | "whiteList";
+        page: number;
+        list?: Array<BanWhiteList>;
+      };
     };
   };
 }

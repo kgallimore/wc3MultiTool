@@ -1,5 +1,5 @@
 <script type="ts">
-  import type { AppSettings } from "./../../../tsrc/utility";
+  import type { AppSettings } from "./../../../tsrc/globals/settings";
   import { onMount } from "svelte";
   export let setting: keyof AppSettings;
   export let key: string;
