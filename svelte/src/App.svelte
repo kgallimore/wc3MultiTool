@@ -2078,14 +2078,9 @@
       </a>
     </div>
     {#each Object.entries(gameState) as [key, value]}
-      {#if key !== "connected" && !key.includes("currentStep")}
-        <div class="d-flex justify-content-center pt-1">
-          <details>
-            <summary>{key}</summary>
-            <pre>{JSON.stringify(value, null, 2)}</pre>
-          </details>
-        </div>
-      {/if}
+      <div class="d-flex justify-content-center pt-1">
+        {key} : {typeof value !== "object" ? value : JSON.stringify(value)}
+      </div>
     {/each}
     <h4>Current Step: <span />{clientState.currentStepProgress}</h4>
     <div class="progress">

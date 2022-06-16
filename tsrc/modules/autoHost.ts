@@ -25,7 +25,7 @@ class AutoHost extends ModuleBase {
   voteTimer: NodeJS.Timeout | null = null;
   private lastAnnounceTime: number = 0;
   constructor() {
-    super();
+    super({ listeners: ["gameSocketEvent"] });
   }
 
   protected onGameSocketEvent(events: GameSocketEvents): void {

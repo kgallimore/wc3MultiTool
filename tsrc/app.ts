@@ -131,9 +131,9 @@ if (!gotLock) {
     replayHandler,
   ];
 
-  webUISocket.on("event", (data: WebUIEvents) => sendWindow);
+  webUISocket.on("webUIEvent", (data: WebUIEvents) => sendWindow);
 
-  settings.on("settingsUpdate", (newSettings: SettingsUpdates) =>
+  settings.on("settingsUpdates", (newSettings: SettingsUpdates) =>
     sendWindow({ globalUpdate: { settings: newSettings } })
   );
   gameState.on("gameStateUpdates", (gameState: Partial<GameState>) =>

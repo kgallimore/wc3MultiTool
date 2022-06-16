@@ -307,7 +307,7 @@ class AppSettingsContainer extends EventEmitter {
       });
     });
     if (Object.keys(filteredUpdates).length > 0) {
-      this.emit("settingsUpdate", filteredUpdates);
+      this.emit("settingsUpdates", filteredUpdates);
       return true;
     }
     return false;

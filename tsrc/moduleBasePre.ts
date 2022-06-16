@@ -26,6 +26,13 @@ export interface EmitEvents {
   processedChat?: GameChatMessage["message"] & { translated?: string };
 }
 
+export type Listeners =
+  | "settingsUpdate"
+  | "gameStateUpdates"
+  | "webUIEvent"
+  | "gameSocketEvent"
+  | "lobbyUpdate";
+
 /**
  *
  *
@@ -42,12 +49,24 @@ export class Module extends Global {
   protected gameSocket = gameSocket;
   protected warControl = warControl;
 
-  constructor() {
+  constructor(options?: { listeners?: Array<Listeners> }) {
     super();
-    this.settings.on("settingsUpdate", this.onSettingsUpdate.bind(this));
-    this.gameState.on("gameStateUpdates", this.onGameStateUpdate.bind(this));
-    this.webUISocket.on("event", this.onGameStateUpdate.bind(this));
-    this.gameSocket.on("event", this.onGameStateUpdate.bind(this));
+    if (options) {
+      if (options.listeners) {
+        if ("settingsUpdate" in options.listeners) {
+          this.settings.on("settingsUpdates", this.onSettingsUpdate.bind(this));
+        }
+        if ("gameStateUpdates" in options.listeners) {
+          this.gameState.on("gameStateUpdates", this.onGameStateUpdate.bind(this));
+        }
+        if ("webUIEvent" in options.listeners) {
+          this.webUISocket.on("webUIEvent", this.onGameStateUpdate.bind(this));
+        }
+        if ("gameSocketEvent" in options.listeners) {
+          this.gameSocket.on("gameSocketEvent", this.onGameStateUpdate.bind(this));
+        }
+      }
+    }
   }
 
   /**

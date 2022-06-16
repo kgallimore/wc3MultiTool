@@ -2,18 +2,25 @@ import { ModuleBase } from "../moduleBase";
 
 import { existsSync, renameSync } from "fs";
 import Store from "electron-store";
+import { SettingsUpdates } from "./../globals/settings";
 const store = new Store();
 
 class PerformanceMode extends ModuleBase {
   warInstallLoc: string;
 
   constructor() {
-    super();
+    super({ listeners: ["settingsUpdate"] });
     this.warInstallLoc = store.get("warInstallLoc") as string;
     this.togglePerformanceMode(this.settings.values.client.performanceMode);
   }
 
-  togglePerformanceMode(enabled: boolean) {
+  onSettingsUpdate(updates: SettingsUpdates) {
+    if (updates.client?.performanceMode !== undefined) {
+      this.togglePerformanceMode(updates.client.performanceMode);
+    }
+  }
+
+  private togglePerformanceMode(enabled: boolean) {
     if (enabled) {
       if (existsSync(this.warInstallLoc + "\\_retail_\\webui\\GlueManagerAltered.js")) {
         renameSync(
