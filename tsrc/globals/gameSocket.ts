@@ -160,29 +160,13 @@ class GameSocket extends Global {
       this.emitEvent({ connected: true });
     });
     this.gameWebSocket.on("message", (data) => {
-      let parsedData = JSON.parse(data.toString());
+      let parsedData: { messageType: keyof NativeGameSocketEvents; payload: any } =
+        JSON.parse(data.toString());
+      if (parsedData.messageType !== "OnChannelUpdate")
+        console.log({ [parsedData.messageType]: parsedData.payload });
+      this.emitEvent({ [parsedData.messageType]: parsedData.payload });
       if (parsedData.messageType === "MultiplayerGameLeave") {
         this.sentMessages = [];
-        gameState.updateGameState({ action: "nothing" });
-      }
-      if (parsedData.messageType === "ChatMessage") {
-        this.emitEvent(parsedData);
-      }
-      switch (parsedData.messageType) {
-        case "ScreenTransitionInfo":
-          this.gameState.updateGameState({ screenState: parsedData.payload.screen });
-          break;
-        case "UpdateUserInfo":
-          this.gameState.updateGameState({
-            selfBattleTag: parsedData.payload.user.battleTag,
-            selfRegion: parsedData.payload.user.userRegion,
-          });
-          break;
-        case "SetOverlayScreen":
-          if (parsedData.payload.screen === "AUTHENTICATION_OVERLAY") {
-            setTimeout(warControl.handleBnetLogin, 5000);
-          }
-          break;
       }
     });
     this.gameWebSocket.on("close", () => {

@@ -15,7 +15,10 @@ import {
   centerOf,
   imageResource,
   sleep,
+  Point,
+  straightTo,
 } from "@nut-tree/nut-js";
+import { GameState } from "./../globals/gameState";
 require("@nut-tree/nl-matcher");
 
 class AutoHost extends ModuleBase {
@@ -35,7 +38,9 @@ class AutoHost extends ModuleBase {
     if (events.UpdateScoreInfo) {
       this.autoHostGame();
     }
-
+    if (events.SetOverlayScreen?.screen === "AUTHENTICATION_OVERLAY") {
+      setTimeout(() => this.warControl.handleBnetLogin(), 5000);
+    }
     if (events.processedChat) {
       if (events.processedChat.content.match(/^\?votestart$/i)) {
         if (
@@ -86,6 +91,32 @@ class AutoHost extends ModuleBase {
         }
       }
     }
+  }
+
+  protected onGameStateUpdate(updates: Partial<GameState>): void {
+    if (this.settings.values.autoHost.type === "smartHost") {
+      this.info("Setting up smart host.");
+      setTimeout(() => autoHost.smartQuit(), 15000);
+    } else if (
+      this.settings.values.autoHost.type === "rapidHost" &&
+      this.settings.values.autoHost.rapidHostTimer > 0
+    ) {
+      this.info(
+        "Setting rapid host timer to " + this.settings.values.autoHost.rapidHostTimer
+      );
+      setTimeout(
+        () => this.lobby.leaveGame,
+        this.settings.values.autoHost.rapidHostTimer * 1000 * 60
+      );
+    }
+    screen.height().then((screenHeight) => {
+      screen.width().then((screenWidth) => {
+        let safeZone = new Point(screenWidth / 2, screenHeight - screenHeight / 4);
+        mouse.move(straightTo(safeZone)).then(() => {
+          this.warControl.sendInGameChat("");
+        });
+      });
+    });
   }
 
   async autoHostGame(override: boolean = false) {

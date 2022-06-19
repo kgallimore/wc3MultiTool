@@ -24,6 +24,13 @@ import {
   writeFileSync,
 } from "fs";
 import { play } from "sound-play";
+
+import { settings, SettingsUpdates } from "./globals/settings";
+import { gameState, GameState } from "./globals/gameState";
+import { webUISocket, WebUIEvents } from "./globals/webUISocket";
+import { gameSocket } from "./globals/gameSocket";
+import { clientState, ClientState } from "./globals/clientState";
+
 import { discSingle } from "./modules/disc";
 import { discRPCSingle } from "./modules/discordRPC";
 import { warControl } from "./globals/warControl";
@@ -46,12 +53,6 @@ if (!app.isPackaged) {
   });
 }
 import { WindowSend, WindowReceive, BanWhiteList } from "./utility";
-
-import { settings, SettingsUpdates } from "./globals/settings";
-import { gameState, GameState } from "./globals/gameState";
-import { webUISocket, WebUIEvents } from "./globals/webUISocket";
-import { gameSocket } from "./globals/gameSocket";
-import { clientState, ClientState } from "./globals/clientState";
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
