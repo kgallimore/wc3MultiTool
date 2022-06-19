@@ -3,6 +3,7 @@ import { ModuleBase } from "../moduleBase";
 import { existsSync, renameSync } from "fs";
 import Store from "electron-store";
 import { SettingsUpdates } from "./../globals/settings";
+import { GameSocketEvents } from "./../globals/gameSocket";
 const store = new Store();
 
 class PerformanceMode extends ModuleBase {
@@ -12,6 +13,32 @@ class PerformanceMode extends ModuleBase {
     super({ listeners: ["settingsUpdate"] });
     this.warInstallLoc = store.get("warInstallLoc") as string;
     this.togglePerformanceMode(this.settings.values.client.performanceMode);
+  }
+
+  protected onGameSocketEvent(events: GameSocketEvents): void {
+    if (
+      this.settings.values.client.performanceMode &&
+      events.SetGlueScreen?.screen === "LOGIN_DOORS"
+    ) {
+      [
+        "GetLocalPlayerName",
+        "FriendsGetInvitations",
+        "FriendsGetFriends",
+        "MultiplayerSendRecentPlayers",
+        "ClanGetClanInfo",
+        "ClanGetMembers",
+        "StopOverworldMusic",
+        "StopAmbientSound",
+        "LoginDoorClose",
+        "StopAmbientSound",
+        "StopAmbientSound",
+        "OnWebUILoad",
+      ].forEach((message, index) => {
+        setTimeout(() => {
+          this.gameSocket.sendMessage({ [message]: {} });
+        }, 50 * index);
+      });
+    }
   }
 
   onSettingsUpdate(updates: SettingsUpdates) {

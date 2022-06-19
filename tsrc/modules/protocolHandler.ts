@@ -12,6 +12,14 @@ class ProtocolHandler extends ModuleBase {
         this.openParamsJoin();
       }
     }
+    if (events.SetGlueScreen) {
+      if (["CUSTOM_LOBBIES", "MAIN_MENU"].includes(events.SetGlueScreen.screen)) {
+        this.info("Checking to see if we should auto host or join a lobby link.");
+        if (this.gameState.values.openLobbyParams.lobbyName) {
+          setTimeout(protocolHandler.openParamsJoin, 250);
+        }
+      }
+    }
     if (
       events.GameList &&
       (this.gameState.values.openLobbyParams.lobbyName ||

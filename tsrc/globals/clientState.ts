@@ -1,4 +1,4 @@
-import EventEmitter from "events";
+import { Global } from "../globalBase";
 import Store from "electron-store";
 
 import type { PickByValue } from "./../utility";
@@ -10,7 +10,7 @@ export interface ClientState {
   currentStepProgress: number;
 }
 
-class ClientStateSingle extends EventEmitter {
+class ClientStateSingle extends Global {
   private _store = new Store();
   private _values: ClientState;
   constructor() {
