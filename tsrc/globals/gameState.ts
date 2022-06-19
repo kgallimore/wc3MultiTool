@@ -1,8 +1,9 @@
-import EventEmitter from "events";
+import { Global } from "./../globalBase";
 
 import { BattleTagRegex, Regions } from "wc3mt-lobby-container";
 
 import type { PickByValue } from "./../utility";
+import { gameSocket, GameSocketEvents } from "./gameSocket";
 
 export type MenuStates =
   | "OUT_OF_MENUS"
@@ -43,7 +44,8 @@ export interface GameState {
   connected: boolean;
 }
 
-class GameStateContainer extends EventEmitter {
+class GameStateContainer extends Global {
+  private gameSocket = gameSocket;
   private _values: GameState = {
     menuState: "OUT_OF_MENUS",
     screenState: "",
@@ -57,7 +59,7 @@ class GameStateContainer extends EventEmitter {
 
   constructor() {
     super();
-    // TODO: Anything else?
+    this.gameSocket.on("gameSocketEvent", this.onGameSocketEvent.bind(this));
   }
 
   get values(): GameState {
@@ -66,6 +68,42 @@ class GameStateContainer extends EventEmitter {
 
   set values(value: GameState) {
     throw new Error("Can not set values directly. Use updateGameState.");
+  }
+
+  onGameSocketEvent(events: GameSocketEvents) {
+    if (events.disconnected) {
+      this.updateGameState({
+        menuState: "null",
+        selfRegion: "",
+        inGame: false,
+        screenState: "",
+        selfBattleTag: "",
+      });
+    }
+    if (events.MultiplayerGameLeave) {
+      this.updateGameState({ action: "nothing" });
+    }
+    if (events.ScreenTransitionInfo) {
+      this.updateGameState({ screenState: events.ScreenTransitionInfo.screen });
+    }
+    if (events.UpdateUserInfo) {
+      this.updateGameState({
+        selfBattleTag: events.UpdateUserInfo.user.battleTag,
+        selfRegion: events.UpdateUserInfo.user.userRegion,
+      });
+    }
+    if (events.SetGlueScreen) {
+      if (
+        this.values.menuState === "LOADING_SCREEN" &&
+        events.SetGlueScreen.screen === "SCORE_SCREEN"
+      ) {
+        this.info("Game has finished loading in.");
+        gameState.updateGameState({ inGame: true });
+        //  action: "waitingToLeaveGame"
+      } else {
+        gameState.updateGameState({ menuState: events.SetGlueScreen.screen });
+      }
+    }
   }
 
   updateGameState(values: Partial<GameState>) {
@@ -84,13 +122,13 @@ class GameStateContainer extends EventEmitter {
         } else if (
           key === "selfBattleTag" &&
           typeof value === "string" &&
-          BattleTagRegex.test(value)
+          (!value || BattleTagRegex.test(value))
         ) {
           this._values[key] = value;
         } else if (
           key === "selfRegion" &&
           typeof value === "string" &&
-          ["us", "eu", "usw"].includes(value)
+          ["us", "eu", "usw", ""].includes(value)
         ) {
           this._values[key] = value as Regions;
         } else if (key === "menuState" && typeof value === "string") {
