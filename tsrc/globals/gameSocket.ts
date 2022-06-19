@@ -60,7 +60,7 @@ export interface NativeGameSocketEvents {
   UpdateUserInfo?: {
     user: { battleTag: string; userRegion: Regions };
   };
-  SetOverlayScreen?: { screen: "AUTHENTICATION_OVERLAY" | string };
+  SetOverlayScreen?: { screen: "AUTHENTICATION_OVERLAY" | "NO_OVERLAY" };
   // TODO: Fix these
   OnNetProviderInitialized?: any;
   OnChannelUpdate?: { gameChat: any };
@@ -162,7 +162,14 @@ class GameSocket extends Global {
     this.gameWebSocket.on("message", (data) => {
       let parsedData: { messageType: keyof NativeGameSocketEvents; payload: any } =
         JSON.parse(data.toString());
-      if (parsedData.messageType !== "OnChannelUpdate")
+      if (
+        ![
+          "TeamsInformation",
+          "OnChannelUpdate",
+          "FriendsFriendUpdated",
+          "UpdateReadyState",
+        ].includes(parsedData.messageType)
+      )
         console.log({ [parsedData.messageType]: parsedData.payload });
       this.emitEvent({ [parsedData.messageType]: parsedData.payload });
       if (parsedData.messageType === "MultiplayerGameLeave") {

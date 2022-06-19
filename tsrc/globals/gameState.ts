@@ -14,7 +14,7 @@ export type MenuStates =
   | "SCORE_SCREEN"
   | "LOGIN_DOORS"
   | "CUSTOM_GAME_LOBBY"
-  | "null";
+  | "";
 
 export type GameStateActions =
   | "openingWarcraft"
@@ -73,7 +73,7 @@ class GameStateContainer extends Global {
   onGameSocketEvent(events: GameSocketEvents) {
     if (events.disconnected) {
       this.updateGameState({
-        menuState: "null",
+        menuState: "",
         selfRegion: "",
         inGame: false,
         screenState: "",
