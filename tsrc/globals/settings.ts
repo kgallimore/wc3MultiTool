@@ -1,4 +1,4 @@
-import EventEmitter from "events";
+import { Global } from "../globalBase";
 
 import Store from "electron-store";
 
@@ -133,7 +133,7 @@ export interface UpdateSetting {
   key: SettingsKeys;
   value: any;
 }
-class AppSettingsContainer extends EventEmitter {
+class AppSettingsContainer extends Global {
   // TODO Get that returns settings with sensitive fields removed
   private _values: AppSettings;
 
@@ -261,26 +261,26 @@ class AppSettingsContainer extends EventEmitter {
         ];
       }[keyof AppSettings][]
     ).forEach(([settingName, entries]) => {
-      if (settingName! in this._values) {
+      const targetSetting = this._values[settingName];
+      if (targetSetting === undefined) {
+        this.warn("Setting " + settingName + " is not a valid key.");
         return;
       }
-      const targetSetting = this._values[settingName];
       Object.entries(entries).forEach(([key, value]) => {
         // @ts-expect-error Still need to figure out how to type this
         let targetCurrentValue = this._values[settingName]?.[key];
         if (
-          targetSetting &&
           targetCurrentValue !== undefined &&
           (typeof targetCurrentValue === typeof value ||
             ((key === "inGameHotkey" || key === "outOfGameHotkey") &&
               (typeof value === "boolean" || typeof value === "object"))) &&
           targetCurrentValue !== value
         ) {
-          targetCurrentValue = value;
+          // @ts-expect-error
+          this._values[settingName][key] = value;
           // TODO Make this not update the whole settingName section
-          store.set(settingName, settings.values[settingName]);
-          this.emit(
-            "info",
+          store.set(settingName + "." + key, value);
+          this.info(
             settingName + " settings changed:",
             key,
             key.toLowerCase().includes("token") || key.toLowerCase().includes("password")
