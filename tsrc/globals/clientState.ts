@@ -14,7 +14,7 @@ class ClientStateSingle extends Global {
   private _store = new Store();
   private _values: ClientState;
   constructor() {
-    super();
+    super("Client State");
     // Get the tableVersion, if it's not set then we are going to create the most up to date table, so we set it to the most recent version.
     let tableVersion: number = this._store.get("tableVersion") as number;
     if (!tableVersion) {

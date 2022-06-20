@@ -40,7 +40,7 @@ class SEClient extends ModuleBase {
   socket: any;
 
   constructor() {
-    super({ listeners: ["settingsUpdate"] });
+    super("Stream", { listeners: ["settingsUpdate"] });
     if (!this.settings.values.streaming.seToken) {
       return;
     }

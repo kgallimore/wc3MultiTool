@@ -48,7 +48,7 @@ class WarControl extends Global {
   sendingInGameChat: { active: boolean; queue: string[] } = { active: false, queue: [] };
 
   constructor() {
-    super();
+    super("War Control");
     screen.height().then((height) => {
       this.setResourceDir(height);
     });

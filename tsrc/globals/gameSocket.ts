@@ -146,7 +146,7 @@ class GameSocket extends Global {
   };
 
   constructor() {
-    super();
+    super("Game Socket");
   }
 
   emitEvent(event: GameSocketEvents): void {
@@ -170,8 +170,7 @@ class GameSocket extends Global {
           "UpdateReadyState",
         ].includes(parsedData.messageType)
       )
-        console.log({ [parsedData.messageType]: parsedData.payload });
-      this.emitEvent({ [parsedData.messageType]: parsedData.payload });
+        this.emitEvent({ [parsedData.messageType]: parsedData.payload });
       if (parsedData.messageType === "MultiplayerGameLeave") {
         this.sentMessages = [];
       }

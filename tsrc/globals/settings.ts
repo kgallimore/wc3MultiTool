@@ -138,7 +138,7 @@ class AppSettingsContainer extends Global {
   private _values: AppSettings;
 
   constructor() {
-    super();
+    super("Settings");
     this._values = <AppSettings>{
       autoHost: {
         type: store.get("autoHost.type") ?? "off",

@@ -15,7 +15,7 @@ class HubControl extends ModuleBase {
   #heartBeatTimer: NodeJS.Timeout | null = null;
 
   constructor() {
-    super({ listeners: ["gameStateUpdates", "settingsUpdate", "lobbyUpdate"] });
+    super("Hub", { listeners: ["gameStateUpdates", "settingsUpdate", "lobbyUpdate"] });
     this.isPackaged = app.isPackaged;
     this.appVersion = app.getVersion();
     this.socketSetup();

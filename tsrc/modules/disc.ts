@@ -31,7 +31,7 @@ class DisClient extends ModuleBase {
   };
 
   constructor() {
-    super({
+    super("Discord", {
       listeners: [
         "gameSocketEvent",
         "settingsUpdate",

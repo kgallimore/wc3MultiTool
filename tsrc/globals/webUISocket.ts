@@ -28,7 +28,7 @@ class WebUISocket extends Global {
   webUISocket: WebSocket | null = null;
 
   constructor() {
-    super();
+    super("WebUI Sockets");
     this.wss.on("connection", (ws) => {
       this.info("Connection");
       this.webUISocket = ws;

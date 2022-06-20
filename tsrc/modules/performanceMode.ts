@@ -10,7 +10,7 @@ class PerformanceMode extends ModuleBase {
   warInstallLoc: string;
 
   constructor() {
-    super({ listeners: ["settingsUpdate"] });
+    super("Performance Mode", { listeners: ["settingsUpdate"] });
     this.warInstallLoc = store.get("warInstallLoc") as string;
     this.togglePerformanceMode(this.settings.values.client.performanceMode);
   }

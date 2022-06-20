@@ -11,8 +11,8 @@ export type Listeners =
 export class ModuleBase extends Module {
   protected lobby = lobbyControl;
 
-  constructor(options?: { listeners?: Array<Listeners> }) {
-    super(options);
+  constructor(name: string, options?: { listeners?: Array<Listeners> }) {
+    super(name, options);
     if (options?.listeners && "lobbyUpdate" in options.listeners) {
       this.lobby.on("lobbyUpdate", this.onLobbyUpdate.bind(this));
     }
