@@ -20,7 +20,7 @@ class ReplayHandler extends ModuleBase {
   replayFolders = join(app.getPath("documents"), "Warcraft III\\BattleNet");
 
   constructor() {
-    super({ listeners: ["gameStateUpdates"] });
+    super("Replay Handler", { listeners: ["gameStateUpdates"] });
   }
 
   protected onGameStateUpdate(updates: Partial<GameState>): void {

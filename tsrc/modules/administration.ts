@@ -29,7 +29,7 @@ class banWhiteList extends ModuleBase {
   db = new sqlite3(app.getPath("userData") + "/wc3mt.db");
 
   constructor() {
-    super({ listeners: ["gameSocketEvent"] });
+    super("Administration", { listeners: ["gameSocketEvent"] });
     this.db.exec(
       "CREATE TABLE IF NOT EXISTS banList(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, add_date DATETIME default current_timestamp NOT NULL, admin TEXT NOT NULL, region TEXT NOT NULL, reason TEXT, removal_date DATETIME)"
     );

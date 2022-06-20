@@ -12,7 +12,7 @@ export class Comm extends ModuleBase {
   retrySetup: NodeJS.Timeout | null = null;
 
   constructor() {
-    super({ listeners: ["gameSocketEvent", "settingsUpdate", "lobbyUpdate"] });
+    super("Comm", { listeners: ["gameSocketEvent", "settingsUpdate", "lobbyUpdate"] });
     this.initialize();
   }
 

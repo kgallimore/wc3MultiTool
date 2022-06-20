@@ -8,7 +8,7 @@ detectLang.setLanguageType("iso2");
 
 class ChatHandler extends ModuleBase {
   constructor() {
-    super({ listeners: ["gameSocketEvent"] });
+    super("Chat Handler", { listeners: ["gameSocketEvent"] });
   }
 
   protected async onGameSocketEvent(events: GameSocketEvents): Promise<void> {

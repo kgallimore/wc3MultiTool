@@ -17,7 +17,7 @@ class OBSSocket extends ModuleBase {
   socket: OBSWebSocket | null = null;
 
   constructor() {
-    super({ listeners: ["gameStateUpdates", "settingsUpdate"] });
+    super("OBS", { listeners: ["gameStateUpdates", "settingsUpdate"] });
     this.setup();
   }
 

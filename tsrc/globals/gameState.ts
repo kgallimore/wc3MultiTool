@@ -58,7 +58,7 @@ class GameStateContainer extends Global {
   };
 
   constructor() {
-    super();
+    super("Game State");
     this.gameSocket.on("gameSocketEvent", this.onGameSocketEvent.bind(this));
   }
 
@@ -78,7 +78,11 @@ class GameStateContainer extends Global {
         inGame: false,
         screenState: "",
         selfBattleTag: "",
+        connected: false,
       });
+    }
+    if (events.connected) {
+      this.updateGameState({ connected: true });
     }
     if (events.MultiplayerGameLeave) {
       this.updateGameState({ action: "nothing" });
@@ -117,7 +121,7 @@ class GameStateContainer extends Global {
       }[keyof GameState][]
     ).forEach(([key, value]) => {
       if (key in this._values && this._values[key] != value) {
-        if (key === "inGame" && typeof value === "boolean") {
+        if ((key === "inGame" || key === "connected") && typeof value === "boolean") {
           this._values[key] = value == true;
         } else if (
           key === "selfBattleTag" &&

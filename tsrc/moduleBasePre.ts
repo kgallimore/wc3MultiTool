@@ -49,21 +49,25 @@ export class Module extends Global {
   protected gameSocket = gameSocket;
   protected warControl = warControl;
 
-  constructor(options?: { listeners?: Array<Listeners> }) {
-    super();
+  constructor(name: string, options?: { listeners?: Array<Listeners> }) {
+    super(name);
     if (options) {
       if (options.listeners) {
-        if ("settingsUpdate" in options.listeners) {
+        if (options.listeners.includes("settingsUpdate")) {
+          this.verbose("Settings Listener Attached.");
           this.settings.on("settingsUpdates", this.onSettingsUpdate.bind(this));
         }
-        if ("gameStateUpdates" in options.listeners) {
+        if (options.listeners.includes("gameStateUpdates")) {
+          this.verbose("Game State Update Listener Attached.");
           this.gameState.on("gameStateUpdates", this.onGameStateUpdate.bind(this));
         }
-        if ("webUIEvent" in options.listeners) {
-          this.webUISocket.on("webUIEvent", this.onGameStateUpdate.bind(this));
+        if (options.listeners.includes("webUIEvent")) {
+          this.verbose("Web UI Listener Attached.");
+          this.webUISocket.on("webUIEvent", this.onWebUISocketEvent.bind(this));
         }
-        if ("gameSocketEvent" in options.listeners) {
-          this.gameSocket.on("gameSocketEvent", this.onGameStateUpdate.bind(this));
+        if (options.listeners.includes("gameSocketEvent")) {
+          this.verbose("Game Socket Listener Attached.");
+          this.gameSocket.on("gameSocketEvent", this.onGameSocketEvent.bind(this));
         }
       }
     }

@@ -24,11 +24,11 @@ require("@nut-tree/nl-matcher");
 class AutoHost extends ModuleBase {
   voteStartVotes: Array<string> = [];
   wc3mtTargetFile = `${app.getPath("documents")}\\Warcraft III\\CustomMapData\\wc3mt.txt`;
-  gameNumber = 1;
+  gameNumber = 0;
   voteTimer: NodeJS.Timeout | null = null;
   private lastAnnounceTime: number = 0;
   constructor() {
-    super({ listeners: ["gameSocketEvent"] });
+    super("AutoHost", { listeners: ["gameSocketEvent", "gameStateUpdates"] });
   }
 
   protected onGameSocketEvent(events: GameSocketEvents): void {
@@ -41,26 +41,6 @@ class AutoHost extends ModuleBase {
     if (events.SetOverlayScreen?.screen) {
       if (events.SetOverlayScreen.screen === "AUTHENTICATION_OVERLAY") {
         setTimeout(() => this.warControl.handleBnetLogin(), 5000);
-      }
-    }
-    if (events.SetGlueScreen) {
-      if (events.SetGlueScreen.screen === "LOADING_SCREEN") {
-        if (this.settings.values.autoHost.type === "rapidHost") {
-          if (this.settings.values.autoHost.rapidHostTimer === 0) {
-            this.info("Rapid Host leave game immediately");
-            this.lobby.leaveGame();
-          } else if (this.settings.values.autoHost.rapidHostTimer === -1) {
-            this.info("Rapid Host exit game immediately");
-            this.warControl.forceQuitWar().then(() => {
-              this.warControl.openWarcraft();
-            });
-          }
-        }
-      } else if (
-        !this.gameState.values.openLobbyParams.lobbyName &&
-        ["CUSTOM_LOBBIES", "MAIN_MENU"].includes(events.SetGlueScreen.screen)
-      ) {
-        setTimeout(this.autoHostGame.bind(this), 250);
       }
     }
     if (events.processedChat) {
@@ -141,13 +121,42 @@ class AutoHost extends ModuleBase {
         });
       });
     }
+    if (updates.menuState) {
+      if (updates.menuState === "LOADING_SCREEN") {
+        if (this.settings.values.autoHost.type === "rapidHost") {
+          if (this.settings.values.autoHost.rapidHostTimer === 0) {
+            this.info("Rapid Host leave game immediately");
+            this.lobby.leaveGame();
+          } else if (this.settings.values.autoHost.rapidHostTimer === -1) {
+            this.info("Rapid Host exit game immediately");
+            this.warControl.forceQuitWar().then(() => {
+              this.warControl.openWarcraft();
+            });
+          }
+        }
+      } else if (["CUSTOM_LOBBIES", "MAIN_MENU"].includes(updates.menuState)) {
+        if (this.gameState.values.openLobbyParams.lobbyName) {
+          this.verbose("Skipping autohost since a lobby is being joined.");
+        } else {
+          setTimeout(this.autoHostGame.bind(this), 250);
+        }
+      }
+    }
   }
 
   async autoHostGame(override: boolean = false) {
-    if (
-      this.settings.values.autoHost.type !== "off" &&
-      (!this.settings.values.client.commAddress || override)
-    ) {
+    if (this.settings.values.autoHost.type === "off") {
+      return false;
+    }
+    if (this.settings.values.client.commAddress || override) {
+      this.verbose(
+        "Not auto-hosting game: " + this.settings.values.client.commAddress
+          ? "Comm Address"
+          : "Over-ridden"
+      );
+      return false;
+    }
+    {
       let targetRegion = this.gameState.values.selfRegion;
       if (this.settings.values.autoHost.regionChange) {
         targetRegion = getTargetRegion(
@@ -160,7 +169,7 @@ class AutoHost extends ModuleBase {
         targetRegion &&
         this.gameState.values.selfRegion !== targetRegion
       ) {
-        this.info(`Changing autohost region to ${targetRegion}`);
+        this.info(`Changing region to ${targetRegion}`);
         await this.warControl.exitGame();
         this.warControl.openWarcraft(targetRegion);
         return true;
@@ -275,88 +284,93 @@ class AutoHost extends ModuleBase {
     callCount: number = 0,
     lobbyName: string = ""
   ): Promise<boolean> {
-    if (!(await this.warControl.isWarcraftOpen())) {
-      await this.warControl.openWarcraft();
+    if (!this.gameState.values.connected) {
+      this.warn("Tried to create game when no connection exists.");
+      return false;
+    }
+    if (this.gameState.values.inGame) {
+      this.info("Cancelling lobby creation: Already in game.");
+      return false;
+    }
+    if (this.lobby.microLobby?.lobbyStatic.lobbyName) {
+      if (this.lobby.microLobby.lobbyStatic.lobbyName === lobbyName) {
+        this.info("Game successfully created: " + lobbyName);
+        return true;
+      }
+      if (
+        this.lobby.microLobby.lobbyStatic.lobbyName.includes(
+          this.settings.values.autoHost.gameName
+        )
+      ) {
+        this.info(
+          "Game created with incorrect increment: " +
+            this.lobby.microLobby.lobbyStatic.lobbyName
+        );
+        return true;
+      }
     }
     if (
-      !this.lobby.microLobby?.lobbyStatic.lobbyName &&
-      !this.gameState.values.inGame &&
-      !["CUSTOM_GAME_LOBBY", "LOADING_SCREEN", "GAME_LOBBY"].includes(
+      ["CUSTOM_GAME_LOBBY", "LOADING_SCREEN", "GAME_LOBBY"].includes(
         this.gameState.values.menuState
       )
     ) {
-      this.gameState.updateGameState({ action: "creatingLobby" });
-      if ((callCount + 5) % 10 === 0) {
-        if (this.settings.values.autoHost.increment) {
-          if (callCount > 45) {
-            return false;
-          }
-          this.gameNumber += 1;
-          this.warn("Failed to create game. Incrementing game name");
-        } else {
-          this.warn("Failed to create game. Stopping attempts.");
-          return false;
-        }
-      }
-      if (callCount % 10 === 0) {
-        lobbyName =
-          lobbyName ||
-          this.settings.values.autoHost.gameName +
-            (this.settings.values.autoHost.increment ? ` #${this.gameNumber}` : "");
-        const payloadData: CreateLobbyPayload = customGameData || {
-          filename: this.settings.values.autoHost.mapPath.replace(/\\/g, "/"),
-          gameSpeed: 2,
-          gameName: lobbyName,
-          mapSettings: {
-            flagLockTeams: this.settings.values.autoHost.advancedMapOptions
-              ? this.settings.values.autoHost.flagLockTeams
-              : true,
-            flagPlaceTeamsTogether: this.settings.values.autoHost.advancedMapOptions
-              ? this.settings.values.autoHost.flagPlaceTeamsTogether
-              : true,
-            flagFullSharedUnitControl: this.settings.values.autoHost.advancedMapOptions
-              ? this.settings.values.autoHost.flagFullSharedUnitControl
-              : false,
-            flagRandomRaces: this.settings.values.autoHost.advancedMapOptions
-              ? this.settings.values.autoHost.flagRandomRaces
-              : false,
-            flagRandomHero: this.settings.values.autoHost.advancedMapOptions
-              ? this.settings.values.autoHost.flagRandomHero
-              : false,
-            settingObservers: parseInt(this.settings.values.autoHost.observers) as
-              | 0
-              | 1
-              | 2
-              | 3,
-            settingVisibility: this.settings.values.autoHost.advancedMapOptions
-              ? (parseInt(this.settings.values.autoHost.settingVisibility) as
-                  | 0
-                  | 1
-                  | 2
-                  | 3)
-              : 0,
-          },
-          privateGame: this.settings.values.autoHost.private,
-        };
-        this.info("Sending autoHost payload", payloadData);
-        this.gameSocket.sendMessage({ CreateLobby: payloadData });
-      }
-      await sleep(1000);
-      return await this.createGame(false, callCount + 1, lobbyName);
-    } else if (this.lobby.microLobby?.lobbyStatic.lobbyName === lobbyName) {
-      this.info("Game successfully created");
-      return true;
-    } else if (
-      !this.lobby.microLobby?.lobbyStatic.lobbyName.includes(
-        this.settings.values.autoHost.gameName
-      )
-    ) {
-      this.info("Game created with incorrect increment.");
-      return true;
-    } else {
-      this.warn("Failed to create game?");
+      this.info("Cancelling lobby creation: Already in lobby.");
       return false;
     }
+    this.gameState.updateGameState({ action: "creatingLobby" });
+    if ((callCount + 5) % 10 === 0) {
+      if (this.settings.values.autoHost.increment) {
+        if (callCount > 45) {
+          return false;
+        }
+        this.gameNumber += 1;
+        this.warn("Failed to create game. Incrementing game name");
+      } else {
+        this.warn("Failed to create game. Stopping attempts.");
+        return false;
+      }
+    }
+    if (callCount % 10 === 0) {
+      lobbyName =
+        lobbyName ||
+        this.settings.values.autoHost.gameName +
+          (this.settings.values.autoHost.increment ? ` #${this.gameNumber}` : "");
+      const payloadData: CreateLobbyPayload = customGameData || {
+        filename: this.settings.values.autoHost.mapPath.replace(/\\/g, "/"),
+        gameSpeed: 2,
+        gameName: lobbyName,
+        mapSettings: {
+          flagLockTeams: this.settings.values.autoHost.advancedMapOptions
+            ? this.settings.values.autoHost.flagLockTeams
+            : true,
+          flagPlaceTeamsTogether: this.settings.values.autoHost.advancedMapOptions
+            ? this.settings.values.autoHost.flagPlaceTeamsTogether
+            : true,
+          flagFullSharedUnitControl: this.settings.values.autoHost.advancedMapOptions
+            ? this.settings.values.autoHost.flagFullSharedUnitControl
+            : false,
+          flagRandomRaces: this.settings.values.autoHost.advancedMapOptions
+            ? this.settings.values.autoHost.flagRandomRaces
+            : false,
+          flagRandomHero: this.settings.values.autoHost.advancedMapOptions
+            ? this.settings.values.autoHost.flagRandomHero
+            : false,
+          settingObservers: parseInt(this.settings.values.autoHost.observers) as
+            | 0
+            | 1
+            | 2
+            | 3,
+          settingVisibility: this.settings.values.autoHost.advancedMapOptions
+            ? (parseInt(this.settings.values.autoHost.settingVisibility) as 0 | 1 | 2 | 3)
+            : 0,
+        },
+        privateGame: this.settings.values.autoHost.private,
+      };
+      this.info("Sending autoHost payload", payloadData);
+      this.gameSocket.sendMessage({ CreateLobby: payloadData });
+    }
+    await sleep(1000);
+    return await this.createGame(false, callCount + 1, lobbyName);
   }
 
   cancelVote() {
