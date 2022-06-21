@@ -1,4 +1,4 @@
-import { screen, keyboard, Point, mouse, straightTo } from "@nut-tree/nut-js";
+import { screen, keyboard } from "@nut-tree/nut-js";
 require("@nut-tree/nl-matcher");
 import {
   app,
@@ -27,22 +27,23 @@ import { play } from "sound-play";
 
 import { settings, SettingsUpdates } from "./globals/settings";
 import { gameState, GameState } from "./globals/gameState";
-import { webUISocket, WebUIEvents } from "./globals/webUISocket";
 import { gameSocket } from "./globals/gameSocket";
 import { clientState, ClientState } from "./globals/clientState";
-
-import { discSingle } from "./modules/disc";
-import { discRPCSingle } from "./modules/discordRPC";
 import { warControl } from "./globals/warControl";
-import { HubSingle } from "./modules/hub";
-import { obsSocketSingle } from "./modules/obs";
-import { SEClientSingle } from "./modules/stream";
-import { performanceMode } from "./modules/performanceMode";
-import { banWhiteListSingle } from "./modules/administration";
+
+import { administration } from "./modules/administration";
 import { autoHost } from "./modules/autoHost";
-import { protocolHandler } from "./modules/protocolHandler";
+import { chatHandler } from "./modules/chatHandler";
+import { commServer } from "./modules/comm";
+import { discordBot } from "./modules/discordBot";
+import { discordRPC } from "./modules/discordRPC";
+import { HubSingle } from "./modules/hub";
 import { lobbyControl } from "./modules/lobbyControl";
+import { obsSocketSingle } from "./modules/obs";
+import { performanceMode } from "./modules/performanceMode";
+import { protocolHandler } from "./modules/protocolHandler";
 import { replayHandler } from "./modules/replayHandler";
+import { SEClientSingle } from "./modules/stream";
 
 import type { EmitEvents } from "./moduleBasePre";
 
@@ -53,6 +54,7 @@ if (!app.isPackaged) {
   });
 }
 import { WindowSend, WindowReceive, BanWhiteList } from "./utility";
+import { LobbyUpdates } from "wc3mt-lobby-container";
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -120,19 +122,20 @@ if (!gotLock) {
   }
 
   let modules = [
-    discSingle,
-    lobbyControl,
-    discRPCSingle,
+    administration,
+    autoHost,
+    chatHandler,
+    commServer,
+    discordBot,
+    discordRPC,
     HubSingle,
+    lobbyControl,
     obsSocketSingle,
-    SEClientSingle,
     performanceMode,
     protocolHandler,
-    autoHost,
     replayHandler,
+    SEClientSingle,
   ];
-
-  webUISocket.on("webUIEvent", (data: WebUIEvents) => sendWindow);
 
   settings.on("settingsUpdates", (newSettings: SettingsUpdates) =>
     sendWindow({ globalUpdate: { settings: newSettings } })
@@ -142,6 +145,12 @@ if (!gotLock) {
   );
   clientState.on("clientStateUpdates", (clientState: Partial<ClientState>) =>
     sendWindow({ globalUpdate: { clientState } })
+  );
+
+  lobbyControl.on("lobbyUpdate", (lobbyUpdate: LobbyUpdates) =>
+    sendWindow({
+      legacy: { messageType: "lobbyUpdate", data: { lobbyData: lobbyUpdate } },
+    })
   );
 
   app.setAsDefaultProtocolClient("wc3mt");
@@ -163,7 +172,7 @@ if (!gotLock) {
 
   app.on("before-quit", () => {
     HubSingle.sendToHub({ lobbyUpdates: { leftLobby: true } });
-    discSingle.lobbyClosed();
+    discordBot.lobbyClosed();
     lobbyControl.clear();
   });
 
@@ -308,7 +317,7 @@ if (!gotLock) {
 
   app.on("window-all-closed", () => {
     HubSingle.sendToHub({ lobbyUpdates: { leftLobby: true } });
-    discSingle.lobbyClosed();
+    discordBot.lobbyClosed();
     lobbyControl?.clear();
     if (process.platform !== "darwin") {
       app.quit();
@@ -356,14 +365,9 @@ if (!gotLock) {
       case "changePerm":
         if (args.perm?.player) {
           if (args.perm.role === "moderator" || args.perm.role === "admin") {
-            banWhiteListSingle.addAdmin(
-              args.perm.player,
-              "client",
-              "client",
-              args.perm.role
-            );
+            administration.addAdmin(args.perm.player, "client", "client", args.perm.role);
           } else if (!args.perm.role) {
-            banWhiteListSingle.removeAdmin(args.perm.player, "client");
+            administration.removeAdmin(args.perm.player, "client");
           }
         } else {
           log.info("No player in perm");
@@ -372,14 +376,14 @@ if (!gotLock) {
       case "addWhiteBan":
         if (args.addWhiteBan) {
           if (args.addWhiteBan.type === "banList") {
-            banWhiteListSingle.banPlayer(
+            administration.banPlayer(
               args.addWhiteBan.player,
               "client",
               "client",
               args.addWhiteBan.reason
             );
           } else if (args.addWhiteBan.type === "whiteList") {
-            banWhiteListSingle.whitePlayer(
+            administration.whitePlayer(
               args.addWhiteBan.player,
               "client",
               "client",
@@ -391,9 +395,9 @@ if (!gotLock) {
       case "removeWhiteBan":
         if (args.removeWhiteBan) {
           if (args.removeWhiteBan.type === "banList") {
-            banWhiteListSingle.unBanPlayer(args.removeWhiteBan.player, "client");
+            administration.unBanPlayer(args.removeWhiteBan.player, "client");
           } else if (args.removeWhiteBan.type === "whiteList") {
-            banWhiteListSingle.unWhitePlayer(args.removeWhiteBan.player, "client");
+            administration.unWhitePlayer(args.removeWhiteBan.player, "client");
           }
         }
         break;
@@ -424,7 +428,7 @@ if (!gotLock) {
         break;
       case "fetchWhiteBanList":
         if (args.fetch) {
-          const whiteBanList = banWhiteListSingle.fetchList(args.fetch);
+          const whiteBanList = administration.fetchList(args.fetch);
           sendWindow({
             legacy: {
               messageType: "fetchedWhiteBanList",
@@ -504,7 +508,7 @@ if (!gotLock) {
         break;
       case "exportWhitesBans":
         if (args.exportImport) {
-          let list = banWhiteListSingle.fetchList({ type: args.exportImport.type });
+          let list = administration.fetchList({ type: args.exportImport.type });
           if (args.exportImport.type === "banList") {
             let path = app.getPath("documents") + "\\bans.json";
             writeFileSync(path, JSON.stringify(list));
@@ -532,14 +536,14 @@ if (!gotLock) {
                 let bans = JSON.parse(readFileSync(file).toString());
                 bans.forEach((ban: BanWhiteList) => {
                   if (args.exportImport?.type === "banList") {
-                    banWhiteListSingle.banPlayer(
+                    administration.banPlayer(
                       ban.username,
                       "client",
                       ban.region || "client",
                       ban.reason
                     );
                   } else if (args.exportImport?.type === "whiteList") {
-                    banWhiteListSingle.whitePlayer(
+                    administration.whitePlayer(
                       ban.username,
                       "client",
                       ban.region || "client",
@@ -574,7 +578,7 @@ if (!gotLock) {
       playSound(command.playSound);
     }
     if (command.mmdResults) {
-      discSingle.lobbyEnded(command.mmdResults);
+      discordBot.lobbyEnded(command.mmdResults);
     }
     if (command.lobbyUpdate) {
       // TODO Move the below code to the module system.
@@ -630,7 +634,7 @@ if (!gotLock) {
           log.info("Player left: " + update.playerLeft);
         } else if (update.playerJoined) {
           if (update.playerJoined.name) {
-            let row = banWhiteListSingle.isBanned(update.playerJoined.name);
+            let row = administration.isBanned(update.playerJoined.name);
             if (row) {
               lobbyControl.banSlot(update.playerJoined.slot);
               gameSocket.sendChatMessage(
@@ -649,7 +653,7 @@ if (!gotLock) {
             if (settings.values.autoHost.whitelist) {
               if (
                 update.playerJoined.name !== gameState.values.selfBattleTag &&
-                !banWhiteListSingle.isWhiteListed(update.playerJoined.name)
+                !administration.isWhiteListed(update.playerJoined.name)
               ) {
                 lobbyControl.banSlot(update.playerJoined.slot);
                 gameSocket.sendChatMessage(
