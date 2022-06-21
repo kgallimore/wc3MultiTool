@@ -2,7 +2,7 @@ import { Global } from "../globalBase";
 
 import WebSocket from "ws";
 
-import { gameState, MenuStates } from "./gameState";
+import { MenuStates } from "./gameState";
 import { settings } from "./settings";
 
 import { warControl } from "./warControl";
@@ -56,6 +56,10 @@ export interface NativeGameSocketEvents {
   SetGlueScreen?: { screen: MenuStates };
   GameLobbySetup?: GameClientLobbyPayload;
   GameList?: GameList;
+  GameListRemove?: { game: { id: number } };
+  GameListUpdate?: {
+    game: { id: number; currentPlayers: number; maxPlayers: number; ping: 95 };
+  };
   ChatMessage?: GameChatMessage;
   UpdateUserInfo?: {
     user: { battleTag: string; userRegion: Regions };
@@ -71,6 +75,7 @@ export interface GameSocketEvents extends NativeGameSocketEvents {
   connected?: true;
   disconnected?: true;
   processedChat?: BaseMessage & { translated?: string };
+  nonAdminChat?: BaseMessage & { translated?: string };
 }
 
 export interface CreateLobbyPayload {
@@ -93,7 +98,12 @@ interface BaseMessage {
   content: string;
 }
 export interface GameChatMessage {
-  message: BaseMessage & { source: "gameChat" };
+  message: BaseMessage & {
+    source: "gameChat";
+    channelDisplayName: string;
+    channelName: string;
+    type: "message";
+  };
 }
 
 export interface SendGameMessage {
@@ -138,7 +148,6 @@ class GameSocket extends Global {
   sentMessages: Array<String> = [];
   gameWebSocket: WebSocket | null = null;
   voteTimer: NodeJS.Timeout | null = null;
-  gameState = gameState;
   //lobbyControl = lobbyControl;
   sendingInGameChat: { active: boolean; queue: Array<string> } = {
     active: false,
@@ -169,8 +178,9 @@ class GameSocket extends Global {
           "FriendsFriendUpdated",
           "UpdateReadyState",
         ].includes(parsedData.messageType)
-      )
+      ) {
         this.emitEvent({ [parsedData.messageType]: parsedData.payload });
+      }
       if (parsedData.messageType === "MultiplayerGameLeave") {
         this.sentMessages = [];
       }
@@ -197,26 +207,21 @@ class GameSocket extends Global {
   }
 
   sendChatMessage(content: string) {
-    if (
-      this.gameState.values.menuState === "GAME_LOBBY" ||
-      this.gameState.values.menuState === "CUSTOM_GAME_LOBBY"
-    ) {
-      if (typeof content === "string" && content.length > 0) {
-        let newChatSplit = content.match(/.{1,255}/g);
-        if (!newChatSplit) {
-          this.error("Could not split chat message into 255 character chunks");
-          return;
-        }
-        this.sentMessages = this.sentMessages.concat(newChatSplit);
-        newChatSplit.forEach((content) => {
-          this.info("Sending chat message: " + content);
-          this.sendMessage({
-            SendGameChatMessage: {
-              content,
-            },
-          });
-        });
+    if (typeof content === "string" && content.length > 0) {
+      let newChatSplit = content.match(/.{1,255}/g);
+      if (!newChatSplit) {
+        this.error("Could not split chat message into 255 character chunks");
+        return;
       }
+      this.sentMessages = this.sentMessages.concat(newChatSplit);
+      newChatSplit.forEach((content) => {
+        this.info("Sending chat message: " + content);
+        this.sendMessage({
+          SendGameChatMessage: {
+            content,
+          },
+        });
+      });
     }
   }
 
