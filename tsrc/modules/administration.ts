@@ -25,7 +25,7 @@ export interface FetchListOptions {
   activeOnly?: boolean;
 }
 
-class banWhiteList extends ModuleBase {
+class Administration extends ModuleBase {
   db = new sqlite3(app.getPath("userData") + "/wc3mt.db");
 
   constructor() {
@@ -77,42 +77,42 @@ class banWhiteList extends ModuleBase {
       if (events.processedChat.content.match(/^\?sp$/i)) {
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          banWhiteListSingle.checkRole(sender, "moderator")
+          this.checkRole(sender, "moderator")
         ) {
           this.lobby.shufflePlayers();
         }
       } else if (events.processedChat.content.match(/^\?st$/i)) {
         if (
           this.lobby.microLobby?.lobbyStatic?.isHost &&
-          banWhiteListSingle.checkRole(sender, "moderator")
+          this.checkRole(sender, "moderator")
         ) {
           this.lobby.shufflePlayers(false);
         }
       } else if (events.processedChat.content.match(/^\?start$/i)) {
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          banWhiteListSingle.checkRole(sender, "moderator")
+          this.checkRole(sender, "moderator")
         ) {
           this.lobby.startGame();
         }
       } else if (events.processedChat.content.match(/^\?a$/i)) {
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          banWhiteListSingle.checkRole(sender, "moderator")
+          this.checkRole(sender, "moderator")
         ) {
           this.gameSocket.cancelStart();
         }
       } else if (events.processedChat.content.match(/^\?closeall$/i)) {
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          banWhiteListSingle.checkRole(sender, "moderator")
+          this.checkRole(sender, "moderator")
         ) {
           this.gameSocket.sendChatMessage("!closeall");
         }
       } else if (events.processedChat.content.match(/^\?hold$/i)) {
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          banWhiteListSingle.checkRole(sender, "moderator")
+          this.checkRole(sender, "moderator")
         ) {
           let targetPlayer = events.processedChat.content.split(" ")[1];
           if (targetPlayer) {
@@ -122,7 +122,7 @@ class banWhiteList extends ModuleBase {
           }
         }
       } else if (events.processedChat.content.match(/^\?mute$/i)) {
-        if (banWhiteListSingle.checkRole(sender, "moderator")) {
+        if (this.checkRole(sender, "moderator")) {
           let targetPlayer = events.processedChat.content.split(" ")[1];
           if (targetPlayer) {
             this.gameSocket.sendChatMessage("!mute " + targetPlayer);
@@ -132,7 +132,7 @@ class banWhiteList extends ModuleBase {
           }
         }
       } else if (events.processedChat.content.match(/^\?unmute$/i)) {
-        if (banWhiteListSingle.checkRole(sender, "moderator")) {
+        if (this.checkRole(sender, "moderator")) {
           let targetPlayer = events.processedChat.content.split(" ")[1];
           if (targetPlayer) {
             this.gameSocket.sendChatMessage("!unmute " + targetPlayer);
@@ -144,14 +144,14 @@ class banWhiteList extends ModuleBase {
       } else if (events.processedChat.content.match(/^\?openall$/i)) {
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          banWhiteListSingle.checkRole(sender, "moderator")
+          this.checkRole(sender, "moderator")
         ) {
           this.gameSocket.sendChatMessage("!openall");
         }
       } else if (events.processedChat.content.match(/^\?swap/i)) {
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          banWhiteListSingle.checkRole(sender, "baswapper")
+          this.checkRole(sender, "baswapper")
         ) {
           let [command, ...args] = events.processedChat.content.split(" ");
           if (args.length === 2) {
@@ -159,7 +159,7 @@ class banWhiteList extends ModuleBase {
             let tenMinutesAgo = Date.now() - 10 * 60 * 1000;
             if (isInt(args[1], 24, 1) && isInt(args[0], 24, 1)) {
               if (
-                banWhiteListSingle.checkRole(sender, "swapper") ||
+                this.checkRole(sender, "swapper") ||
                 (playerData[this.lobby.microLobby?.slots[parseInt(args[0]) - 1].name]
                   .joinedAt > tenMinutesAgo &&
                   playerData[this.lobby.microLobby?.slots[parseInt(args[1]) - 1].name]
@@ -181,7 +181,7 @@ class banWhiteList extends ModuleBase {
               this.lobby.microLobby?.searchPlayer(args[0]).length === 1
             ) {
               if (
-                banWhiteListSingle.checkRole(sender, "swapper") ||
+                this.checkRole(sender, "swapper") ||
                 (playerData[this.lobby.microLobby?.searchPlayer(args[1])[0]].joinedAt >
                   tenMinutesAgo &&
                   playerData[this.lobby.microLobby?.searchPlayer(args[0])[0]].joinedAt >
@@ -205,7 +205,7 @@ class banWhiteList extends ModuleBase {
       } else if (events.processedChat.content.match(/^\?handi/i)) {
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          banWhiteListSingle.checkRole(sender, "moderator")
+          this.checkRole(sender, "moderator")
         ) {
           if (events.processedChat.content.split(" ").length === 3) {
             var target = events.processedChat.content.split(" ")[1];
@@ -229,7 +229,7 @@ class banWhiteList extends ModuleBase {
       } else if (events.processedChat.content.match(/^\?close/i)) {
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          banWhiteListSingle.checkRole(sender, "moderator")
+          this.checkRole(sender, "moderator")
         ) {
           var target = events.processedChat.content.split(" ")[1];
           if (target) {
@@ -254,7 +254,7 @@ class banWhiteList extends ModuleBase {
       } else if (events.processedChat.content.match(/^\?open/i)) {
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          banWhiteListSingle.checkRole(sender, "moderator")
+          this.checkRole(sender, "moderator")
         ) {
           var target = events.processedChat.content.split(" ")[1];
           if (target) {
@@ -279,7 +279,7 @@ class banWhiteList extends ModuleBase {
       } else if (events.processedChat.content.match(/^\?kick/i)) {
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          banWhiteListSingle.checkRole(sender, "moderator")
+          this.checkRole(sender, "moderator")
         ) {
           var target = events.processedChat.content.split(" ")[1];
           if (target) {
@@ -304,14 +304,14 @@ class banWhiteList extends ModuleBase {
       } else if (events.processedChat.content.match(/^\?ban/i)) {
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          banWhiteListSingle.checkRole(sender, "moderator")
+          this.checkRole(sender, "moderator")
         ) {
           var targetPlayer = events.processedChat.content.split(" ")[1];
           if (targetPlayer) {
             var reason = events.processedChat.content.split(" ").slice(2).join(" ") || "";
             if (isInt(targetPlayer, 24, 1)) {
               this.lobby.banSlot(parseInt(targetPlayer) - 1);
-              banWhiteListSingle.banPlayer(
+              this.banPlayer(
                 this.lobby.microLobby?.slots[targetPlayer].name,
                 sender,
                 this.lobby.microLobby?.region,
@@ -320,7 +320,7 @@ class banWhiteList extends ModuleBase {
             } else {
               if (targetPlayer.match(/^\D\S{2,11}#\d{4,8}$/)) {
                 this.gameSocket.sendChatMessage("Banning out of lobby player.");
-                banWhiteListSingle.banPlayer(
+                this.banPlayer(
                   targetPlayer,
                   sender,
                   this.lobby.microLobby?.region,
@@ -329,7 +329,7 @@ class banWhiteList extends ModuleBase {
               } else {
                 let targets = this.lobby.microLobby?.searchPlayer(targetPlayer);
                 if (targets.length === 1) {
-                  banWhiteListSingle.banPlayer(
+                  this.banPlayer(
                     targets[0],
                     sender,
                     this.lobby.microLobby?.region,
@@ -351,13 +351,13 @@ class banWhiteList extends ModuleBase {
       } else if (events.processedChat.content.match(/^\?unban/i)) {
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          banWhiteListSingle.checkRole(sender, "moderator")
+          this.checkRole(sender, "moderator")
         ) {
           var target = events.processedChat.content.split(" ")[1];
           if (target) {
             if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
               this.gameSocket.sendChatMessage("Unbanning out of lobby player.");
-              banWhiteListSingle.unBanPlayer(target, sender);
+              this.unBanPlayer(target, sender);
             } else {
               this.gameSocket.sendChatMessage("Full battleTag required");
               this.info("Full battleTag required");
@@ -370,13 +370,13 @@ class banWhiteList extends ModuleBase {
       } else if (events.processedChat.content.match(/^\?white/i)) {
         if (
           this.lobby.microLobby?.lobbyStatic?.isHost &&
-          banWhiteListSingle.checkRole(sender, "moderator")
+          this.checkRole(sender, "moderator")
         ) {
           var targetPlayer = events.processedChat.content.split(" ")[1];
           if (targetPlayer) {
             var reason = events.processedChat.content.split(" ").slice(2).join(" ") || "";
             if (isInt(targetPlayer, 24, 1)) {
-              banWhiteListSingle.whitePlayer(
+              this.whitePlayer(
                 this.lobby.microLobby?.slots[targetPlayer].name,
                 sender,
                 this.lobby.microLobby?.region,
@@ -385,7 +385,7 @@ class banWhiteList extends ModuleBase {
             } else {
               if (targetPlayer.match(/^\D\S{2,11}#\d{4,8}$/)) {
                 this.gameSocket.sendChatMessage("Whitelisting out of lobby player.");
-                banWhiteListSingle.whitePlayer(
+                this.whitePlayer(
                   targetPlayer,
                   sender,
                   this.lobby.microLobby?.region,
@@ -394,7 +394,7 @@ class banWhiteList extends ModuleBase {
               } else {
                 let targets = this.lobby.microLobby?.searchPlayer(targetPlayer);
                 if (targets.length === 1) {
-                  banWhiteListSingle.whitePlayer(
+                  this.whitePlayer(
                     targets[0],
                     sender,
                     this.lobby.microLobby?.region,
@@ -417,13 +417,13 @@ class banWhiteList extends ModuleBase {
         // TODO: In lobby search and removal
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          banWhiteListSingle.checkRole(sender, "moderator")
+          this.checkRole(sender, "moderator")
         ) {
           var target = events.processedChat.content.split(" ")[1];
           if (target) {
             if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
               this.gameSocket.sendChatMessage("Un-whitelisting out of lobby player.");
-              banWhiteListSingle.unWhitePlayer(target, sender);
+              this.unWhitePlayer(target, sender);
             } else {
               this.gameSocket.sendChatMessage("Full battleTag required");
               this.info("Full battleTag required");
@@ -436,7 +436,7 @@ class banWhiteList extends ModuleBase {
       } else if (events.processedChat.content.match(/^\?perm/i)) {
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          banWhiteListSingle.checkRole(sender, "admin")
+          this.checkRole(sender, "admin")
         ) {
           var target = events.processedChat.content.split(" ")[1];
           var perm: "mod" | "baswapper" | "swapper" | "moderator" | "admin" =
@@ -453,22 +453,12 @@ class banWhiteList extends ModuleBase {
                 this.gameSocket.sendChatMessage(
                   "Assigning out of lobby player " + perm + "."
                 );
-                banWhiteListSingle.addAdmin(
-                  target,
-                  sender,
-                  this.lobby.microLobby?.region,
-                  perm
-                );
+                this.addAdmin(target, sender, this.lobby.microLobby?.region, perm);
               } else {
                 let targets = this.lobby.microLobby?.searchPlayer(target);
                 if (targets.length === 1) {
                   if (
-                    banWhiteListSingle.addAdmin(
-                      targets[0],
-                      sender,
-                      this.lobby.microLobby?.region,
-                      perm
-                    )
+                    this.addAdmin(targets[0], sender, this.lobby.microLobby?.region, perm)
                   ) {
                     this.gameSocket.sendChatMessage(
                       targets[0] + " has been promoted to " + perm + "."
@@ -496,12 +486,12 @@ class banWhiteList extends ModuleBase {
       } else if (events.processedChat.content.match(/^\?unperm/i)) {
         if (
           this.lobby.microLobby?.lobbyStatic?.isHost &&
-          banWhiteListSingle.checkRole(sender, "admin")
+          this.checkRole(sender, "admin")
         ) {
           var target = events.processedChat.content.split(" ")[1];
           if (target) {
             if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
-              if (banWhiteListSingle.removeAdmin(target, sender)) {
+              if (this.removeAdmin(target, sender)) {
                 this.gameSocket.sendChatMessage(
                   "Removed perm from out of lobby player: " + target
                 );
@@ -513,7 +503,7 @@ class banWhiteList extends ModuleBase {
             } else {
               let targets = this.lobby.microLobby?.searchPlayer(target);
               if (targets.length === 1) {
-                if (banWhiteListSingle.removeAdmin(targets[0], sender)) {
+                if (this.removeAdmin(targets[0], sender)) {
                   this.gameSocket.sendChatMessage(targets[0] + " has been demoted.");
                 } else {
                   this.gameSocket.sendChatMessage(targets[0] + " has no permissions.");
@@ -533,7 +523,7 @@ class banWhiteList extends ModuleBase {
       } else if (events.processedChat.content.match(/^\?autohost/i)) {
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          banWhiteListSingle.checkRole(sender, "admin")
+          this.checkRole(sender, "admin")
         ) {
           var target = events.processedChat.content.split(" ")[1];
           if (target) {
@@ -562,7 +552,7 @@ class banWhiteList extends ModuleBase {
       } else if (events.processedChat.content.match(/^\?autostart/i)) {
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          banWhiteListSingle.checkRole(sender, "admin")
+          this.checkRole(sender, "admin")
         ) {
           var target = events.processedChat.content.split(" ")[1];
           if (target) {
@@ -603,7 +593,7 @@ class banWhiteList extends ModuleBase {
               "?voteStart: Starts or accepts a vote to start"
             );
           }
-          if (banWhiteListSingle.checkRole(sender, "moderator")) {
+          if (this.checkRole(sender, "moderator")) {
             this.gameSocket.sendChatMessage("?a: Aborts game start");
             this.gameSocket.sendChatMessage(
               "?ban <name|slotNumber> <?reason>: Bans a player forever"
@@ -636,7 +626,7 @@ class banWhiteList extends ModuleBase {
               "?st: Shuffles players randomly between teams"
             );
           }
-          if (banWhiteListSingle.checkRole(sender, "admin")) {
+          if (this.checkRole(sender, "admin")) {
             this.gameSocket.sendChatMessage(
               "?perm <name> <?admin|mod|swapper>: Promotes a player to a role (mod by default)"
             );
@@ -649,6 +639,8 @@ class banWhiteList extends ModuleBase {
             "?help: Shows commands with <required arg> <?optional arg>"
           );
         }
+      } else {
+        this.gameSocket.emitEvent({ nonAdminChat: events.processedChat });
       }
     }
   }
@@ -886,4 +878,4 @@ class banWhiteList extends ModuleBase {
   }
 }
 
-export const banWhiteListSingle = new banWhiteList();
+export const administration = new Administration();
