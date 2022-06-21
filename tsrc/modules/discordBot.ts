@@ -1,16 +1,16 @@
 import { ModuleBase } from "../moduleBase";
 
-import type { SettingsUpdates } from "./../globals/settings";
+import type { SettingsUpdates } from "../globals/settings";
 
 import Discord from "discord.js";
 import type { mmdResults } from "./replayHandler";
 import type { PlayerTeamsData, LobbyUpdates } from "wc3mt-lobby-container";
 import { DeColorName } from "../utility";
 import { app } from "electron";
-import { GameState } from "./../globals/gameState";
-import { GameSocketEvents } from "./../globals/gameSocket";
+import { GameState } from "../globals/gameState";
+import { GameSocketEvents } from "../globals/gameSocket";
 
-class DisClient extends ModuleBase {
+class DiscordBot extends ModuleBase {
   client: Discord.Client | null = null;
   announceChannel: Discord.TextChannel | null = null;
   chatChannel: Discord.TextChannel | null = null;
@@ -359,4 +359,4 @@ class DisClient extends ModuleBase {
   }
 }
 
-export const discSingle = new DisClient();
+export const discordBot = new DiscordBot();
