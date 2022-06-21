@@ -57,21 +57,21 @@ export class LobbyControl extends Module {
     ) {
       this.clear();
     }
-    if (events.processedChat) {
-      if (events.processedChat.content.match(/^\?stats/)) {
+    if (events.nonAdminChat) {
+      if (events.nonAdminChat.content.match(/^\?stats/)) {
         if (
           this.microLobby?.lobbyStatic?.isHost &&
           this.settings.values.elo.type !== "off" &&
           this.microLobby?.statsAvailable
         ) {
           let data: false | PlayerData;
-          let playerTarget = events.processedChat.content.split(" ")[1];
+          let playerTarget = events.nonAdminChat.content.split(" ")[1];
           if (playerTarget) {
             let targets = this.microLobby?.searchPlayer(playerTarget);
             if (targets.length === 1) {
               // Set the sender to a the target player. Could use a empty string and ?? instead
-              events.processedChat.sender = targets[0];
-              data = this.getPlayerData(events.processedChat.sender);
+              events.nonAdminChat.sender = targets[0];
+              data = this.getPlayerData(events.nonAdminChat.sender);
             } else if (targets.length > 1) {
               this.gameSocket.sendChatMessage(
                 "Multiple players found. Please be more specific."
@@ -82,14 +82,14 @@ export class LobbyControl extends Module {
               return;
             }
           } else {
-            data = this.getPlayerData(events.processedChat.sender);
+            data = this.getPlayerData(events.nonAdminChat.sender);
           }
           if (data) {
             if (!data.extra || data.extra?.rating === -1) {
               this.gameSocket.sendChatMessage("Data pending");
             } else {
               this.gameSocket.sendChatMessage(
-                events.processedChat.sender +
+                events.nonAdminChat.sender +
                   " ELO: " +
                   data.extra.rating +
                   ", Rank: " +
