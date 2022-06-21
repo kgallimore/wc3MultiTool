@@ -92,4 +92,4 @@ export class Comm extends ModuleBase {
   }
 }
 
-export const CommSingle = new Comm();
+export const commServer = new Comm();

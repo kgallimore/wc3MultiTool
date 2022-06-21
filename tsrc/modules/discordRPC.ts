@@ -104,4 +104,4 @@ class DiscordRPC extends ModuleBase {
   }
 }
 
-export const discRPCSingle = new DiscordRPC();
+export const discordRPC = new DiscordRPC();
