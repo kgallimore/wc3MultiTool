@@ -108,6 +108,9 @@ class GameStateContainer extends Global {
         gameState.updateGameState({ menuState: events.SetGlueScreen.screen });
       }
     }
+    if (events.GameListRemove || events.GameListUpdate) {
+      gameState.updateGameState({ menuState: "CUSTOM_LOBBIES" });
+    }
   }
 
   updateGameState(values: Partial<GameState>) {
