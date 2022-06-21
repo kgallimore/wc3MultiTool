@@ -236,15 +236,19 @@
         Object.entries(data.globalUpdate.clientState).forEach(([key, value]) => {
           clientState[key] = value;
         });
+        clientState = clientState;
       }
       if (data.globalUpdate.gameState) {
         Object.entries(data.globalUpdate.gameState).forEach(([key, value]) => {
           gameState[key] = value;
         });
+        gameState = gameState;
       }
       if (data.globalUpdate.settings) {
-        Object.entries(data.globalUpdate.settings).forEach(([key, value]) => {
-          settings[key] = value;
+        Object.entries(data.globalUpdate.settings).forEach(([settingType, updates]) => {
+          Object.entries(updates).forEach(([key, value]) => {
+            settings[settingType][key] = value;
+          });
         });
         if (data.globalUpdate.settings.elo) {
           wc3statsOptions = wc3EloModes(settings.elo.lookupName);
