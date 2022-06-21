@@ -1,5 +1,5 @@
-import { GameSocketEvents } from "./../globals/gameSocket";
-import { ModuleBase } from "./../moduleBase";
+import { GameSocketEvents } from "../globals/gameSocket";
+import { ModuleBase } from "../moduleBase";
 
 const translate = require("translate-google");
 import LanguageDetect from "languagedetect";
@@ -14,8 +14,9 @@ class ChatHandler extends ModuleBase {
   protected async onGameSocketEvent(events: GameSocketEvents): Promise<void> {
     if (events.ChatMessage) {
       if (
-        events.ChatMessage.message?.sender &&
-        events.ChatMessage.message.source === "gameChat"
+        events.ChatMessage.message.sender &&
+        events.ChatMessage.message.source === "gameChat" &&
+        this.lobby.microLobby
       ) {
         if (events.ChatMessage.message.sender.includes("#")) {
           var sender = events.ChatMessage.message.sender;
@@ -26,7 +27,7 @@ class ChatHandler extends ModuleBase {
         ) {
           var sender = this.gameState.values.selfBattleTag;
         } else {
-          let possiblePlayers = this.lobby.microLobby?.searchPlayer(
+          let possiblePlayers = this.lobby.microLobby.searchPlayer(
             events.ChatMessage.message.sender
           );
           if (possiblePlayers && possiblePlayers.length === 1) {
@@ -51,6 +52,11 @@ class ChatHandler extends ModuleBase {
             )
           ) {
             // Escape debug messages
+            this.verbose(
+              "Ignoring debug messages:",
+              sender,
+              events.ChatMessage.message.content
+            );
             return;
           } else if (
             events.ChatMessage.message.content.match(
@@ -58,13 +64,23 @@ class ChatHandler extends ModuleBase {
             )
           ) {
             // Filter out some command returns from !swap etc
+            this.verbose(
+              "Filtering out command messages:",
+              sender,
+              events.ChatMessage.message.content
+            );
             return;
           }
         }
         // Message has a sender and is probably not a debug message.
-        if (!this.lobby.microLobby?.newChat(sender, events.ChatMessage.message.content)) {
+        if (!this.lobby.microLobby.newChat(sender, events.ChatMessage.message.content)) {
           // Filter out repeated messages sent w/in 1 second
           // TODO: more spam filters
+          this.verbose(
+            "Ignoring potential spam: ",
+            sender,
+            events.ChatMessage.message.content
+          );
           return;
         }
         {
@@ -73,11 +89,12 @@ class ChatHandler extends ModuleBase {
             events.ChatMessage.message.content.match(/^!debug/)
           ) {
             this.lobby.banPlayer(sender);
+            this.info("Banning !debug user:", sender, events.ChatMessage.message.content);
+            return;
           }
           var translatedMessage = "";
           if (events.ChatMessage.message.content.length > 4) {
             var detectLangs = detectLang.detect(events.ChatMessage.message.content, 1);
-            console.log(detectLangs);
             if (
               this.settings.values.client.language &&
               !events.ChatMessage.message.content.startsWith("?") &&
@@ -104,7 +121,13 @@ class ChatHandler extends ModuleBase {
               }
             }
           }
-
+          this.verbose(
+            "New message: ",
+            sender,
+            " : ",
+            events.ChatMessage.message.content,
+            translatedMessage ? " | Translated: " + translatedMessage : ""
+          );
           if (this.settings.values.client.translateToLobby && translatedMessage) {
             this.gameSocket.sendChatMessage(sender + ": " + translatedMessage);
           }
