@@ -1,4 +1,5 @@
-import type { LobbyUpdates, Regions, MicroLobbyData } from "wc3mt-lobby-container";
+import type { Regions, MicroLobbyData } from "wc3mt-lobby-container";
+import type { LobbyUpdatesExtended } from "./modules/lobbyControl";
 import type { AppSettings, SettingsKeys } from "./globals/settings";
 
 import type { GameState } from "./globals/gameState";
@@ -31,7 +32,7 @@ export interface WindowReceive {
     data: {
       error?: string;
       value?: string;
-      lobbyData?: LobbyUpdates;
+      lobbyData?: LobbyUpdatesExtended;
       fetched?: {
         type: "banList" | "whiteList";
         page: number;
@@ -133,7 +134,7 @@ export interface GameClientMessage {
 
 export interface HubReceive {
   data: {
-    lobbyUpdates?: LobbyUpdates;
+    lobbyUpdates?: LobbyUpdatesExtended;
     settings?: AppSettings;
     gameState?: GameState;
     settingsUpdates?: SettingsUpdates;
@@ -154,7 +155,7 @@ export interface HubSend {
     newData?: MicroLobbyData;
     change?: {
       lobby: { region: Regions; name: string };
-      lobbyUpdate?: LobbyUpdates;
+      lobbyUpdate?: LobbyUpdatesExtended;
     };
     userLobby?: { userName: string; lobbyName: string; region: Regions };
     clientSize?: number;

@@ -1,6 +1,7 @@
 import { ModuleBase } from "../moduleBase";
 
 import type { Regions, SlotNumbers } from "wc3mt-lobby-container";
+import type { LobbyUpdatesExtended } from "./lobbyControl";
 import sqlite3 from "better-sqlite3";
 import { app } from "electron";
 
@@ -641,6 +642,48 @@ class Administration extends ModuleBase {
         }
       } else {
         this.gameSocket.emitEvent({ nonAdminChat: events.processedChat });
+      }
+    }
+  }
+
+  protected onLobbyUpdate(updates: LobbyUpdatesExtended): void {
+    if (updates.playerJoined) {
+      if (updates.playerJoined.name) {
+        let row = administration.isBanned(updates.playerJoined.name);
+        if (row) {
+          this.lobby.banSlot(updates.playerJoined.slot);
+          this.gameSocket.sendChatMessage(
+            updates.playerJoined.name +
+              " is permanently banned" +
+              (row.reason ? ": " + row.reason : "")
+          );
+          this.info(
+            "Kicked " +
+              updates.playerJoined.name +
+              " for being banned" +
+              (row.reason ? " for: " + row.reason : "")
+          );
+          return;
+        }
+        if (this.settings.values.autoHost.whitelist) {
+          if (
+            updates.playerJoined.name !== this.gameState.values.selfBattleTag &&
+            !administration.isWhiteListed(updates.playerJoined.name)
+          ) {
+            this.lobby.banSlot(updates.playerJoined.slot);
+            this.gameSocket.sendChatMessage(
+              updates.playerJoined.name + " is not whitelisted"
+            );
+            this.info(
+              "Kicked " + updates.playerJoined.name + " for not being whitelisted"
+            );
+            return;
+          }
+        }
+        this.info("Player joined: " + updates.playerJoined.name);
+        this.lobby.emitLobbyUpdate({ playerCleared: updates.playerJoined.name });
+      } else {
+        this.warn("Nameless player joined");
       }
     }
   }

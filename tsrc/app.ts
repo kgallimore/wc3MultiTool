@@ -54,7 +54,7 @@ if (!app.isPackaged) {
   });
 }
 import { WindowSend, WindowReceive, BanWhiteList } from "./utility";
-import { LobbyUpdates } from "wc3mt-lobby-container";
+import { LobbyUpdatesExtended } from "./modules/lobbyControl";
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -147,7 +147,7 @@ if (!gotLock) {
     sendWindow({ globalUpdate: { clientState } })
   );
 
-  lobbyControl.on("lobbyUpdate", (lobbyUpdate: LobbyUpdates) =>
+  lobbyControl.on("lobbyUpdate", (lobbyUpdate: LobbyUpdatesExtended) =>
     sendWindow({
       legacy: { messageType: "lobbyUpdate", data: { lobbyData: lobbyUpdate } },
     })
@@ -335,22 +335,6 @@ if (!gotLock) {
       play(join(__dirname, "sounds\\" + file));
     } else {
       play(join(app.getAppPath(), "\\src\\sounds\\" + file));
-    }
-  }
-
-  function clearLobby() {
-    // TODO: fix lobby close if game was started
-    if (
-      gameState.values.menuState !== "LOADING_SCREEN" &&
-      lobbyControl.microLobby?.lobbyStatic.lobbyName
-    ) {
-      sendWindow({
-        legacy: {
-          messageType: "lobbyUpdate",
-          data: { lobbyData: { leftLobby: true } },
-        },
-      });
-      HubSingle.sendToHub({ lobbyUpdates: { leftLobby: true } });
     }
   }
 
@@ -590,120 +574,8 @@ if (!gotLock) {
           update.newLobby ||
           update.leftLobby
         ) {
-          if (update.leftLobby) {
-            clearLobby();
-          } else {
+          if (!update.leftLobby) {
             gameState.updateGameState({ action: "waitingInLobby" });
-          }
-          sendWindow({
-            legacy: { messageType: "lobbyUpdate", data: { lobbyData: update } },
-          });
-          HubSingle.sendToHub({ lobbyUpdates: update });
-          if (settings.values.obs.textSource) {
-            writeFileSync(
-              join(app.getPath("documents"), "wc3mt.txt"),
-              lobbyControl.exportTeamStructureString()
-            );
-          }
-          if (update.playerData) {
-            if (update.playerData.extraData) {
-              if (settings.values.elo.announce) {
-                gameSocket.sendChatMessage(
-                  update.playerData.name +
-                    " ELO: " +
-                    update.playerData.extraData.rating +
-                    ", Rank: " +
-                    update.playerData.extraData.rank +
-                    ", Played: " +
-                    update.playerData.extraData.played +
-                    ", Wins: " +
-                    update.playerData.extraData.wins +
-                    ", Losses: " +
-                    update.playerData.extraData.losses +
-                    ", Last Change: " +
-                    update.playerData.extraData.lastChange
-                );
-              }
-            } else {
-              log.error("Player data update missing data");
-            }
-          }
-        } else if (update.stale) {
-          lobbyControl.leaveGame();
-        } else if (update.playerLeft) {
-          log.info("Player left: " + update.playerLeft);
-        } else if (update.playerJoined) {
-          if (update.playerJoined.name) {
-            let row = administration.isBanned(update.playerJoined.name);
-            if (row) {
-              lobbyControl.banSlot(update.playerJoined.slot);
-              gameSocket.sendChatMessage(
-                update.playerJoined.name +
-                  " is permanently banned" +
-                  (row.reason ? ": " + row.reason : "")
-              );
-              log.info(
-                "Kicked " +
-                  update.playerJoined.name +
-                  " for being banned" +
-                  (row.reason ? " for: " + row.reason : "")
-              );
-              return;
-            }
-            if (settings.values.autoHost.whitelist) {
-              if (
-                update.playerJoined.name !== gameState.values.selfBattleTag &&
-                !administration.isWhiteListed(update.playerJoined.name)
-              ) {
-                lobbyControl.banSlot(update.playerJoined.slot);
-                gameSocket.sendChatMessage(
-                  update.playerJoined.name + " is not whitelisted"
-                );
-                log.info(
-                  "Kicked " + update.playerJoined.name + " for not being whitelisted"
-                );
-                return;
-              }
-            }
-            log.info("Player joined: " + update.playerJoined.name);
-            autoHost.announcement();
-            if (
-              settings.values.autoHost.minPlayers !== 0 &&
-              lobbyControl.microLobby.nonSpecPlayers.length >=
-                settings.values.autoHost.minPlayers
-            ) {
-              lobbyControl.startGame(settings.values.autoHost.delayStart);
-            }
-          } else {
-            log.warn("Nameless player joined");
-          }
-        } else if (update.lobbyReady) {
-          if (lobbyControl.microLobby.lobbyStatic.isHost) {
-            if (settings.values.autoHost.sounds) {
-              playSound("ready.wav");
-            }
-            if (
-              settings.values.autoHost.type === "smartHost" ||
-              settings.values.autoHost.type === "rapidHost"
-            ) {
-              clientState.updateClientState({
-                currentStep: "Starting Game",
-                currentStepProgress: 100,
-              });
-              if (
-                (settings.values.elo.type == "off" ||
-                  !settings.values.elo.balanceTeams) &&
-                settings.values.autoHost.shufflePlayers
-              ) {
-                lobbyControl.shufflePlayers();
-              }
-              // Wait a quarter second to make sure shuffles are done
-              setTimeout(() => {
-                if (lobbyControl.isLobbyReady()) {
-                  lobbyControl.startGame(settings.values.autoHost.delayStart);
-                }
-              }, 250);
-            }
           }
         }
       }

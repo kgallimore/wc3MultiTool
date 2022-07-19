@@ -4,7 +4,8 @@ import type { SettingsUpdates } from "../globals/settings";
 
 import Discord from "discord.js";
 import type { mmdResults } from "./replayHandler";
-import type { PlayerTeamsData, LobbyUpdates } from "wc3mt-lobby-container";
+import type { PlayerTeamsData } from "wc3mt-lobby-container";
+import type { LobbyUpdatesExtended } from "./lobbyControl";
 import { DeColorName } from "../utility";
 import { app } from "electron";
 import { GameState } from "../globals/gameState";
@@ -56,7 +57,7 @@ class DiscordBot extends ModuleBase {
     }
   }
 
-  protected onLobbyUpdate(updates: LobbyUpdates): void {
+  protected onLobbyUpdate(updates: LobbyUpdatesExtended): void {
     if (updates.newLobby) {
       this.sendNewLobby();
     } else if (updates.leftLobby) {

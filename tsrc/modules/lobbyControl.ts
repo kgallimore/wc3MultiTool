@@ -19,6 +19,11 @@ import { sleep } from "@nut-tree/nut-js";
 require = require("esm")(module);
 var { Combination, Permutation } = require("js-combinatorics");
 
+export interface LobbyUpdatesExtended extends LobbyUpdates {
+  playerCleared?: string;
+  lobbyReady?: true;
+  lobbyBalanced?: true;
+}
 export type SlotInteractions =
   | "CloseSlot"
   | "BanPlayerFromGameLobby"
@@ -561,11 +566,7 @@ export class LobbyControl extends Module {
       ([teamName, teamPlayers]) =>
         Object.values(teamPlayers).filter((player) => player.realPlayer).length > 0
     );
-    if (
-      this.settings.values.elo.type !== "off" &&
-      this.microLobby?.statsAvailable &&
-      this.settings.values.elo.balanceTeams
-    ) {
+    if (this.microLobby?.statsAvailable) {
       let lobbyCopy = new MicroLobby({ fullData: this.microLobby.exportMin() });
       this.info("Auto balancing teams");
       if (this.bestCombo === undefined || this.bestCombo.length == 0) {
@@ -732,7 +733,7 @@ export class LobbyControl extends Module {
           }
         }
         this.info("Players should now be balanced.");
-        this.emitLobbyUpdate({ lobbyReady: true });
+        this.emitLobbyUpdate({ lobbyBalanced: true });
         this.gameSocket.sendChatMessage(
           "ELO data provided by: " + this.settings.values.elo.type
         );
@@ -748,16 +749,9 @@ export class LobbyControl extends Module {
       console.log("Refreshing slots, not ready.");
       return false;
     }
-    for (const team of Object.values(teams)) {
-      if (team.filter((slot) => slot.slotStatus === 0).length > 0) {
-        console.log("Missing Player");
-        return false;
-      }
-    }
-
     if (this.settings.values.elo.type !== "off") {
       if (!this.microLobby?.lookupName) {
-        console.log("No lookup name");
+        this.verbose("No ELO lookup name");
         return false;
       } else if (this.microLobby.statsAvailable) {
         for (const team of Object.values(teams)) {
@@ -767,7 +761,7 @@ export class LobbyControl extends Module {
               (slot.realPlayer && (!slot.data.extra || slot.data.extra.rating < 0))
           );
           if (waitingForStats.length > 0) {
-            console.log(
+            this.verbose(
               "Missing ELO data: ",
               waitingForStats.map((slot) => slot.name + " (" + slot.data.extra + ")")
             );
@@ -1028,7 +1022,7 @@ export class LobbyControl extends Module {
     return this.microLobby?.getAllPlayerData()[player] ?? false;
   }
 
-  emitLobbyUpdate(update: LobbyUpdates) {
+  emitLobbyUpdate(update: LobbyUpdatesExtended) {
     this.emit("lobbyUpdate", update);
   }
 

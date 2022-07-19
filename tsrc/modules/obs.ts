@@ -5,6 +5,10 @@ import type { SettingsUpdates } from "./../globals/settings";
 import OBSWebSocket from "obs-websocket-js";
 import type { GameState } from "./../globals/gameState";
 import { Key, keyboard } from "@nut-tree/nut-js";
+import { LobbyUpdatesExtended } from "./lobbyControl";
+import { writeFileSync } from "fs";
+import { join } from "path";
+import { app } from "electron";
 
 export interface ObsHotkeys {
   key: string;
@@ -17,8 +21,24 @@ class OBSSocket extends ModuleBase {
   socket: OBSWebSocket | null = null;
 
   constructor() {
-    super("OBS", { listeners: ["gameStateUpdates", "settingsUpdate"] });
+    super("OBS", { listeners: ["gameStateUpdates", "settingsUpdate", "lobbyUpdate"] });
     this.setup();
+  }
+
+  protected onLobbyUpdate(updates: LobbyUpdatesExtended): void {
+    if (
+      updates.playerPayload ||
+      updates.playerData ||
+      updates.newLobby ||
+      updates.leftLobby
+    ) {
+      if (this.settings.values.obs.textSource) {
+        writeFileSync(
+          join(app.getPath("documents"), "wc3mt.txt"),
+          this.lobby.exportTeamStructureString()
+        );
+      }
+    }
   }
 
   onSettingsUpdate(updates: SettingsUpdates) {

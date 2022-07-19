@@ -1,7 +1,7 @@
 import { Module } from "./moduleBasePre";
 import { lobbyControl } from "./modules/lobbyControl";
 
-import type { LobbyUpdates } from "wc3mt-lobby-container";
+import type { LobbyUpdatesExtended } from "./modules/lobbyControl";
 export type Listeners =
   | "settingsUpdate"
   | "gameStateUpdates"
@@ -18,5 +18,5 @@ export class ModuleBase extends Module {
     }
   }
 
-  protected onLobbyUpdate(updates: LobbyUpdates) {}
+  protected onLobbyUpdate(updates: LobbyUpdatesExtended) {}
 }

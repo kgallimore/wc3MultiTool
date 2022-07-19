@@ -1,5 +1,5 @@
 import { Global } from "./globalBase";
-import type { LobbyUpdates } from "wc3mt-lobby-container";
+import type { LobbyUpdatesExtended } from "./modules/lobbyControl";
 import type { WindowReceive } from "./utility";
 
 import { gameState, GameState } from "./globals/gameState";
@@ -16,7 +16,7 @@ import type { SEEventEvent } from "./modules/stream";
 import type { SettingsUpdates } from "./globals/settings";
 
 export interface EmitEvents {
-  lobbyUpdate?: LobbyUpdates;
+  lobbyUpdate?: LobbyUpdatesExtended;
   sendInGameChat?: string;
   newTip?: SEEventEvent | SEEventEvent[];
   notification?: { title: string; body: string };
