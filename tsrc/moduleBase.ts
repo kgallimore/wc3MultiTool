@@ -13,7 +13,8 @@ export class ModuleBase extends Module {
 
   constructor(name: string, options?: { listeners?: Array<Listeners> }) {
     super(name, options);
-    if (options?.listeners && "lobbyUpdate" in options.listeners) {
+    if (options?.listeners && options.listeners.includes("lobbyUpdate")) {
+      this.verbose("LobbyController Listener Attached.");
       this.lobby.on("lobbyUpdate", this.onLobbyUpdate.bind(this));
     }
   }
