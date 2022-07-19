@@ -37,6 +37,7 @@ export class LobbyControl extends Module {
   bestCombo: Array<string> | Array<Array<string>> = [];
   microLobby: MicroLobby | null = null;
   eloName: string = "";
+  fetchingStats: Array<string> = [];
   private isTargetMap: boolean = false;
   testMode: boolean = false;
 
@@ -160,6 +161,7 @@ export class LobbyControl extends Module {
             this.closeSlot(slot);
           });
           setTimeout(() => this.moveToSpec(), 150);
+          console.log("new lobby emit");
           this.emitLobbyUpdate({ newLobby: this.microLobby.exportMin() });
         } catch (e) {
           // @ts-ignore
@@ -169,11 +171,13 @@ export class LobbyControl extends Module {
     } else {
       let changedValues = this.microLobby.updateLobbySlots(payload.players);
       if (changedValues.playerUpdates.length > 0) {
+        console.log("playerPayload emit");
         this.emitLobbyUpdate({ playerPayload: changedValues.playerUpdates });
       }
       if (changedValues.events.isUpdated) {
         var metExpectedSwap = false;
         changedValues.events.events.forEach((event) => {
+          console.log("changedValues emit");
           this.emitLobbyUpdate(event);
           if (event.playerJoined) {
             this.fetchStats(event.playerJoined.name);
@@ -356,6 +360,7 @@ export class LobbyControl extends Module {
           }, 1000);
           return;
         } else if (this.microLobby?.statsAvailable) {
+          this.fetchingStats.push(name);
           if (this.settings.values.elo.type === "wc3stats") {
             let buildVariant = "";
             if (this.isTargetMap && this.settings.values.elo.wc3StatsVariant) {
@@ -374,16 +379,23 @@ export class LobbyControl extends Module {
             try {
               jsonData = await (await fetch(targetUrl)).json();
             } catch (e) {
-              this.error("Failed to fetch wc3stats data:");
-              this.error(e as string);
+              this.error("Failed to fetch wc3stats data:", e as string);
               jsonData = { body: [] };
+            }
+            let indexOfName = this.fetchingStats.indexOf(name);
+            if (indexOfName > -1) {
+              this.fetchingStats.splice(indexOfName);
+            }
+            if (!this.microLobby.allPlayers.includes(name)) {
+              // If they left, ignore the rest.
+              this.info("Player left: " + name + " before stats were fetched.");
+              return;
             }
             let elo = 500;
             let data: PlayerData["extra"] | undefined;
             if (this.eloName === "Footmen Vs Grunts") {
               elo = 1000;
             }
-            // If they haven't left, set real ELO
             if (jsonData.body.length > 0) {
               let { name, ...desiredData } = jsonData.body[0];
               data = { ...desiredData };
@@ -438,8 +450,6 @@ export class LobbyControl extends Module {
               this.info("Lobby is ready.");
               this.autoBalance();
             }
-          } else {
-            //this.info("No elo enabled");
           }
         }
       } catch (err: any) {
