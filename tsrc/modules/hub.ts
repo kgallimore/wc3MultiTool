@@ -5,7 +5,7 @@ import type { GameState } from "./../globals/gameState";
 
 import { WebSocket } from "ws";
 import { HubReceive } from "../utility";
-import type { LobbyUpdates } from "wc3mt-lobby-container";
+import type { LobbyUpdatesExtended } from "./lobbyControl";
 import { app } from "electron";
 
 class HubControl extends ModuleBase {
@@ -33,7 +33,7 @@ class HubControl extends ModuleBase {
     });
   }
 
-  onLobbyUpdate(updates: LobbyUpdates): void {
+  onLobbyUpdate(updates: LobbyUpdatesExtended): void {
     this.sendToHub({
       lobbyUpdates: updates,
     });

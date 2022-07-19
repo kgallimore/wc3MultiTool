@@ -5,7 +5,7 @@ import { GameState } from "./../globals/gameState";
 
 import { WebSocket } from "ws";
 import { HubReceive, isValidUrl } from "../utility";
-import type { LobbyUpdates } from "wc3mt-lobby-container";
+import type { LobbyUpdatesExtended } from "./lobbyControl";
 
 export class Comm extends ModuleBase {
   commSocket: WebSocket | null = null;
@@ -31,7 +31,7 @@ export class Comm extends ModuleBase {
     });
   }
 
-  onLobbyUpdate(updates: LobbyUpdates): void {
+  onLobbyUpdate(updates: LobbyUpdatesExtended): void {
     this.commSend({
       lobbyUpdates: updates,
     });

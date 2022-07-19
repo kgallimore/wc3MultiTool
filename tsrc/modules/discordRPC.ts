@@ -3,7 +3,8 @@ import { ModuleBase } from "../moduleBase";
 import type { GameState } from "./../globals/gameState";
 
 import { Client, register, Presence } from "discord-rpc";
-import type { LobbyUpdates, Regions } from "wc3mt-lobby-container";
+import type { Regions } from "wc3mt-lobby-container";
+import type { LobbyUpdatesExtended } from "./lobbyControl";
 
 export interface NewActivity {
   details?: string;
@@ -42,7 +43,7 @@ class DiscordRPC extends ModuleBase {
     });
   }
 
-  protected onLobbyUpdate(updates: LobbyUpdates): void {
+  protected onLobbyUpdate(updates: LobbyUpdatesExtended): void {
     // TODO: More details
     if (updates.newLobby?.lobbyStatic.lobbyName) {
       this.setActivity({

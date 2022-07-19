@@ -19,6 +19,7 @@ import {
   straightTo,
 } from "@nut-tree/nut-js";
 import { GameState } from "./../globals/gameState";
+import { LobbyUpdatesExtended } from "./lobbyControl";
 require("@nut-tree/nl-matcher");
 
 class AutoHost extends ModuleBase {
@@ -28,7 +29,93 @@ class AutoHost extends ModuleBase {
   voteTimer: NodeJS.Timeout | null = null;
   private lastAnnounceTime: number = 0;
   constructor() {
-    super("AutoHost", { listeners: ["gameSocketEvent", "gameStateUpdates"] });
+    super("AutoHost", {
+      listeners: ["gameSocketEvent", "gameStateUpdates", "lobbyUpdate"],
+    });
+  }
+
+  protected onLobbyUpdate(updates: LobbyUpdatesExtended): void {
+    if (
+      this.settings.values.autoHost.type === "off" ||
+      this.settings.values.autoHost.type === "lobbyHost"
+    ) {
+      return;
+    }
+    if (updates.stale) {
+      this.lobby.leaveGame();
+      return;
+    }
+    if (updates.playerCleared && this.lobby.microLobby?.lobbyStatic.isHost) {
+      this.announcement();
+      this.verbose("Player was cleared. Autohost on. Checking for start conditions");
+      let teams = this.lobby.exportDataStructure(true);
+      if (this.settings.values.autoHost.minPlayers !== 0) {
+        if (
+          this.lobby.microLobby.nonSpecPlayers.length <
+          this.settings.values.autoHost.minPlayers
+        ) {
+          return;
+        } else {
+          this.info("Minimum player count met.");
+        }
+      } else if (
+        !Object.values(teams).some(
+          (team) => team.filter((slot) => slot.slotStatus === 0).length > 0
+        )
+      ) {
+        return;
+      } else {
+        this.info("All player teams full.");
+      }
+      // Is a shuffle required
+      if (
+        (this.settings.values.elo.type == "off" ||
+          !this.settings.values.elo.balanceTeams) &&
+        this.settings.values.autoHost.shufflePlayers
+      ) {
+        this.lobby.shufflePlayers();
+        setTimeout(() => {
+          if (this.lobby.isLobbyReady()) {
+            this.lobby.startGame(this.settings.values.autoHost.delayStart);
+          }
+        }, 250);
+      } else if (
+        this.settings.values.elo.type !== "off" &&
+        this.settings.values.elo.balanceTeams
+      ) {
+        this.lobby.autoBalance();
+      } else {
+        this.lobby.startGame(this.settings.values.autoHost.delayStart);
+      }
+      if (this.settings.values.autoHost.sounds) {
+        this.playSound("ready.wav");
+      }
+      this.clientState.updateClientState({
+        currentStep: "Starting Game",
+        currentStepProgress: 100,
+      });
+    }
+    if (
+      updates.playerData?.extraData &&
+      this.settings.values.elo.type !== "off" &&
+      this.settings.values.elo.announce
+    ) {
+      this.gameSocket.sendChatMessage(
+        updates.playerData.name +
+          " ELO: " +
+          updates.playerData.extraData.rating +
+          ", Rank: " +
+          updates.playerData.extraData.rank +
+          ", Played: " +
+          updates.playerData.extraData.played +
+          ", Wins: " +
+          updates.playerData.extraData.wins +
+          ", Losses: " +
+          updates.playerData.extraData.losses +
+          ", Last Change: " +
+          updates.playerData.extraData.lastChange
+      );
+    }
   }
 
   protected onGameSocketEvent(events: GameSocketEvents): void {
