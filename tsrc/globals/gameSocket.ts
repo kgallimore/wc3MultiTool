@@ -2,7 +2,7 @@ import { Global } from "../globalBase";
 
 import WebSocket from "ws";
 
-import { MenuStates } from "./gameState";
+import type { MenuStates } from "./gameState";
 import { settings } from "./settings";
 
 import { warControl } from "./warControl";
@@ -14,32 +14,6 @@ export interface GameList {
 
 export type AvailableHandicaps = 50 | 60 | 70 | 80 | 90 | 100;
 
-/*
-Other Native Game events:
-  "FriendsFriendUpdated",
-  "TeamsInformation",
-  "UpdateMapVetos",
-  "UpdateMapPool",
-  "UpdateSelectedGameMode",
-  "UpdateReadyState",
-  "UpdateGameModes",
-  "FriendsInvitationData",
-  "FriendsFriendData",
-  "MultiplayerRecentPlayers",
-  "UpdateLobbySelectedRace",
-  "FriendsFriendRemoved",
-  "GameModeResolved",
-  "ShowAgeRatingScreen",
-  "ClanInfoData",
-  "ProfileAvatarId",
-  "UpdateToonList",
-  "OnGetAgeRatingRequired",
-  "GameModeUpdated",
-  "GameListRemove",
-  "IMEUpdated",
-  "LoadProgressUpdate",
-  "GameListUpdate",
-*/
 export interface NativeGameSocketEvents {
   UpdateScoreInfo?: {
     scoreInfo: {
