@@ -45,9 +45,17 @@ class AutoHost extends ModuleBase {
       this.lobby.leaveGame();
       return;
     }
-    if (updates.playerCleared && this.lobby.microLobby?.lobbyStatic.isHost) {
+    if (updates.playerCleared) {
       this.announcement();
-      this.verbose("Player was cleared. Autohost on. Checking for start conditions");
+    }
+    if (
+      (updates.lobbyReady || updates.playerCleared) &&
+      this.lobby.microLobby?.lobbyStatic.isHost
+    ) {
+      this.verbose("Lobby in new ready state. Checking for start conditions");
+      if (!this.lobby.isLobbyReady()) {
+        return;
+      }
       let teams = this.lobby.exportDataStructure(true);
       if (this.settings.values.autoHost.minPlayers !== 0) {
         if (
@@ -59,7 +67,8 @@ class AutoHost extends ModuleBase {
           this.info("Minimum player count met.");
         }
       } else if (
-        !Object.values(teams).some(
+        // Any player team has any open slot
+        Object.values(teams).some(
           (team) => team.filter((slot) => slot.slotStatus === 0).length > 0
         )
       ) {

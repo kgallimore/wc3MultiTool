@@ -128,6 +128,7 @@ export class LobbyControl extends Module {
         payload.playerHost
       ) {
         try {
+          this.startTimer = null;
           this.microLobby = new MicroLobby({ region, payload });
           if (this.settings.values.elo.type !== "off") {
             this.eloMapName(payload.mapData.mapName, this.settings.values.elo.type).then(
@@ -161,7 +162,6 @@ export class LobbyControl extends Module {
             this.closeSlot(slot);
           });
           setTimeout(() => this.moveToSpec(), 150);
-          console.log("new lobby emit");
           this.emitLobbyUpdate({ newLobby: this.microLobby.exportMin() });
         } catch (e) {
           // @ts-ignore
@@ -171,29 +171,19 @@ export class LobbyControl extends Module {
     } else {
       let changedValues = this.microLobby.updateLobbySlots(payload.players);
       if (changedValues.playerUpdates.length > 0) {
-        console.log("playerPayload emit");
         this.emitLobbyUpdate({ playerPayload: changedValues.playerUpdates });
       }
       if (changedValues.events.isUpdated) {
         var metExpectedSwap = false;
         changedValues.events.events.forEach((event) => {
-          console.log("changedValues emit");
           this.emitLobbyUpdate(event);
-          if (event.playerJoined) {
+          if (event.playerMoved) {
+            this.clearStartTimer();
+          } else if (event.playerJoined) {
             this.fetchStats(event.playerJoined.name);
-            if (this.microLobby?.nonSpecPlayers.includes(event.playerJoined.name)) {
-            }
-            if (this.startTimer) {
-              this.gameSocket.sendChatMessage(`Lobby start was cancelled`);
-              clearTimeout(this.startTimer);
-              this.startTimer = null;
-            }
+            this.clearStartTimer();
           } else if (event.playerLeft) {
-            if (this.startTimer) {
-              this.gameSocket.sendChatMessage(`Lobby start was cancelled`);
-              clearTimeout(this.startTimer);
-              this.startTimer = null;
-            }
+            this.clearStartTimer();
             let player = event.playerLeft;
             let expectedSwapsCheck = this.expectedSwaps.findIndex((swaps) =>
               swaps.includes(player)
@@ -210,6 +200,9 @@ export class LobbyControl extends Module {
             if (expectedIndex !== -1) {
               this.expectedSwaps.splice(expectedIndex, 1);
               metExpectedSwap = true;
+            } else {
+              this.verbose("Unexpected player swapped, start canceled.");
+              this.clearStartTimer();
             }
           }
         });
@@ -446,10 +439,6 @@ export class LobbyControl extends Module {
                 }
               }
             }
-            if (this.isLobbyReady()) {
-              this.info("Lobby is ready.");
-              this.autoBalance();
-            }
           }
         }
       } catch (err: any) {
@@ -485,6 +474,20 @@ export class LobbyControl extends Module {
     }
   }
 
+  clearPlayer(name: string) {
+    if (this.microLobby?.allPlayers.includes(name)) {
+      this.microLobby.ingestUpdate({ playerData: { name, data: { cleared: true } } });
+    }
+  }
+
+  clearStartTimer() {
+    if (this.startTimer) {
+      this.gameSocket.sendChatMessage(`Lobby start was cancelled`);
+      clearTimeout(this.startTimer);
+      this.startTimer = null;
+    }
+  }
+
   startGame(delay: number = 0) {
     if (delay > 0) {
       if (this.startTimer) {
@@ -497,6 +500,7 @@ export class LobbyControl extends Module {
     }
     if (this.startTimer) {
       clearTimeout(this.startTimer);
+      this.verbose("Start timer reset.");
     }
     this.startTimer = setTimeout(() => {
       this.startTimer = null;
@@ -756,7 +760,7 @@ export class LobbyControl extends Module {
   isLobbyReady() {
     let teams = this.exportDataStructure(true);
     if (this.refreshing) {
-      console.log("Refreshing slots, not ready.");
+      this.verbose("Refreshing slots, not ready.");
       return false;
     }
     if (this.settings.values.elo.type !== "off") {
@@ -764,11 +768,15 @@ export class LobbyControl extends Module {
         this.verbose("No ELO lookup name");
         return false;
       } else if (this.microLobby.statsAvailable) {
+        if (this.fetchingStats.length > 0) {
+          this.verbose("Missing ELO data: ", this.fetchingStats);
+          return false;
+        }
         for (const team of Object.values(teams)) {
           let waitingForStats = team.filter(
             (slot) =>
-              slot.slotStatus == 0 ||
-              (slot.realPlayer && (!slot.data.extra || slot.data.extra.rating < 0))
+              slot.realPlayer &&
+              (!slot.data.cleared || !slot.data.extra || slot.data.extra.rating < 0)
           );
           if (waitingForStats.length > 0) {
             this.verbose(
