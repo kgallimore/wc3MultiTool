@@ -5,7 +5,7 @@ import type { SettingsUpdates } from "./../globals/settings";
 import OBSWebSocket from "obs-websocket-js";
 import type { GameState } from "./../globals/gameState";
 import { Key, keyboard } from "@nut-tree/nut-js";
-import { LobbyUpdatesExtended } from "./lobbyControl";
+import type { LobbyUpdatesExtended } from "./lobbyControl";
 import { writeFileSync } from "fs";
 import { join } from "path";
 import { app } from "electron";

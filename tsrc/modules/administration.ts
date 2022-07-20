@@ -680,7 +680,8 @@ class Administration extends ModuleBase {
             return;
           }
         }
-        this.info("Player joined: " + updates.playerJoined.name);
+        this.info("Player cleared: " + updates.playerJoined.name);
+        this.lobby.clearPlayer(updates.playerJoined.name);
         this.lobby.emitLobbyUpdate({ playerCleared: updates.playerJoined.name });
       } else {
         this.warn("Nameless player joined");
