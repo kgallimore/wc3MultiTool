@@ -15,6 +15,7 @@ import {
 import { ensureInt } from "../utility";
 import type { GameSocketEvents, AvailableHandicaps } from "./../globals/gameSocket";
 import { sleep } from "@nut-tree/nut-js";
+import type { EloSettings } from "./../globals/settings";
 
 require = require("esm")(module);
 var { Combination, Permutation } = require("js-combinatorics");
@@ -39,11 +40,10 @@ export class LobbyControl extends Module {
   eloName: string = "";
   fetchingStats: Array<string> = [];
   private isTargetMap: boolean = false;
-  testMode: boolean = false;
 
   private startTimer: NodeJS.Timeout | null = null;
 
-  private expectedSwaps: Array<[string, string]> = [];
+  private expectedSwaps: Array<{ swaps: [string, string]; forBalance: boolean }> = [];
 
   constructor() {
     super("Lobby Control", { listeners: ["gameSocketEvent"] });
@@ -137,14 +137,6 @@ export class LobbyControl extends Module {
                 if (eloMapName.elo) {
                   if (this.microLobby) {
                     this.microLobby.statsAvailable = eloMapName.elo;
-                    Object.values(this.microLobby.slots)
-                      .filter(
-                        (slot) =>
-                          slot.slotStatus === 2 && (slot.playerRegion || slot.isSelf)
-                      )
-                      .forEach((slot) => {
-                        this.fetchStats(slot.name);
-                      });
                   }
                 }
               }
@@ -177,16 +169,14 @@ export class LobbyControl extends Module {
         var metExpectedSwap = false;
         changedValues.events.events.forEach((event) => {
           this.emitLobbyUpdate(event);
-          if (event.playerMoved) {
-            this.clearStartTimer();
-          } else if (event.playerJoined) {
-            this.fetchStats(event.playerJoined.name);
+          if (event.playerMoved || event.playerJoined) {
+            // TODO: only affect player teams
             this.clearStartTimer();
           } else if (event.playerLeft) {
             this.clearStartTimer();
             let player = event.playerLeft;
             let expectedSwapsCheck = this.expectedSwaps.findIndex((swaps) =>
-              swaps.includes(player)
+              swaps.swaps.includes(player)
             );
             if (expectedSwapsCheck !== -1) {
               this.expectedSwaps.splice(expectedSwapsCheck, 1);
@@ -195,10 +185,11 @@ export class LobbyControl extends Module {
           } else if (event.playersSwapped) {
             let players = event.playersSwapped.players.sort();
             let expectedIndex = this.expectedSwaps.findIndex(
-              (swap) => JSON.stringify(swap.sort()) === JSON.stringify(players)
+              (swap) => JSON.stringify(swap.swaps.sort()) === JSON.stringify(players)
             );
             if (expectedIndex !== -1) {
               this.expectedSwaps.splice(expectedIndex, 1);
+              this.verbose(`Expected swap met for ${players.toString()}`);
               metExpectedSwap = true;
             } else {
               this.verbose("Unexpected player swapped, start canceled.");
@@ -215,8 +206,15 @@ export class LobbyControl extends Module {
         if (!metExpectedSwap) {
           this.bestCombo = [];
           if (this.isLobbyReady()) {
-            this.info("Lobby is ready.");
-            this.autoBalance();
+            this.emitLobbyUpdate({ lobbyReady: true });
+          }
+        } else if (this.expectedSwaps.length === 0) {
+          {
+            this.info("All expected swaps met. Players should now be balanced.");
+            this.gameSocket.sendChatMessage(
+              "ELO data provided by: " + this.settings.values.elo.type
+            );
+            this.emitLobbyUpdate({ lobbyBalanced: true });
           }
         }
       }
@@ -302,7 +300,7 @@ export class LobbyControl extends Module {
 
   async eloMapName(
     mapName: string,
-    type: "off" | "wc3stats" | "pyroTD"
+    type: EloSettings["type"]
   ): Promise<{ name: string; elo: boolean }> {
     if (type === "wc3stats") {
       if (mapName.match(/(HLW)/i)) {
@@ -353,7 +351,9 @@ export class LobbyControl extends Module {
           }, 1000);
           return;
         } else if (this.microLobby?.statsAvailable) {
+          this.verbose("Starting search for stats for: " + name);
           this.fetchingStats.push(name);
+          let data: PlayerData["extra"] | undefined;
           if (this.settings.values.elo.type === "wc3stats") {
             let buildVariant = "";
             if (this.isTargetMap && this.settings.values.elo.wc3StatsVariant) {
@@ -375,17 +375,7 @@ export class LobbyControl extends Module {
               this.error("Failed to fetch wc3stats data:", e as string);
               jsonData = { body: [] };
             }
-            let indexOfName = this.fetchingStats.indexOf(name);
-            if (indexOfName > -1) {
-              this.fetchingStats.splice(indexOfName);
-            }
-            if (!this.microLobby.allPlayers.includes(name)) {
-              // If they left, ignore the rest.
-              this.info("Player left: " + name + " before stats were fetched.");
-              return;
-            }
             let elo = 500;
-            let data: PlayerData["extra"] | undefined;
             if (this.eloName === "Footmen Vs Grunts") {
               elo = 1000;
             }
@@ -397,47 +387,80 @@ export class LobbyControl extends Module {
               played: 0,
               wins: 0,
               losses: 0,
-              rating: this.testMode ? Math.round(Math.random() * 1000) : elo,
+              rating: elo,
               lastChange: 0,
               rank: 9999,
             };
-            if (
-              this.microLobby.ingestUpdate({ playerData: { name, extraData: data } })
-                .isUpdated
+          } else if (this.settings.values.elo.type === "random") {
+            this.info("Generating random stats for: " + name);
+            let played = Math.round(Math.random() * 100);
+            let wins = Math.floor(Math.random() * played);
+            data = {
+              played: played,
+              wins: wins,
+              losses: played - wins,
+              rating: Math.round(Math.random() * 1000),
+              lastChange: Math.floor(Math.random() * 10),
+              rank: Math.floor(Math.random() * 1000 + 1),
+            };
+          } else {
+            this.error("Unknown elo type: " + this.settings.values.elo.type);
+            return;
+          }
+          let indexOfName = this.fetchingStats.indexOf(name);
+          if (indexOfName > -1) {
+            this.fetchingStats.splice(indexOfName);
+          }
+          if (!this.microLobby.allPlayers.includes(name)) {
+            // If they left, ignore the rest.
+            this.info("Player left: " + name + " before stats were fetched.");
+            return;
+          }
+          if (this.settings.values.elo.requireStats) {
+            if (data.played < this.settings.values.elo.minGames) {
+              this.info(`${name} has not played enough games to qualify for the ladder.`);
+              this.gameSocket.sendChatMessage(
+                `${name} has not played enough games to qualify for the ladder.`
+              );
+              this.banPlayer(name);
+              return;
+            } else if (data.rating < this.settings.values.elo.minRating) {
+              this.info(`${name} has an ELO rating below the minimum.`);
+              this.gameSocket.sendChatMessage(
+                `${name} has an ELO rating below the minimum.`
+              );
+              this.banPlayer(name);
+              return;
+            } else if (
+              this.settings.values.elo.minRank !== 0 &&
+              data.rank < this.settings.values.elo.minRank
             ) {
-              this.emitLobbyUpdate({
-                playerData: {
-                  extraData: data,
-                  name,
-                },
-              });
-              this.info(name + " stats received and saved.");
-              if (this.settings.values.elo.requireStats) {
-                if (data.played < this.settings.values.elo.minGames) {
-                  this.info(
-                    `${name} has not played enough games to qualify for the ladder.`
-                  );
-                  this.banPlayer(name);
-                  return;
-                } else if (data.rating < this.settings.values.elo.minRating) {
-                  this.info(`${name} has an ELO rating below the minimum.`);
-                  this.banPlayer(name);
-                  return;
-                } else if (
-                  this.settings.values.elo.minRank !== 0 &&
-                  data.rank < this.settings.values.elo.minRank
-                ) {
-                  this.info(`${name} has a rank below the minimum.`);
-                  this.banPlayer(name);
-                  return;
-                } else if (data.wins < this.settings.values.elo.minWins) {
-                  this.info(
-                    `${name} has not won enough games to qualify for the ladder.`
-                  );
-                  this.banPlayer(name);
-                  return;
-                }
-              }
+              this.info(`${name} has a rank below the minimum.`);
+              this.gameSocket.sendChatMessage(`${name} has a rank below the minimum.`);
+              this.banPlayer(name);
+              return;
+            } else if (data.wins < this.settings.values.elo.minWins) {
+              this.info(`${name} has not won enough games to qualify for the ladder.`);
+              this.gameSocket.sendChatMessage(
+                `${name} has not won enough games to qualify for the ladder.`
+              );
+              this.banPlayer(name);
+              return;
+            }
+          }
+          if (
+            this.microLobby.ingestUpdate({ playerData: { name, extraData: data } })
+              .isUpdated
+          ) {
+            this.emitLobbyUpdate({
+              playerData: {
+                extraData: data,
+                name,
+              },
+            });
+            this.info(name + " stats received and saved.");
+            if (this.isLobbyReady()) {
+              this.emitLobbyUpdate({ lobbyReady: true });
             }
           }
         }
@@ -474,9 +497,23 @@ export class LobbyControl extends Module {
     }
   }
 
-  clearPlayer(name: string) {
+  clearPlayer(name: string, fetchStats = false) {
+    console.log("Clearing player " + name);
     if (this.microLobby?.allPlayers.includes(name)) {
-      this.microLobby.ingestUpdate({ playerData: { name, data: { cleared: true } } });
+      if (
+        this.microLobby.ingestUpdate({ playerData: { name, data: { cleared: true } } })
+          .isUpdated
+      ) {
+        this.verbose("Player cleared: " + name);
+        this.emitLobbyUpdate({ playerCleared: name });
+        if (fetchStats) {
+          this.fetchStats(name);
+        }
+      } else {
+        this.warn("Tried clearing already cleared player.");
+      }
+    } else {
+      this.warn("Tried clearing nonexistent player");
     }
   }
 
@@ -583,7 +620,7 @@ export class LobbyControl extends Module {
     if (this.microLobby?.statsAvailable) {
       let lobbyCopy = new MicroLobby({ fullData: this.microLobby.exportMin() });
       this.info("Auto balancing teams");
-      if (this.bestCombo === undefined || this.bestCombo.length == 0) {
+      if (this.bestCombo.length === 0) {
         if (teams.length < 2) {
           this.emitLobbyUpdate({ lobbyReady: true });
           return;
@@ -676,7 +713,7 @@ export class LobbyControl extends Module {
                 currentStep: "Swapping " + swaps[0][i] + " and " + swaps[1][i],
                 currentStepProgress: 100,
               });
-              this.swapPlayers({ players: [swaps[0][i], swaps[1][i]] });
+              this.swapPlayers({ players: [swaps[0][i], swaps[1][i]], forBalance: true });
             }
           }
         } else {
@@ -714,7 +751,10 @@ export class LobbyControl extends Module {
                           "Swapping " + currentPlayer.name + " and " + targetPlayer,
                         currentStepProgress: 100,
                       });
-                      this.swapPlayers({ players: [currentPlayer.name, targetPlayer] });
+                      this.swapPlayers({
+                        players: [currentPlayer.name, targetPlayer],
+                        forBalance: true,
+                      });
                       // Swap the data of the two players
                       let targetPlayerOldSlot = lobbyCopy.playerToSlot(targetPlayer);
                       let targetPlayerOldData = lobbyCopy.slots[targetPlayerOldSlot];
@@ -746,11 +786,8 @@ export class LobbyControl extends Module {
             }
           }
         }
-        this.info("Players should now be balanced.");
-        this.emitLobbyUpdate({ lobbyBalanced: true });
-        this.gameSocket.sendChatMessage(
-          "ELO data provided by: " + this.settings.values.elo.type
-        );
+      } else {
+        this.warn("Already balancing teams.");
       }
     } else {
       this.emitLobbyUpdate({ lobbyReady: true });
@@ -763,13 +800,17 @@ export class LobbyControl extends Module {
       this.verbose("Refreshing slots, not ready.");
       return false;
     }
+    if (this.expectedSwaps.length > 0) {
+      this.verbose("Expecting player swaps, not ready.");
+      return false;
+    }
     if (this.settings.values.elo.type !== "off") {
       if (!this.microLobby?.lookupName) {
         this.verbose("No ELO lookup name");
         return false;
       } else if (this.microLobby.statsAvailable) {
         if (this.fetchingStats.length > 0) {
-          this.verbose("Missing ELO data: ", this.fetchingStats);
+          this.verbose("Still fetching stats: ", this.fetchingStats);
           return false;
         }
         for (const team of Object.values(teams)) {
@@ -780,8 +821,10 @@ export class LobbyControl extends Module {
           );
           if (waitingForStats.length > 0) {
             this.verbose(
-              "Missing ELO data: ",
-              waitingForStats.map((slot) => slot.name + " (" + slot.data.extra + ")")
+              "Missing Stats: ",
+              waitingForStats.map(
+                (slot) => slot.name + " (" + JSON.stringify(slot.data) + ")"
+              )
             );
             return false;
           }
@@ -851,7 +894,11 @@ export class LobbyControl extends Module {
     }
   }
 
-  swapPlayers(data: { slots?: [SlotNumbers, SlotNumbers]; players?: [string, string] }) {
+  swapPlayers(data: {
+    slots?: [SlotNumbers, SlotNumbers];
+    players?: [string, string];
+    forBalance?: boolean;
+  }) {
     if (this.microLobby?.lobbyStatic.isHost) {
       if (data.slots && data.slots.length === 2) {
         if (
@@ -868,7 +915,10 @@ export class LobbyControl extends Module {
         let target1 = this.microLobby.searchPlayer(data.players[0])[0];
         let target2 = this.microLobby.searchPlayer(data.players[1])[0];
         if (target1 && target2 && target1 !== target2) {
-          this.expectedSwaps.push([target1, target2].sort() as [string, string]);
+          this.expectedSwaps.push({
+            swaps: [target1, target2].sort() as [string, string],
+            forBalance: data.forBalance ?? false,
+          });
           this.gameSocket.sendChatMessage("!swap " + target1 + " " + target2);
         } else {
           this.gameSocket.sendChatMessage("Possible invalid swap targets");
