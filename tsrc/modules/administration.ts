@@ -30,7 +30,7 @@ class Administration extends ModuleBase {
   db = new sqlite3(app.getPath("userData") + "/wc3mt.db");
 
   constructor() {
-    super("Administration", { listeners: ["gameSocketEvent"] });
+    super("Administration", { listeners: ["gameSocketEvent", "lobbyUpdate"] });
     this.db.exec(
       "CREATE TABLE IF NOT EXISTS banList(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, add_date DATETIME default current_timestamp NOT NULL, admin TEXT NOT NULL, region TEXT NOT NULL, reason TEXT, removal_date DATETIME)"
     );
@@ -649,44 +649,60 @@ class Administration extends ModuleBase {
   protected onLobbyUpdate(updates: LobbyUpdatesExtended): void {
     if (updates.playerJoined) {
       if (updates.playerJoined.name) {
-        let row = administration.isBanned(updates.playerJoined.name);
-        if (row) {
-          this.lobby.banSlot(updates.playerJoined.slot);
-          this.gameSocket.sendChatMessage(
-            updates.playerJoined.name +
-              " is permanently banned" +
-              (row.reason ? ": " + row.reason : "")
-          );
-          this.info(
-            "Kicked " +
-              updates.playerJoined.name +
-              " for being banned" +
-              (row.reason ? " for: " + row.reason : "")
-          );
-          return;
-        }
-        if (this.settings.values.autoHost.whitelist) {
-          if (
-            updates.playerJoined.name !== this.gameState.values.selfBattleTag &&
-            !administration.isWhiteListed(updates.playerJoined.name)
-          ) {
-            this.lobby.banSlot(updates.playerJoined.slot);
-            this.gameSocket.sendChatMessage(
-              updates.playerJoined.name + " is not whitelisted"
-            );
-            this.info(
-              "Kicked " + updates.playerJoined.name + " for not being whitelisted"
-            );
-            return;
-          }
-        }
-        this.info("Player cleared: " + updates.playerJoined.name);
-        this.lobby.clearPlayer(updates.playerJoined.name);
-        this.lobby.emitLobbyUpdate({ playerCleared: updates.playerJoined.name });
+        this.clearPlayer(updates.playerJoined);
       } else {
         this.warn("Nameless player joined");
       }
     }
+    if (updates.newLobby) {
+      Object.values(updates.newLobby.slots)
+        .filter((slot) => slot.slotStatus === 2 && (slot.playerRegion || slot.isSelf))
+        .forEach((slot) => {
+          this.clearPlayer(slot);
+        });
+    }
+  }
+
+  clearPlayer(data: { name: string; slot: number; [key: string]: any }) {
+    this.verbose("Checking if player is clear: " + data.name);
+    let isClear = this.checkPlayer(data.name);
+    if (!isClear.type) {
+      this.lobby.clearPlayer(data.name, true);
+    } else {
+      this.lobby.banSlot(data.slot);
+      if (isClear.type === "black") {
+        this.gameSocket.sendChatMessage(
+          data.name +
+            " is permanently banned" +
+            (isClear.reason ? ": " + isClear.reason : "")
+        );
+        this.info(
+          "Kicked " +
+            data.name +
+            " for being banned" +
+            (isClear ? " for: " + isClear : "")
+        );
+      } else if (isClear.type === "white") {
+        this.lobby.banSlot(data.slot);
+        this.gameSocket.sendChatMessage(data.name + " is not whitelisted");
+        this.info("Kicked " + data.name + " for not being whitelisted");
+      } else {
+        this.info("Player cleared: " + data.name);
+      }
+    }
+  }
+
+  checkPlayer(name: string): { type: "black" | "white" | false; reason?: string } {
+    let row = this.isBanned(name);
+    if (row) {
+      return { type: "black", reason: row.reason };
+    }
+    if (this.settings.values.autoHost.whitelist) {
+      if (name !== this.gameState.values.selfBattleTag && !this.isWhiteListed(name)) {
+        return { type: "white" };
+      }
+    }
+    return { type: false };
   }
 
   banPlayer(player: string, admin: string, region: Regions | "client", reason = "") {
