@@ -648,6 +648,7 @@
                   >
                     <option value="off">Disabled</option>
                     <option value="wc3stats">wc3stats.com</option>
+                    <option value="random">Random (Test mode)</option>
                   </select>
                 </div>
               </div>
@@ -660,10 +661,14 @@
                         <div class="d-flex justify-content-center">
                           {#if settings.elo.available}
                             <div class="badge bg-success">
-                              <a
-                                href="https://api.wc3stats.com/maps/{settings.elo
-                                  .lookupName}">ELO Available!</a
-                              >
+                              {#if settings.elo.type === "wc3stats"}
+                                <a
+                                  href="https://api.wc3stats.com/maps/{settings.elo
+                                    .lookupName}">ELO Available!</a
+                                >
+                              {:else}
+                                ELO Available!
+                              {/if}
                             </div>
                           {:else}
                             <div class="badge bg-danger">

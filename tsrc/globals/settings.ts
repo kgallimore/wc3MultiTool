@@ -96,7 +96,7 @@ export interface DiscordSettings {
   sendInGameChat: boolean;
 }
 export interface EloSettings {
-  type: "off" | "wc3stats" | "pyroTD";
+  type: "off" | "wc3stats" | "pyroTD" | "random";
   balanceTeams: boolean;
   announce: boolean;
   excludeHostFromSwap: boolean;
@@ -281,8 +281,7 @@ class AppSettingsContainer extends Global {
           // TODO Make this not update the whole settingName section
           store.set(settingName + "." + key, value);
           this.info(
-            settingName + " settings changed:",
-            key,
+            settingName + " settings changed: " + key,
             key.toLowerCase().includes("token") || key.toLowerCase().includes("password")
               ? "*HIDDEN*"
               : value
