@@ -49,7 +49,7 @@ class AutoHost extends ModuleBase {
       this.announcement();
     }
     if (
-      (updates.lobbyReady || updates.playerCleared) &&
+      (updates.lobbyReady || updates.playerCleared || updates.lobbyBalanced) &&
       this.lobby.microLobby?.lobbyStatic.isHost
     ) {
       this.verbose("Lobby in new ready state. Checking for start conditions");
@@ -82,6 +82,7 @@ class AutoHost extends ModuleBase {
           !this.settings.values.elo.balanceTeams) &&
         this.settings.values.autoHost.shufflePlayers
       ) {
+        this.info("Shuffling players.");
         this.lobby.shufflePlayers();
         setTimeout(() => {
           if (this.lobby.isLobbyReady()) {
@@ -90,8 +91,10 @@ class AutoHost extends ModuleBase {
         }, 250);
       } else if (
         this.settings.values.elo.type !== "off" &&
-        this.settings.values.elo.balanceTeams
+        this.settings.values.elo.balanceTeams &&
+        !updates.lobbyBalanced
       ) {
+        this.info("Balancing players.");
         this.lobby.autoBalance();
       } else {
         this.lobby.startGame(this.settings.values.autoHost.delayStart);
