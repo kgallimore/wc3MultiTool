@@ -204,7 +204,6 @@ export class LobbyControl extends Module {
         }, 1000 * 60 * 15);
         if (!metExpectedSwap) {
           this.bestCombo = [];
-          this.verbose("Lobby changed and not expected. Clearing combo.");
           if (this.isLobbyReady()) {
             this.emitLobbyUpdate({ lobbyReady: true });
           }

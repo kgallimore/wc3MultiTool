@@ -28,6 +28,7 @@ import { play } from "sound-play";
 import { settings, SettingsUpdates } from "./globals/settings";
 import { gameState, GameState } from "./globals/gameState";
 import { gameSocket } from "./globals/gameSocket";
+import { logger } from "./globals/logger";
 import { clientState, ClientState } from "./globals/clientState";
 import { warControl } from "./globals/warControl";
 

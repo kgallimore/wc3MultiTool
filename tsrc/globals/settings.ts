@@ -93,6 +93,8 @@ export interface DiscordSettings {
   token: string;
   announceChannel: string;
   chatChannel: string;
+  adminChannel: string;
+  logLevel: "error" | "warn" | "off";
   bidirectionalChat: boolean;
   sendInGameChat: boolean;
 }
@@ -218,6 +220,8 @@ class AppSettingsContainer extends Global {
         chatChannel: store.get("discord.chatChannel") ?? "",
         bidirectionalChat: store.get("discord.bidirectionalChat") ?? false,
         sendInGameChat: store.get("discord.sendInGameChat") ?? false,
+        adminChannel: store.get("discord.adminChannel") ?? "",
+        logLevel: store.get("discord.logLevel") ?? "error",
       },
       client: {
         restartOnUpdate: store.get("client.restartOnUpdate") ?? false,
@@ -249,7 +253,7 @@ class AppSettingsContainer extends Global {
   }
 
   set values(value: AppSettings) {
-    throw new Error("Can not set values directly. Use updateGameState.");
+    throw new Error("Can not set values directly. Use updateSettings.");
   }
 
   updateSettings(updates: SettingsUpdates) {

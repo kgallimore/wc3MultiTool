@@ -4,6 +4,7 @@ import type { WindowReceive } from "./utility";
 
 import { gameState, GameState } from "./globals/gameState";
 import { settings } from "./globals/settings";
+import { logger } from "./globals/logger";
 import { identifier } from "./globals/identifier";
 import { clientState } from "./globals/clientState";
 import { warControl } from "./globals/warControl";
@@ -31,7 +32,11 @@ export type Listeners =
   | "gameStateUpdates"
   | "webUIEvent"
   | "gameSocketEvent"
-  | "lobbyUpdate";
+  | "lobbyUpdate"
+  | "errors"
+  | "warnings"
+  | "info"
+  | "verbose";
 
 /**
  *
@@ -48,6 +53,7 @@ export class Module extends Global {
   protected webUISocket = webUISocket;
   protected gameSocket = gameSocket;
   protected warControl = warControl;
+  protected logger = logger;
 
   constructor(name: string, options?: { listeners?: Array<Listeners> }) {
     super(name);
@@ -68,6 +74,22 @@ export class Module extends Global {
         if (options.listeners.includes("gameSocketEvent")) {
           this.verbose("Game Socket Listener Attached.");
           this.gameSocket.on("gameSocketEvent", this.onGameSocketEvent.bind(this));
+        }
+        if (options.listeners.includes("errors")) {
+          this.verbose("Error log Listener Attached.");
+          this.logger.on("error", this.onErrorLog.bind(this));
+        }
+        if (options.listeners.includes("warnings")) {
+          this.verbose("Warning log Listener Attached.");
+          this.logger.on("warn", this.onWarnLog.bind(this));
+        }
+        if (options.listeners.includes("info")) {
+          this.verbose("Info log Listener Attached.");
+          this.logger.on("info", this.onInfoLog.bind(this));
+        }
+        if (options.listeners.includes("verbose")) {
+          this.verbose("Verbose log Listener Attached.");
+          this.logger.on("verbose", this.onVerboseLog.bind(this));
         }
       }
     }
@@ -95,6 +117,13 @@ export class Module extends Global {
   protected onGameSocketEvent(events: GameSocketEvents) {}
 
   protected onWebUISocketEvent(events: WebUIEvents) {}
+
+  protected onErrorLog(...events: any[]) {}
+
+  protected onWarnLog(...events: any[]) {}
+
+  protected onInfoLog(...events: any[]) {}
+  protected onVerboseLog(...events: any[]) {}
 
   protected emitEvent(data: EmitEvents) {
     this.emit("event", data);

@@ -15,6 +15,7 @@ class DiscordBot extends ModuleBase {
   client: Discord.Client | null = null;
   announceChannel: Discord.TextChannel | null = null;
   chatChannel: Discord.TextChannel | null = null;
+  adminChannel: Discord.TextChannel | null = null;
   dev: boolean;
   private _embed: Discord.MessageEmbed | null = null;
   private _sentEmbed: Discord.Message | null = null;
@@ -38,9 +39,12 @@ class DiscordBot extends ModuleBase {
         "settingsUpdate",
         "gameSocketEvent",
         "gameStateUpdates",
+        "warnings",
+        "errors",
       ],
     });
     this.dev = app.isPackaged;
+    this.initialize();
   }
 
   protected onSettingsUpdate(updates: SettingsUpdates) {
@@ -50,7 +54,8 @@ class DiscordBot extends ModuleBase {
       }
       if (
         updates.discord.announceChannel !== undefined ||
-        updates.discord.chatChannel !== undefined
+        updates.discord.chatChannel !== undefined ||
+        updates.discord.adminChannel !== undefined
       ) {
         this.initialize();
       }
@@ -101,6 +106,7 @@ class DiscordBot extends ModuleBase {
     });
     this.client.on("ready", () => {
       if (!this.client?.user) {
+        this.error("Missing client user.");
         return;
       }
       this.client.user.setStatus("online");
@@ -108,7 +114,7 @@ class DiscordBot extends ModuleBase {
       if (!this.dev) {
         this.client.user.setAvatar("./images/wc3_auto_balancer_v2.png");
       }
-      console.log(`Logged in as ${this.client.user.tag}!`);
+      this.verbose(`Logged in as ${this.client.user.tag}!`);
       this.client.user.setActivity({
         name: "war.trenchguns.com",
         type: "WATCHING",
@@ -117,6 +123,7 @@ class DiscordBot extends ModuleBase {
     });
 
     this.client.on("message", (msg) => {
+      // TODO: admin commands
       if (msg.channel === this.chatChannel && !msg.author.bot) {
         if (this.settings.values.discord.bidirectionalChat) {
           this.gameSocket.sendChatMessage(
@@ -130,14 +137,17 @@ class DiscordBot extends ModuleBase {
 
   private getChannels() {
     if (!this.client) {
+      this.error("Tried to get channels before client is available.");
       return;
     }
     // Flush channels just in case the new ones don't exist or the channels aren't wanted.
     this.chatChannel = null;
     this.announceChannel = null;
+    this.adminChannel = null;
     if (
       this.settings.values.discord.chatChannel ||
-      this.settings.values.discord.announceChannel
+      this.settings.values.discord.announceChannel ||
+      this.settings.values.discord.adminChannel
     ) {
       this.client.channels.cache
         .filter((channel) => channel.isText())
@@ -152,14 +162,32 @@ class DiscordBot extends ModuleBase {
           }
           if (
             (this.settings.values.discord.chatChannel &&
-              this.settings.values.discord.chatChannel &&
               (channel as Discord.TextChannel).name ===
                 this.settings.values.discord.chatChannel) ||
             channel.id === this.settings.values.discord.chatChannel
           ) {
             this.chatChannel = channel as Discord.TextChannel;
           }
+          if (
+            (this.settings.values.discord.adminChannel &&
+              (channel as Discord.TextChannel).name ===
+                this.settings.values.discord.adminChannel) ||
+            channel.id === this.settings.values.discord.adminChannel
+          ) {
+            this.adminChannel = channel as Discord.TextChannel;
+          }
         });
+      if (this.settings.values.discord.chatChannel && !this.chatChannel) {
+        this.warn("Chat channel set, but could not be found.");
+      }
+      if (this.settings.values.discord.announceChannel && !this.announceChannel) {
+        this.warn("Announce channel set, but could not be found.");
+      }
+      if (this.settings.values.discord.adminChannel && !this.adminChannel) {
+        this.warn("Admin channel set, but could not be found.");
+      }
+    } else {
+      this.verbose("No channels set.");
     }
   }
 
@@ -345,14 +373,32 @@ class DiscordBot extends ModuleBase {
     }
   }
 
+  protected onErrorLog(...events: any[]): void {
+    if (
+      (this.settings.values.discord.logLevel === "error" ||
+        this.settings.values.discord.logLevel === "warn") &&
+      this.adminChannel
+    ) {
+      this.sendMessage(JSON.stringify(events), "admin");
+    }
+  }
+
+  protected onWarnLog(...events: any[]): void {
+    if (this.settings.values.discord.logLevel === "warn" && this.adminChannel) {
+      this.sendMessage(JSON.stringify(events), "admin");
+    }
+  }
+
   async sendMessage(
     message: string | Discord.MessagePayload | Discord.MessageOptions,
-    channel: "chat" | "announce" = "chat"
+    channel: "chat" | "announce" | "admin" = "chat"
   ) {
     if (channel === "chat" && this.chatChannel) {
       return this.chatChannel.send(message);
     } else if (channel === "announce" && this.announceChannel) {
       return this.announceChannel.send(message);
+    } else if (channel === "admin" && this.adminChannel) {
+      return this.adminChannel.send(message);
     } else {
       console.log("Channel is not defined");
       return null;

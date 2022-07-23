@@ -2,12 +2,7 @@ import { Module } from "./moduleBasePre";
 import { lobbyControl } from "./modules/lobbyControl";
 
 import type { LobbyUpdatesExtended } from "./modules/lobbyControl";
-export type Listeners =
-  | "settingsUpdate"
-  | "gameStateUpdates"
-  | "webUIEvent"
-  | "gameSocketEvent"
-  | "lobbyUpdate";
+import type { Listeners } from "./moduleBasePre";
 export class ModuleBase extends Module {
   protected lobby = lobbyControl;
 

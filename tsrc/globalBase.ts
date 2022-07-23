@@ -1,10 +1,11 @@
 import EventEmitter from "events";
 
-import { info, error, warn, verbose } from "electron-log";
+import { logger } from "./globals/logger";
 
 import { Notification } from "electron";
 
 export class Global extends EventEmitter {
+  protected logger = logger;
   name: string;
   constructor(name: string) {
     super();
@@ -16,15 +17,15 @@ export class Global extends EventEmitter {
   }
 
   protected info(...args: any[]) {
-    info(this.name + ": " + args);
+    this.logger.info(this.name, args);
   }
   protected warn(...args: any[]) {
-    warn(this.name + ": " + args);
+    this.logger.warn(this.name, args);
   }
   protected error(...args: any[]) {
-    error(this.name + ": " + args);
+    this.logger.error(this.name, args);
   }
   protected verbose(...args: any[]) {
-    verbose(this.name + ": " + args);
+    this.logger.verbose(this.name, args);
   }
 }

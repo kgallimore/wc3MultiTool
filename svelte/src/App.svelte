@@ -86,6 +86,8 @@
       token: "",
       announceChannel: "",
       chatChannel: "",
+      adminChannel: "",
+      logLevel: "error",
       bidirectionalChat: false,
       sendInGameChat: false,
     },
@@ -1642,6 +1644,42 @@
                               e.target.value
                             )}
                         />
+                      </div>
+                    </div>
+                    <div class="row">
+                      <div class="col">
+                        <label for="adminChannel">Admin Channel</label>
+                        <input
+                          type="text"
+                          class="form-control"
+                          id="adminChannel"
+                          placeholder="Name or ID"
+                          value={settings.discord.adminChannel}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "discord",
+                              "adminChannel", // @ts-ignore
+                              e.target.value
+                            )}
+                        />
+                      </div>
+                      <div class="col-auto">
+                        <label for="logLevel">Log Level</label>
+                        <select
+                          id="logLevel"
+                          class="form-select"
+                          value={settings.discord.logLevel}
+                          on:change={(e) =>
+                            updateSettingSingle(
+                              "discord",
+                              "logLevel", // @ts-ignore
+                              e.target.value
+                            )}
+                        >
+                          <option value="off" selected>Disabled</option>
+                          <option value="warn">Warnings</option>
+                          <option value="error">Errors</option>
+                        </select>
                       </div>
                     </div>
                   </div>
