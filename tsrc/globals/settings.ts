@@ -36,6 +36,7 @@ export interface ClientSettings {
   alternateLaunch: boolean;
   bnetUsername: string;
   bnetPassword: string;
+  releaseChannel: "latest" | "beta" | "alpha";
 }
 export interface AutoHostSettings {
   type: "off" | "lobbyHost" | "rapidHost" | "smartHost";
