@@ -156,7 +156,6 @@
     "electron-log": "^4.4.8",
     "electron-store": "^8.0.2",
     "electron-updater": "^4.6.5",
-    "esm": "^3.2.25",
     "firebase": "^9.9.1",
     "form-data": "^2.5.1",
     "https": "^1.0.0",
