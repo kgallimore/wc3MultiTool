@@ -17,8 +17,7 @@ import type { GameSocketEvents, AvailableHandicaps } from "./../globals/gameSock
 import { sleep } from "@nut-tree/nut-js";
 import type { EloSettings } from "./../globals/settings";
 
-require = require("esm")(module);
-var { Combination, Permutation } = require("js-combinatorics");
+import { Combination, Permutation } from "js-combinatorics";
 
 export interface LobbyUpdatesExtended extends LobbyUpdates {
   playerCleared?: string;
@@ -559,6 +558,7 @@ export class LobbyControl extends Module {
     },
     teamSize: number = 3
   ) {
+    // @ts-expect-error This is a false error
     let combos: Array<Array<string>> = new Permutation(target);
     let bestCombo: Array<Array<string>> = [];
     let smallestEloDiff = Number.POSITIVE_INFINITY;
@@ -637,6 +637,7 @@ export class LobbyControl extends Module {
           );
           let smallestEloDiff = Number.POSITIVE_INFINITY;
           let bestCombo: Array<string> = [];
+          // @ts-expect-error This is a false error
           const combos: Array<Array<string>> = new Combination(
             players.map((player) => player[0]),
             Math.floor(players.length / 2)
