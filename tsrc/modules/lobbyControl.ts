@@ -205,6 +205,7 @@ export class LobbyControl extends Module {
         }, 1000 * 60 * 15);
         if (!metExpectedSwap) {
           this.bestCombo = [];
+          this.verbose("Lobby changed and not expected. Clearing combo.");
           if (this.isLobbyReady()) {
             this.emitLobbyUpdate({ lobbyReady: true });
           }
@@ -622,7 +623,7 @@ export class LobbyControl extends Module {
       this.info("Auto balancing teams");
       if (this.bestCombo.length === 0) {
         if (teams.length < 2) {
-          this.emitLobbyUpdate({ lobbyReady: true });
+          this.emitLobbyUpdate({ lobbyBalanced: true });
           return;
         } else if (teams.length === 2) {
           let leastSwapTeam = "Team ?";
@@ -699,24 +700,33 @@ export class LobbyControl extends Module {
             });
           }
           swaps = [swapsFromTeam1, swapsFromTeam2];
-          if (!lobbyCopy.lobbyStatic.isHost) {
-            this.gameSocket.sendChatMessage(
-              leastSwapTeam + " should be: " + this.bestCombo.join(", ")
-            );
+          if (swapsFromTeam1.length === 0) {
+            this.gameSocket.sendChatMessage("Teams are already balanced.");
+            this.emitLobbyUpdate({ lobbyBalanced: true });
           } else {
-            for (let i = 0; i < swaps[0].length; i++) {
-              if (!this.isLobbyReady()) {
-                this.info("Lobby no longer ready.");
-                break;
+            if (!lobbyCopy.lobbyStatic.isHost) {
+              this.gameSocket.sendChatMessage(
+                leastSwapTeam + " should be: " + this.bestCombo.join(", ")
+              );
+            } else {
+              for (let i = 0; i < swaps[0].length; i++) {
+                if (!this.isLobbyReady()) {
+                  this.info("Lobby no longer ready.");
+                  break;
+                }
+                this.clientState.updateClientState({
+                  currentStep: "Swapping " + swaps[0][i] + " and " + swaps[1][i],
+                  currentStepProgress: 100,
+                });
+                this.swapPlayers({
+                  players: [swaps[0][i], swaps[1][i]],
+                  forBalance: true,
+                });
               }
-              this.clientState.updateClientState({
-                currentStep: "Swapping " + swaps[0][i] + " and " + swaps[1][i],
-                currentStepProgress: 100,
-              });
-              this.swapPlayers({ players: [swaps[0][i], swaps[1][i]], forBalance: true });
             }
           }
         } else {
+          // TODO: There will be an issue if the teams are already balanced.
           this.bestCombo = this.lobbyCombinations(
             lobbyCopy.nonSpecPlayers,
             this.microLobby.getAllPlayerData(),
@@ -790,7 +800,7 @@ export class LobbyControl extends Module {
         this.warn("Already balancing teams.");
       }
     } else {
-      this.emitLobbyUpdate({ lobbyReady: true });
+      this.warn("Can not autobalance. Stats are not available.");
     }
   }
 
