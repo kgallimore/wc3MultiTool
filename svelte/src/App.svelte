@@ -102,6 +102,7 @@
       alternateLaunch: false,
       bnetPassword: "",
       bnetUsername: "",
+      releaseChannel: "latest",
     },
     streaming: {
       enabled: false,
@@ -520,6 +521,23 @@
                         );
                       }}
                     />
+                  </div>
+                </div>
+                <div class="row">
+                  <div class="col">
+                    <label for="releaseChannel" class="form-label">Release Channel</label>
+                    <select
+                      id="releaseChannel"
+                      class="form-select"
+                      value={settings.client.releaseChannel}
+                      on:change={(e) =>
+                        // @ts-ignore
+                        updateSettingSingle("client", "releaseChannel", e.target.value)}
+                    >
+                      <option value="latest">Latest</option>
+                      <option value="beta">Beta</option>
+                      <option value="alpha">Alpha</option>
+                    </select>
                   </div>
                 </div>
               </div>

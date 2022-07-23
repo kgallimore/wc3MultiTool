@@ -60,6 +60,7 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
+  autoUpdater.channel = settings.values.client.releaseChannel;
   autoUpdater.logger = log;
   log.catchErrors();
 
@@ -137,9 +138,12 @@ if (!gotLock) {
     SEClientSingle,
   ];
 
-  settings.on("settingsUpdates", (newSettings: SettingsUpdates) =>
-    sendWindow({ globalUpdate: { settings: newSettings } })
-  );
+  settings.on("settingsUpdates", (newSettings: SettingsUpdates) => {
+    sendWindow({ globalUpdate: { settings: newSettings } });
+    if (newSettings.client?.releaseChannel) {
+      autoUpdater.channel = newSettings.client.releaseChannel;
+    }
+  });
   gameState.on("gameStateUpdates", (gameState: Partial<GameState>) =>
     sendWindow({ globalUpdate: { gameState } })
   );
