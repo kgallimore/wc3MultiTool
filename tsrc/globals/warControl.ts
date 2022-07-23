@@ -36,9 +36,6 @@ const exec = promisify(require("child_process").exec);
 import type { Regions } from "wc3mt-lobby-container";
 
 class WarControl extends Global {
-  settings = settings;
-  gameState = gameState;
-  gameSocket = gameSocket;
   inFocus: boolean = false;
   isOpen: boolean = false;
   windowRegion: Region | null = null;
@@ -62,17 +59,17 @@ class WarControl extends Global {
     callCount = 0,
     focusAttempted = false
   ): Promise<boolean> {
-    this.gameState.updateGameState({ action: "openingWarcraft" });
+    gameState.updateGameState({ action: "openingWarcraft" });
     try {
       if (callCount > 60) {
         this.error("Failed to open Warcraft after 60 attempts");
       }
       if (await this.isWarcraftOpen()) {
         this.info("Warcraft is now open");
-        this.gameState.updateGameState({ action: "nothing" });
+        gameState.updateGameState({ action: "nothing" });
         return true;
       }
-      if (this.settings.values.client.alternateLaunch) {
+      if (settings.values.client.alternateLaunch) {
         //shell.openPath(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe -launch");
         if (callCount === 0 || callCount % 15 === 0) {
           exec(
@@ -98,7 +95,7 @@ class WarControl extends Global {
         }
         if (title === "Blizzard Battle.net Login") {
           this.error("A login is required to open Warcraft");
-          this.gameState.updateGameState({ action: "nothing" });
+          gameState.updateGameState({ action: "nothing" });
           return false;
         }
         if (title === "Battle.net") {
@@ -134,7 +131,7 @@ class WarControl extends Global {
           return await this.openWarcraft(region, callCount + 1, true);
         } else {
           this.error("Failed to focus Battle.net");
-          this.gameState.updateGameState({ action: "nothing" });
+          gameState.updateGameState({ action: "nothing" });
           return false;
         }
       }
@@ -188,19 +185,15 @@ class WarControl extends Global {
       searchRegion.height = searchRegion.height * 0.5;
       searchRegion.width = searchRegion.width * 0.4;
       searchRegion.top = searchRegion.top + searchRegion.height;
-      if (!region && this.settings.values.autoHost.regionChange) {
+      if (!region && settings.values.autoHost.regionChange) {
         region = getTargetRegion(
-          this.settings.values.autoHost.regionChangeTimeEU,
-          this.settings.values.autoHost.regionChangeTimeNA
+          settings.values.autoHost.regionChangeTimeEU,
+          settings.values.autoHost.regionChangeTimeNA
         );
       }
       let targetRegion = { asia: 1, eu: 2, us: 3, usw: 3, "": 0 }[region];
       try {
-        if (
-          targetRegion &&
-          targetRegion > 0 &&
-          this.gameState.values.selfRegion !== region
-        ) {
+        if (targetRegion && targetRegion > 0 && gameState.values.selfRegion !== region) {
           this.info(`Changing region to ${region}`);
           let changeRegionPosition = await screen.waitFor(
             imageResource("changeRegion.png"),
@@ -236,7 +229,7 @@ class WarControl extends Global {
         for (let i = 0; i < 10; i++) {
           if (await this.isWarcraftOpen()) {
             this.info("Warcraft is now open.");
-            this.gameState.updateGameState({ action: "nothing" });
+            gameState.updateGameState({ action: "nothing" });
             return true;
           }
           await sleep(100);
@@ -247,26 +240,23 @@ class WarControl extends Global {
         return await this.openWarcraft(region, callCount + 15);
       }
       this.error("Failed to open Warcraft.");
-      this.gameState.updateGameState({ action: "nothing" });
+      gameState.updateGameState({ action: "nothing" });
       return false;
     } catch (e) {
       this.error(e as string);
-      this.gameState.updateGameState({ action: "nothing" });
+      gameState.updateGameState({ action: "nothing" });
       return false;
     }
   }
 
   async handleBnetLogin() {
-    if (
-      this.settings.values.client.bnetUsername &&
-      this.settings.values.client.bnetPassword
-    ) {
+    if (settings.values.client.bnetUsername && settings.values.client.bnetPassword) {
       this.info("Attempting to login to Battle.net.");
-      clipboard.writeText(this.settings.values.client.bnetUsername);
+      clipboard.writeText(settings.values.client.bnetUsername);
       await keyboard.type(Key.Tab);
       await keyboard.type(Key.LeftControl, Key.V);
       await keyboard.type(Key.Tab);
-      clipboard.writeText(this.settings.values.client.bnetPassword);
+      clipboard.writeText(settings.values.client.bnetPassword);
       await keyboard.type(Key.LeftControl, Key.V);
       await keyboard.type(Key.Enter);
     }
@@ -283,11 +273,11 @@ class WarControl extends Global {
     }
     await warControl.activeWindowWar();
     try {
-      if (this.gameState.values.inGame && warControl.inFocus) {
+      if (gameState.values.inGame && warControl.inFocus) {
         this.sendingInGameChat.active = true;
         let nextMessage = this.sendingInGameChat.queue.shift();
         while (nextMessage) {
-          if (this.gameState.values.inGame && warControl.inFocus) {
+          if (gameState.values.inGame && warControl.inFocus) {
             this.info("Sending chat: " + nextMessage);
             clipboard.writeText(nextMessage);
             await mouse.leftClick();
@@ -298,7 +288,7 @@ class WarControl extends Global {
           } else {
             this.info(
               "Forced to stop sending messages. In Game: " +
-                this.gameState.values.inGame +
+                gameState.values.inGame +
                 " Warcraft in focus: " +
                 warControl.inFocus
             );
@@ -345,12 +335,12 @@ class WarControl extends Global {
     if (await this.isWarcraftOpen()) {
       if (callCount < 5) {
         return await this.forceQuitWar();
-      } else if (this.gameState.values.menuState === "LOADING_SCREEN") {
+      } else if (gameState.values.menuState === "LOADING_SCREEN") {
         this.info("Warcraft is loading game, forcing quit");
         return await this.forceQuitWar();
       } else {
         this.info("Sending Exit Game");
-        this.gameSocket.sendMessage({ ExitGame: {} });
+        gameSocket.sendMessage({ ExitGame: {} });
         await sleep(200);
         return this.exitGame(callCount + 1);
       }
