@@ -417,7 +417,7 @@ class WarControl extends Global {
     }
     mouse.config.mouseSpeed = parseInt(targetRes) * 2;
     if (this.isPackaged) {
-      screen.config.resourceDirectory = join(__dirname, "images", targetRes);
+      screen.config.resourceDirectory = join(__dirname, "..\\images", targetRes);
     } else {
       screen.config.resourceDirectory = join(this.appPath, "\\src\\images", targetRes);
     }
