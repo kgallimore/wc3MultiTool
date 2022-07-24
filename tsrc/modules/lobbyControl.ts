@@ -18,6 +18,7 @@ import { sleep } from "@nut-tree/nut-js";
 import type { EloSettings } from "./../globals/settings";
 
 import { Combination, Permutation } from "js-combinatorics";
+import type { GameState } from "./../globals/gameState";
 
 export interface LobbyUpdatesExtended extends LobbyUpdates {
   playerCleared?: string;
@@ -45,7 +46,13 @@ export class LobbyControl extends Module {
   private expectedSwaps: Array<{ swaps: [string, string]; forBalance: boolean }> = [];
 
   constructor() {
-    super("Lobby Control", { listeners: ["gameSocketEvent"] });
+    super("Lobby Control", { listeners: ["gameSocketEvent", "gameStateUpdates"] });
+  }
+
+  protected onGameStateUpdate(updates: Partial<GameState>): void {
+    if (updates.inGame === false) {
+      this.clear();
+    }
   }
 
   protected onGameSocketEvent(events: GameSocketEvents): void {
@@ -288,6 +295,7 @@ export class LobbyControl extends Module {
   }
 
   clear() {
+    this.verbose("Clearing lobby.");
     this.bestCombo = [];
     this.refreshing = false;
     if (this.staleTimer) {
@@ -295,6 +303,7 @@ export class LobbyControl extends Module {
       this.staleTimer = null;
     }
     this.microLobby = null;
+    this.emitLobbyUpdate({ leftLobby: true });
   }
 
   async eloMapName(
@@ -612,7 +621,7 @@ export class LobbyControl extends Module {
   }
 
   autoBalance() {
-    let teams = Object.entries(this.exportDataStructure(true)).filter(
+    let teams = Object.entries(this.exportDataStructure("Self export 5", true)).filter(
       // Filter out empty teams
       ([teamName, teamPlayers]) =>
         Object.values(teamPlayers).filter((player) => player.realPlayer).length > 0
@@ -805,7 +814,7 @@ export class LobbyControl extends Module {
   }
 
   isLobbyReady() {
-    let teams = this.exportDataStructure(true);
+    let teams = this.exportDataStructure("Self export 4", true);
     if (this.refreshing) {
       this.verbose("Refreshing slots, not ready.");
       return false;
@@ -1029,7 +1038,7 @@ export class LobbyControl extends Module {
   }
 
   allPlayerTeamsContainPlayers() {
-    let teams = this.exportDataStructure();
+    let teams = this.exportDataStructure("Self export 3");
     for (const team of Object.values(teams)) {
       if (team.filter((slot) => slot.realPlayer).length === 0) {
         return false;
@@ -1039,7 +1048,7 @@ export class LobbyControl extends Module {
   }
 
   exportDataStructureString(playerTeamsOnly: boolean = true) {
-    let data = this.exportDataStructure(playerTeamsOnly);
+    let data = this.exportDataStructure("Self export 2", playerTeamsOnly);
     let exportString = "";
     Object.entries(data).forEach(([teamName, data]) => {
       exportString += teamName + ":\n";
@@ -1062,18 +1071,18 @@ export class LobbyControl extends Module {
     return exportString;
   }
 
-  exportDataStructure(playerTeamsOnly: boolean = true): PlayerTeamsData {
+  exportDataStructure(source: string, playerTeamsOnly: boolean = true): PlayerTeamsData {
     let lobby = this.microLobby;
     let returnValue = {};
     if (!lobby) {
-      this.error("No lobby");
+      this.error("No lobby to export data from.", source);
       return returnValue;
     }
     return lobby.exportTeamStructure(playerTeamsOnly);
   }
 
   exportTeamStructureString(playerTeamsOnly: boolean = true) {
-    let data = this.exportDataStructure(playerTeamsOnly);
+    let data = this.exportDataStructure("Self export 1", playerTeamsOnly);
     let exportString = "";
     Object.entries(data).forEach(([teamName, data]) => {
       exportString += teamName + ":\n";
@@ -1113,13 +1122,15 @@ export class LobbyControl extends Module {
       this.gameSocket.sendMessage({ LeaveGame: {} });
       if (this.microLobby?.lobbyStatic?.lobbyName) {
         let oldLobbyName = this.microLobby?.lobbyStatic.lobbyName;
-        await sleep(1000);
+        await sleep(3000);
         if (this.microLobby?.lobbyStatic.lobbyName === oldLobbyName) {
           this.info("Lobby did not leave, trying again");
           await this.warControl.exitGame();
           this.warControl.openWarcraft();
         }
       }
+    } else {
+      this.warn("Tried to leave game that doesn't exist.");
     }
   }
 }
