@@ -27,6 +27,7 @@ class AutoHost extends ModuleBase {
   wc3mtTargetFile = `${app.getPath("documents")}\\Warcraft III\\CustomMapData\\wc3mt.txt`;
   gameNumber = 0;
   voteTimer: NodeJS.Timeout | null = null;
+  creatingGame: boolean = false;
   private lastAnnounceTime: number = 0;
   constructor() {
     super("AutoHost", {
@@ -56,7 +57,7 @@ class AutoHost extends ModuleBase {
       if (!this.lobby.isLobbyReady()) {
         return;
       }
-      let teams = this.lobby.exportDataStructure(true);
+      let teams = this.lobby.exportDataStructure("Autohost", true);
       if (this.settings.values.autoHost.minPlayers !== 0) {
         if (
           this.lobby.microLobby.nonSpecPlayers.length <
@@ -134,9 +135,6 @@ class AutoHost extends ModuleBase {
     if (events.OnNetProviderInitialized && this.settings.values.client.performanceMode) {
       setTimeout(this.autoHostGame.bind(this), 1000);
     }
-    if (events.UpdateScoreInfo) {
-      this.autoHostGame();
-    }
     if (events.SetOverlayScreen?.screen) {
       if (events.SetOverlayScreen.screen === "AUTHENTICATION_OVERLAY") {
         setTimeout(() => this.warControl.handleBnetLogin(), 5000);
@@ -198,17 +196,18 @@ class AutoHost extends ModuleBase {
       if (this.settings.values.autoHost.type === "smartHost") {
         this.info("Setting up smart host.");
         setTimeout(() => autoHost.smartQuit(), 15000);
-      } else if (
-        this.settings.values.autoHost.type === "rapidHost" &&
-        this.settings.values.autoHost.rapidHostTimer > 0
-      ) {
-        this.info(
-          "Setting rapid host timer to " + this.settings.values.autoHost.rapidHostTimer
-        );
-        setTimeout(
-          () => this.lobby.leaveGame,
-          this.settings.values.autoHost.rapidHostTimer * 1000 * 60
-        );
+      } else if (this.settings.values.autoHost.type === "rapidHost") {
+        if (this.settings.values.autoHost.rapidHostTimer > 0) {
+          this.info(
+            "Setting rapid host timer to " + this.settings.values.autoHost.rapidHostTimer
+          );
+          setTimeout(
+            () => this.lobby.leaveGame,
+            this.settings.values.autoHost.rapidHostTimer * 1000 * 60
+          );
+        } else {
+          this.lobby.leaveGame();
+        }
       }
       screen.height().then((screenHeight) => {
         screen.width().then((screenWidth) => {
@@ -222,28 +221,27 @@ class AutoHost extends ModuleBase {
     if (updates.menuState) {
       if (updates.menuState === "LOADING_SCREEN") {
         if (this.settings.values.autoHost.type === "rapidHost") {
-          if (this.settings.values.autoHost.rapidHostTimer === 0) {
-            this.info("Rapid Host leave game immediately");
-            this.lobby.leaveGame();
-          } else if (this.settings.values.autoHost.rapidHostTimer === -1) {
+          if (this.settings.values.autoHost.rapidHostTimer === -1) {
             this.info("Rapid Host exit game immediately");
             this.warControl.forceQuitWar().then(() => {
               this.warControl.openWarcraft();
             });
           }
         }
-      } else if (["CUSTOM_LOBBIES", "MAIN_MENU"].includes(updates.menuState)) {
+      } else if (
+        ["CUSTOM_LOBBIES", "MAIN_MENU", "SCORE_SCREEN"].includes(updates.menuState)
+      ) {
         if (this.gameState.values.openLobbyParams.lobbyName) {
           this.verbose("Skipping autohost since a lobby is being joined.");
         } else {
-          setTimeout(this.autoHostGame.bind(this), 250);
+          setTimeout(this.autoHostGame.bind(this), 1000);
         }
       }
     }
   }
 
   async autoHostGame(override: boolean = false) {
-    if (this.settings.values.autoHost.type === "off") {
+    if (this.settings.values.autoHost.type === "off" || this.creatingGame) {
       return false;
     }
     if (this.settings.values.client.commAddress || override) {
@@ -382,17 +380,24 @@ class AutoHost extends ModuleBase {
     callCount: number = 0,
     lobbyName: string = ""
   ): Promise<boolean> {
+    if (this.creatingGame === true && callCount === 0) {
+      return false;
+    }
+    this.creatingGame = true;
     if (!this.gameState.values.connected) {
       this.warn("Tried to create game when no connection exists.");
+      this.creatingGame = false;
       return false;
     }
     if (this.gameState.values.inGame) {
       this.info("Cancelling lobby creation: Already in game.");
+      this.creatingGame = false;
       return false;
     }
     if (this.lobby.microLobby?.lobbyStatic.lobbyName) {
       if (this.lobby.microLobby.lobbyStatic.lobbyName === lobbyName) {
         this.info("Game successfully created: " + lobbyName);
+        this.creatingGame = false;
         return true;
       }
       if (
@@ -404,6 +409,7 @@ class AutoHost extends ModuleBase {
           "Game created with incorrect increment: " +
             this.lobby.microLobby.lobbyStatic.lobbyName
         );
+        this.creatingGame = false;
         return true;
       }
     }
@@ -413,18 +419,21 @@ class AutoHost extends ModuleBase {
       )
     ) {
       this.info("Cancelling lobby creation: Already in lobby.");
+      this.creatingGame = false;
       return false;
     }
     this.gameState.updateGameState({ action: "creatingLobby" });
     if ((callCount + 5) % 10 === 0) {
       if (this.settings.values.autoHost.increment) {
         if (callCount > 45) {
+          this.creatingGame = false;
           return false;
         }
         this.gameNumber += 1;
         this.warn("Failed to create game. Incrementing game name");
       } else {
         this.warn("Failed to create game. Stopping attempts.");
+        this.creatingGame = false;
         return false;
       }
     }
