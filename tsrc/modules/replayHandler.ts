@@ -8,6 +8,7 @@ import parser from "w3gjs";
 import { readFileSync, readdirSync, existsSync, statSync, createReadStream } from "fs";
 import type { GameState } from "./../globals/gameState";
 import { join } from "path";
+import fetch from "cross-fetch";
 
 export interface mmdResults {
   list: {
