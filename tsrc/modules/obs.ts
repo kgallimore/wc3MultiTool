@@ -32,7 +32,7 @@ class OBSSocket extends ModuleBase {
       updates.newLobby ||
       updates.leftLobby
     ) {
-      if (this.settings.values.obs.textSource) {
+      if (this.settings.values.obs.enabled && this.settings.values.obs.textSource) {
         writeFileSync(
           join(app.getPath("documents"), "wc3mt.txt"),
           this.lobby.exportTeamStructureString()
