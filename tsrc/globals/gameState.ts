@@ -102,14 +102,17 @@ class GameStateContainer extends Global {
         events.SetGlueScreen.screen === "SCORE_SCREEN"
       ) {
         this.info("Game has finished loading in.");
-        gameState.updateGameState({ inGame: true });
+        this.updateGameState({ inGame: true });
         //  action: "waitingToLeaveGame"
       } else {
-        gameState.updateGameState({ menuState: events.SetGlueScreen.screen });
+        this.updateGameState({ menuState: events.SetGlueScreen.screen });
       }
     }
+    if (events.UpdateScoreInfo) {
+      this.updateGameState({ inGame: false, menuState: "SCORE_SCREEN" });
+    }
     if (events.GameListRemove || events.GameListUpdate) {
-      gameState.updateGameState({ menuState: "CUSTOM_LOBBIES" });
+      this.updateGameState({ menuState: "CUSTOM_LOBBIES" });
     }
   }
 

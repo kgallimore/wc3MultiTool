@@ -118,12 +118,12 @@ export class Module extends Global {
 
   protected onWebUISocketEvent(events: WebUIEvents) {}
 
-  protected onErrorLog(...events: any[]) {}
+  protected onErrorLog(name: string, ...events: any[]) {}
 
-  protected onWarnLog(...events: any[]) {}
+  protected onWarnLog(name: string, ...events: any[]) {}
 
-  protected onInfoLog(...events: any[]) {}
-  protected onVerboseLog(...events: any[]) {}
+  protected onInfoLog(name: string, ...events: any[]) {}
+  protected onVerboseLog(name: string, ...events: any[]) {}
 
   protected emitEvent(data: EmitEvents) {
     this.emit("event", data);

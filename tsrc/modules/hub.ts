@@ -69,7 +69,7 @@ class HubControl extends ModuleBase {
       this.info("Received message from hub: " + data);
     };
     this.hubWebSocket.onclose = (ev) => {
-      if (this.isPackaged) this.error("Disconnected from hub");
+      if (this.isPackaged) this.info("Disconnected from hub");
       setTimeout(this.socketSetup.bind(this), Math.random() * 5000 + 3000);
       if (this.#heartBeatTimer) {
         clearTimeout(this.#heartBeatTimer);

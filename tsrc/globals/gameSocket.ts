@@ -171,7 +171,7 @@ class GameSocket extends Global {
         }, 1000);
       }
       this.emitEvent({ disconnected: true });
-      this.error("Game client connection closed!");
+      this.warn("Game client connection closed.");
     });
   }
 

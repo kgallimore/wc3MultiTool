@@ -64,7 +64,7 @@ export class Comm extends ModuleBase {
         this.retrySetup = setTimeout(() => this.initialize, 1000);
       };
       this.commSocket.onerror = (error) => {
-        this.error("Error in comm: " + error);
+        this.error("Error in comm: ", error);
         this.commSocket = null;
       };
       this.commSocket.onmessage = (message) => {
