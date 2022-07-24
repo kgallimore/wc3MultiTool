@@ -37,7 +37,7 @@ class DiscordBot extends ModuleBase {
       listeners: [
         "gameSocketEvent",
         "settingsUpdate",
-        "gameSocketEvent",
+        "lobbyUpdate",
         "gameStateUpdates",
         "warnings",
         "errors",
@@ -77,10 +77,10 @@ class DiscordBot extends ModuleBase {
   }
 
   protected onGameStateUpdate(updates: Partial<GameState>): void {
-    if (updates.inGame) {
+    if (updates.menuState === "LOADING_SCREEN") {
       this.lobbyStarted();
     }
-    if (!updates.inGame) {
+    if (updates.inGame === false) {
       this.lobbyEnded(null);
     }
   }
@@ -373,19 +373,19 @@ class DiscordBot extends ModuleBase {
     }
   }
 
-  protected onErrorLog(...events: any[]): void {
+  protected onErrorLog(name: string, ...events: any[]): void {
     if (
       (this.settings.values.discord.logLevel === "error" ||
         this.settings.values.discord.logLevel === "warn") &&
       this.adminChannel
     ) {
-      this.sendMessage(JSON.stringify(events), "admin");
+      this.sendMessage(name + " ERROR: " + JSON.stringify(events), "admin");
     }
   }
 
-  protected onWarnLog(...events: any[]): void {
+  protected onWarnLog(name: string, ...events: any[]): void {
     if (this.settings.values.discord.logLevel === "warn" && this.adminChannel) {
-      this.sendMessage(JSON.stringify(events), "admin");
+      this.sendMessage(name + " WARN: " + JSON.stringify(events), "admin");
     }
   }
 
