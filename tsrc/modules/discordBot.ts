@@ -104,9 +104,11 @@ class DiscordBot extends ModuleBase {
     }
     if (events.processedChat && this.chatChannel) {
       this.sendMessage(
-        events.processedChat.sender + ": " + events.processedChat.translated
-          ? events.processedChat.translated + "||" + events.processedChat.content + "||"
-          : events.processedChat.content,
+        events.processedChat.sender +
+          ": " +
+          (events.processedChat.translated
+            ? events.processedChat.translated + "||" + events.processedChat.content + "||"
+            : events.processedChat.content),
         "chat"
       );
     }
