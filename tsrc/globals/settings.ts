@@ -244,6 +244,7 @@ class AppSettingsContainer extends Global {
         alternateLaunch: store.get("client.alternateLaunch") ?? false,
         bnetUsername: store.get("client.bnetUsername") ?? "",
         bnetPassword: store.get("client.bnetPassword") ?? "",
+        releaseChannel: store.get("client.releaseChannel") ?? "latest",
       },
       streaming: {
         enabled: store.get("streaming.enabled") ?? false,
