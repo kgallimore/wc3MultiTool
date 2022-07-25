@@ -102,7 +102,11 @@ export interface DiscordSettings {
   sendInGameChat: boolean;
 }
 export interface EloSettings {
-  type: "off" | "wc3stats" | "pyroTD" | "random";
+  type: "off" | "wc3stats" | "pyroTD" | "mariaDB" | "mysql" | "sqlite" | "random";
+  dbIP: string;
+  dbPort: number;
+  dbUser: string;
+  dbPass: string;
   balanceTeams: boolean;
   announce: boolean;
   excludeHostFromSwap: boolean;
@@ -206,6 +210,10 @@ class AppSettingsContainer extends Global {
       },
       elo: {
         type: store.get("elo.type") ?? "off",
+        dbIP: store.get("elo.dbIP") ?? "127.0.0.1",
+        dbPort: store.get("elo.dbPort") ?? 3306,
+        dbUser: store.get("elo.dbUser") ?? "",
+        dbPass: store.get("elo.dbPass") ?? "",
         balanceTeams: store.get("elo.balanceTeams") ?? true,
         announce: store.get("elo.announce") ?? true,
         excludeHostFromSwap: store.get("elo.excludeHostFromSwap") ?? true,

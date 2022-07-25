@@ -15,18 +15,10 @@
   });
 </script>
 
-<input
-  type="checkbox"
-  class="btn-check"
-  id={setting + key}
-  data-key={key}
-  data-setting={setting}
-  bind:checked
-  on:change
-/>
+<input type="checkbox" class="btn-check" id={key} bind:checked on:change />
 <label
   bind:this={label}
-  for={setting + key}
+  for={key}
   class="btn btn-outline-primary"
   data-bs-toggle="tooltip"
   data-bs-placement="top"
