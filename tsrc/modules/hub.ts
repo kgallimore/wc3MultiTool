@@ -50,7 +50,7 @@ class HubControl extends ModuleBase {
       this.hubWebSocket = new WebSocket("wss://wsdev.trenchguns.com/" + this.identifier);
     }
     this.hubWebSocket.onerror = (error) => {
-      if (this.isPackaged) this.error("Failed hub connection: " + error);
+      if (this.isPackaged) this.warn("Failed hub connection: " + error);
     };
     this.hubWebSocket.onopen = (ev) => {
       if (this.hubWebSocket?.readyState !== WebSocket.OPEN) return;

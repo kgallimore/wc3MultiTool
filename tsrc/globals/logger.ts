@@ -11,12 +11,10 @@ class Logger extends EventEmitter {
     this.emit("info", name, args);
   }
   warn(name: string, ...args: any[]) {
-    console.log("Warning encountered!");
     warn(name + ": " + args);
     this.emit("warn", name, args);
   }
   error(name: string, ...args: any[]) {
-    console.log("Warning encountered!");
     error(name + ": " + args);
     this.emit("error", name, args);
   }

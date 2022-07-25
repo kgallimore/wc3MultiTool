@@ -1,6 +1,6 @@
 {
   "name": "wc3multitool",
-  "version": "1.0.0-alpha",
+  "version": "1.0.0-beta",
   "description": "A multi-tool for Warcraft 3",
   "repository": {
     "type": "git",
@@ -164,6 +164,7 @@
     "nanoid": "^3.3.4",
     "node-abi": "^3.22.0",
     "obs-websocket-js": "^4.0.3",
+    "public-ip": "^4.0.4",
     "socket.io-client": "^2.5.0",
     "sound-play": "^1.1.0",
     "translate": "^1.4.1",

@@ -2,12 +2,15 @@ import { Global } from "../globalBase";
 import Store from "electron-store";
 
 import type { PickByValue } from "./../utility";
+import { v4 as publicIP } from "public-ip";
 
 export interface ClientState {
   tableVersion: number;
   latestUploadedReplay: number;
   currentStep: string;
   currentStepProgress: number;
+  vpnActive: "us" | "eu" | false;
+  currentIP: string;
 }
 
 class ClientStateSingle extends Global {
@@ -26,7 +29,10 @@ class ClientStateSingle extends Global {
       latestUploadedReplay: (this._store.get("latestUploadedReplay") as number) ?? 0,
       currentStep: "",
       currentStepProgress: 0,
+      vpnActive: false,
+      currentIP: "",
     };
+    this.getPublicIP();
   }
 
   get values() {
@@ -35,6 +41,17 @@ class ClientStateSingle extends Global {
 
   set values(value: ClientState) {
     throw new Error("Can not set values directly. Use updateClientState.");
+  }
+
+  async getPublicIP(): Promise<{ current: string; old?: string | undefined }> {
+    let retVal: { current: string; old?: string };
+    let ip = await publicIP();
+    retVal = { current: ip };
+    if (ip !== this._values.currentIP) {
+      retVal.old = this._values.currentIP;
+      this.updateClientState({ currentIP: ip });
+    }
+    return retVal;
   }
 
   updateClientState(values: Partial<ClientState>) {

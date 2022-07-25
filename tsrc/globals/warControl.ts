@@ -315,10 +315,10 @@ class WarControl extends Global {
       return false;
     } else {
       if (stdout.includes(processName)) {
-        console.log(`${processName} is running`);
+        //console.log(`${processName} is running`);
         return true;
       } else {
-        console.log(`${processName} is not running`);
+        //console.log(`${processName} is not running`);
         return false;
       }
     }

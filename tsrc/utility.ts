@@ -197,24 +197,24 @@ export type PickByValue<T, V> = Pick<
 export function getTargetRegion(
   regionChangeTimeEU: string,
   regionChangeTimeNA: string
-): "NA" | "EU" {
+): "us" | "eu" {
   let currentTime = new Date().getUTCHours() * 100 + new Date().getUTCMinutes();
   let targetTimes = {
     eu: parseInt(regionChangeTimeEU.replace(":", "")),
     us: parseInt(regionChangeTimeNA.replace(":", "")),
   };
   if (targetTimes.us > targetTimes.eu) {
-    console.log("US later", currentTime, targetTimes);
+    //console.log("US later", currentTime, targetTimes);
     if (currentTime > targetTimes.eu && currentTime < targetTimes.us) {
-      return "EU";
+      return "eu";
     } else {
-      return "NA";
+      return "us";
     }
   } else {
     if (currentTime > targetTimes.us && currentTime < targetTimes.eu) {
-      return "NA";
+      return "us";
     } else {
-      return "EU";
+      return "eu";
     }
   }
 }
