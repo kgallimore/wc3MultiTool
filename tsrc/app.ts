@@ -466,7 +466,6 @@ if (!gotLock) {
                 }
               }
               settings.updateSettings({ autoHost: { mapPath: newMapPath } });
-              log.info(`Change map to ${settings.values.autoHost.mapPath}`);
               if (mapName) {
                 mapName = mapName.substring(0, mapName.length - 4);
                 settings.updateSettings({ autoHost: { mapName } });
@@ -478,6 +477,28 @@ if (!gotLock) {
                     });
                   });
               }
+            }
+          })
+          .catch((err) => {
+            log.warn(err.message, err.stack);
+          });
+        break;
+      case "getOpenVPNPath":
+        dialog
+          .showOpenDialog(win, {
+            title: "Choose OpenVPN-GUI Executable",
+            defaultPath: `C:\\Program Files\\OpenVPN\\bin`,
+            properties: ["openFile"],
+            filters: [{ name: "openvpn-gui", extensions: ["exe"] }],
+          })
+          .then((result) => {
+            if (!result.canceled) {
+              let pathChosen = result.filePaths[0].replace(/\\/g, "/");
+              let executableName = pathChosen.split("/").pop();
+              if (executableName !== "openvpn-gui.exe") {
+                log.warn("Possibly wrong OpenVpn executable chosen.");
+              }
+              settings.updateSettings({ autoHost: { openVPNPath: pathChosen } });
             }
           })
           .catch((err) => {

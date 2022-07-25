@@ -46,12 +46,15 @@
       settingVisibility: "0",
       leaveAlternate: false,
       shufflePlayers: false,
-      regionChange: false,
+      regionChangeType: "off",
       regionChangeTimeEU: "11:00",
+      regionChangeOpenVPNConfigEU: "",
       regionChangeTimeNA: "01:00",
+      regionChangeOpenVPNConfigNA: "",
       whitelist: false,
       minPlayers: 0,
       delayStart: 0,
+      openVPNPath: "",
     },
     obs: {
       enabled: false,
@@ -120,6 +123,8 @@
     latestUploadedReplay: 0,
     currentStep: "",
     currentStepProgress: 0,
+    currentIP: "",
+    vpnActive: false,
   };
   let gameState: GameState = {
     selfRegion: "",
@@ -183,7 +188,9 @@
       : ""
   } ${
     ["smartHost", "rapidHost"].includes(settings.autoHost.type)
-      ? "I will start when slots are full."
+      ? settings.autoHost.minPlayers < 1
+        ? "I will start when slots are full."
+        : "I will start with " + settings.autoHost.minPlayers + " players."
       : ""
   } ${settings.autoHost.voteStart ? " You can vote start with ?votestart" : ""}`;
   onMount(() => {
@@ -209,6 +216,24 @@
       return data.body.variants[0].stats;
     }
     return [];
+  }
+
+  function updateNumber(
+    e: Event & {
+      currentTarget: EventTarget & HTMLInputElement;
+    },
+    min: number = 0
+  ) {
+    let val = parseInt(e.currentTarget.value);
+    if (isNaN(val)) {
+      val = min;
+      e.currentTarget.value = min.toString();
+    }
+    updateSettingSingle(
+      e.currentTarget.form.name as keyof AppSettings,
+      e.currentTarget.id as SettingsKeys,
+      val
+    );
   }
 
   function updatestructuredTeamData() {
@@ -361,7 +386,7 @@
   function updateSettingSingle(
     setting: keyof AppSettings,
     key: SettingsKeys,
-    value: boolean | string,
+    value: boolean | string | number,
     slot: number | null = null
   ) {
     if (key === "closeSlots" && slot != null) {
@@ -628,8 +653,8 @@
                         on:change={(e) =>
                           updateSettingSingle(
                             "client",
-                            "bnetUsername", // @ts-ignore
-                            e.target.value
+                            "bnetUsername",
+                            e.currentTarget.value
                           )}
                       />
                     </div>
@@ -645,8 +670,8 @@
                         on:change={(e) =>
                           updateSettingSingle(
                             "client",
-                            "bnetPassword", // @ts-ignore
-                            e.target.value
+                            "bnetPassword",
+                            e.currentTarget.value
                           )}
                       />
                     </div>
@@ -844,12 +869,7 @@
                           id="minRank"
                           placeholder="0 for none"
                           value={settings.elo.minRank}
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "elo",
-                              "minRank", // @ts-ignore
-                              parseInt(e.target.value)
-                            )}
+                          on:change={(e) => updateNumber(e)}
                         />
                       </div>
                       <div class="col">
@@ -860,12 +880,7 @@
                           id="minGames"
                           placeholder="Minimum Games Played"
                           value={settings.elo.minGames}
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "elo",
-                              "minGames", // @ts-ignore
-                              parseInt(e.target.value)
-                            )}
+                          on:change={(e) => updateNumber(e)}
                         />
                       </div>
                       <div class="col">
@@ -876,12 +891,7 @@
                           id="minWins"
                           placeholder="Minimum Wins"
                           value={settings.elo.minWins}
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "elo",
-                              "minWins", // @ts-ignore
-                              parseInt(e.target.value)
-                            )}
+                          on:change={(e) => updateNumber(e)}
                         />
                       </div>
                       <div class="col">
@@ -892,12 +902,7 @@
                           id="minRating"
                           placeholder="Minimum Rating"
                           value={settings.elo.minRating}
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "elo",
-                              "minRating", // @ts-ignore
-                              parseInt(e.target.value)
-                            )}
+                          on:change={(e) => updateNumber(e)}
                         />
                       </div>
                     </div>
@@ -1122,22 +1127,6 @@
                               e.target.checked
                             )}
                         />
-                        {#if !settings.client.alternateLaunch}
-                          <SettingsCheckbox
-                            key="regionChange"
-                            setting="autoHost"
-                            frontFacingName="Auto Change Regions"
-                            checked={settings.autoHost.regionChange}
-                            tooltip="Will automatically change regions at the specified time."
-                            on:change={(e) =>
-                              updateSettingSingle(
-                                "autoHost",
-                                "regionChange",
-                                // @ts-ignore
-                                e.target.checked
-                              )}
-                          />
-                        {/if}
                         <SettingsCheckbox
                           key="whitelist"
                           setting="autoHost"
@@ -1242,8 +1231,7 @@
                             updateSettingSingle(
                               "autoHost",
                               "settingVisibility",
-                              // @ts-ignore
-                              e.target.value
+                              e.currentTarget.value
                             )}
                         >
                           <option value="0">Default</option>
@@ -1282,8 +1270,7 @@
                             updateSettingSingle(
                               "autoHost",
                               "gameName",
-                              // @ts-ignore
-                              e.target.value
+                              e.currentTarget.value
                             );
                           }
                         }}
@@ -1291,8 +1278,7 @@
                           updateSettingSingle(
                             "autoHost",
                             "gameName",
-                            // @ts-ignore
-                            e.target.value
+                            e.currentTarget.value
                           )}
                       />
                     </div>
@@ -1309,17 +1295,12 @@
                         min="0"
                         max="30"
                         value={settings.autoHost.delayStart}
-                        on:change={(e) =>
-                          updateSettingSingle(
-                            "autoHost",
-                            "delayStart", // @ts-ignore
-                            parseInt(e.target.value)
-                          )}
+                        on:change={(e) => updateNumber(e)}
                       />
                     </div>
                     {#if ["rapidHost", "smartHost"].includes(settings.autoHost.type)}
                       <div class="col">
-                        <label for="minPlayers">Minimum Players to Start</label>
+                        <label for="minPlayers">Minimum Players to Autostart</label>
                         <input
                           type="number"
                           class="form-control"
@@ -1328,12 +1309,7 @@
                           min="0"
                           max="24"
                           value={settings.autoHost.minPlayers}
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "autoHost",
-                              "minPlayers", // @ts-ignore
-                              parseInt(e.target.value)
-                            )}
+                          on:change={(e) => updateNumber(e)}
                         />
                       </div>
                     {/if}
@@ -1364,8 +1340,7 @@
                             updateSettingSingle(
                               "autoHost",
                               "moveToTeam",
-                              // @ts-ignore
-                              e.target.value
+                              e.currentTarget.value
                             )}
                         />
                       </div>
@@ -1487,8 +1462,7 @@
                             updateSettingSingle(
                               "autoHost",
                               "customAnnouncement",
-                              // @ts-ignore
-                              e.target.value
+                              e.currentTarget.value
                             )}
                         />
                       </div>
@@ -1507,24 +1481,100 @@
                           min="0"
                           max="600"
                           value={settings.autoHost.announceRestingInterval}
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "autoHost",
-                              "announceRestingInterval",
-                              // @ts-ignore
-                              parseInt(e.target.value)
-                            )}
+                          on:change={(e) => updateNumber(e)}
                         />
                       </div>
                     </div>
                   {/if}
-                  {#if settings.autoHost.regionChange && !settings.client.alternateLaunch}
+                  <div class="row p-2">
+                    <div class="col">
+                      <label for="regionChangeType">Change Region</label>
+                      <select
+                        class="form-control form-control-sm"
+                        id="regionChangeType"
+                        value={settings.autoHost.regionChangeType}
+                        on:change={(e) =>
+                          updateSettingSingle(
+                            "autoHost",
+                            "regionChangeType",
+                            e.currentTarget.value
+                          )}
+                      >
+                        <option value="off" selected>Off</option>
+                        <option disabled={settings.client.alternateLaunch} value="realm"
+                          >Bnet Realm</option
+                        >
+                        <option value="openVPN">OpenVPN</option>
+                        <option disabled={settings.client.alternateLaunch} value="both"
+                          >Both</option
+                        >
+                      </select>
+                    </div>
+                  </div>
+                  {#if settings.autoHost.regionChangeType !== "off"}
                     <div class="row p-2">
                       <div class="col flex text-center">
                         Current UTC time is: {utcTime}
                         Target: {region}
                       </div>
                     </div>
+                    {#if settings.autoHost.regionChangeType === "both" || settings.autoHost.regionChangeType === "openVPN"}
+                      <div class="row p-2">
+                        <div class="col">
+                          <button
+                            on:click={() => toMain({ messageType: "getOpenVPNPath" })}
+                            type="button"
+                            class="btn btn-sm {settings.autoHost.openVPNPath
+                              ? 'btn-primary'
+                              : 'btn-danger'}"
+                            id="openVPNPath"
+                            >OpenVPN-GUI.exe Path:
+                          </button>
+                          <span
+                            class={settings.autoHost.openVPNPath ? "" : "alert-warning"}
+                            >{settings.autoHost.openVPNPath || "Please set a path."}</span
+                          >
+                        </div>
+                      </div>
+                      <div class="row p-2">
+                        <div class="col">
+                          <label for="regionChangeOpenVPNConfigNA" class="form-label"
+                            >NA OVPN File Name</label
+                          >
+                          <input
+                            type="text"
+                            id="regionChangeOpenVPNConfigNA"
+                            class="form-control"
+                            placeholder="With or without extension"
+                            value={settings.autoHost.regionChangeOpenVPNConfigNA}
+                            on:change={(e) =>
+                              updateSettingSingle(
+                                "autoHost",
+                                "regionChangeOpenVPNConfigNA",
+                                e.currentTarget.value
+                              )}
+                          />
+                        </div>
+                        <div class="col">
+                          <label for="regionChangeOpenVPNConfigEU" class="form-label"
+                            >EU OVPN File Name</label
+                          >
+                          <input
+                            type="text"
+                            id="regionChangeOpenVPNConfigEU"
+                            class="form-control"
+                            placeholder="With or without extension"
+                            value={settings.autoHost.regionChangeOpenVPNConfigEU}
+                            on:change={(e) =>
+                              updateSettingSingle(
+                                "autoHost",
+                                "regionChangeOpenVPNConfigEU",
+                                e.currentTarget.value
+                              )}
+                          />
+                        </div>
+                      </div>
+                    {/if}
                     <div class="row p-2">
                       <div class="col">
                         <label for="regionChangeTimeNA" class="form-label"
@@ -1539,8 +1589,7 @@
                             updateSettingSingle(
                               "autoHost",
                               "regionChangeTimeNA",
-                              // @ts-ignore
-                              e.target.value
+                              e.currentTarget.value
                             )}
                         />
                       </div>
@@ -1557,8 +1606,7 @@
                             updateSettingSingle(
                               "autoHost",
                               "regionChangeTimeEU",
-                              // @ts-ignore
-                              e.target.value
+                              e.currentTarget.value
                             )}
                         />
                       </div>
@@ -1604,8 +1652,8 @@
                           on:change={(e) =>
                             updateSettingSingle(
                               "discord",
-                              "token", // @ts-ignore
-                              e.target.value
+                              "token",
+                              e.currentTarget.value
                             )}
                         />
                       </div>
@@ -1622,8 +1670,8 @@
                           on:change={(e) =>
                             updateSettingSingle(
                               "discord",
-                              "announceChannel", // @ts-ignore
-                              e.target.value
+                              "announceChannel",
+                              e.currentTarget.value
                             )}
                         />
                       </div>
@@ -1640,8 +1688,8 @@
                           on:change={(e) =>
                             updateSettingSingle(
                               "discord",
-                              "chatChannel", // @ts-ignore
-                              e.target.value
+                              "chatChannel",
+                              e.currentTarget.value
                             )}
                         />
                       </div>
@@ -1658,8 +1706,8 @@
                           on:change={(e) =>
                             updateSettingSingle(
                               "discord",
-                              "adminChannel", // @ts-ignore
-                              e.target.value
+                              "adminChannel",
+                              e.currentTarget.value
                             )}
                         />
                       </div>
@@ -1672,8 +1720,8 @@
                           on:change={(e) =>
                             updateSettingSingle(
                               "discord",
-                              "logLevel", // @ts-ignore
-                              e.target.value
+                              "logLevel",
+                              e.currentTarget.value
                             )}
                         >
                           <option value="off" selected>Disabled</option>
@@ -1799,8 +1847,8 @@
                         on:change={(e) =>
                           updateSettingSingle(
                             "obs",
-                            "sceneSwitchType", // @ts-ignore
-                            e.target.value
+                            "sceneSwitchType",
+                            e.currentTarget.value
                           )}
                       >
                         <option value="off" selected>Disabled</option>
@@ -1971,8 +2019,7 @@
                           updateSettingSingle(
                             "streaming",
                             "seToken",
-                            // @ts-ignore
-                            e.target.value
+                            e.currentTarget.value
                           )}
                       />
                     </div>
@@ -2037,13 +2084,7 @@
                           class="form-control"
                           min="1"
                           value={settings.streaming.minInGameTip}
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "streaming",
-                              "minInGameTip",
-                              // @ts-ignore
-                              parseInt(e.target.value)
-                            )}
+                          on:change={(e) => updateNumber(e, 1)}
                         />
                       {/if}
                     </div>

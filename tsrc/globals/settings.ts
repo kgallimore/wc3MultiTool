@@ -67,13 +67,16 @@ export interface AutoHostSettings {
   flagRandomHero: boolean;
   settingVisibility: "0" | "1" | "2" | "3";
   leaveAlternate: boolean;
-  regionChange: boolean;
+  regionChangeType: "off" | "realm" | "openVPN" | "both";
   regionChangeTimeEU: string;
+  regionChangeOpenVPNConfigEU: string;
   regionChangeTimeNA: string;
+  regionChangeOpenVPNConfigNA: string;
   shufflePlayers: boolean;
   whitelist: boolean;
   minPlayers: number;
   delayStart: number;
+  openVPNPath: string;
 }
 export interface ObsSettings {
   enabled: boolean;
@@ -177,12 +180,17 @@ class AppSettingsContainer extends Global {
         settingVisibility: store.get("autoHost.settingVisibility") ?? "0",
         leaveAlternate: store.get("autoHost.leaveAlternate") ?? false,
         shufflePlayers: store.get("autoHost.shufflePlayers") ?? false,
-        regionChange: store.get("autoHost.regionChange") ?? false,
+        regionChangeType: store.get("autoHost.regionChangeType") ?? "off",
         regionChangeTimeEU: store.get("autoHost.regionChangeTimeEU") ?? "11:00",
+        regionChangeOpenVPNConfigEU:
+          store.get("autoHost.regionChangeOpenVPNConfigEU") ?? "",
         regionChangeTimeNA: store.get("autoHost.regionChangeTimeNA") ?? "01:00",
+        regionChangeOpenVPNConfigNA:
+          store.get("autoHost.regionChangeOpenVPNConfigNA") ?? "",
         whitelist: store.get("autoHost.whitelist") ?? false,
         minPlayers: store.get("autoHost.minPlayers") ?? 0,
         delayStart: store.get("autoHost.delayStart") ?? 0,
+        openVPNPath: store.get("autoHost.openVPNPath") ?? "",
       },
       obs: {
         enabled: store.get("obs.enabled") ?? false,
@@ -297,8 +305,7 @@ class AppSettingsContainer extends Global {
           // @ts-expect-error Still need to figure out how to type this
           filteredUpdates[settingName][key] = value;
         } else if (targetCurrentValue !== value) {
-          this.emit(
-            "warn",
+          this.warn(
             "Invalid update:",
             settingName,
             key,
@@ -307,6 +314,8 @@ class AppSettingsContainer extends Global {
               : value
           );
           return false;
+        } else {
+          this.error("Something weird happened.");
         }
       });
     });

@@ -1,6 +1,5 @@
 import { Global } from "../globalBase";
 
-import { getTargetRegion } from "../utility";
 import { shell, app } from "electron";
 import { settings } from "./settings";
 import { gameState } from "./gameState";
@@ -185,15 +184,9 @@ class WarControl extends Global {
       searchRegion.height = searchRegion.height * 0.5;
       searchRegion.width = searchRegion.width * 0.4;
       searchRegion.top = searchRegion.top + searchRegion.height;
-      if (!region && settings.values.autoHost.regionChange) {
-        region = getTargetRegion(
-          settings.values.autoHost.regionChangeTimeEU,
-          settings.values.autoHost.regionChangeTimeNA
-        );
-      }
       let targetRegion = { asia: 1, eu: 2, us: 3, usw: 3, "": 0 }[region];
       try {
-        if (targetRegion && targetRegion > 0 && gameState.values.selfRegion !== region) {
+        if (targetRegion > 0 && gameState.values.selfRegion !== region) {
           this.info(`Changing region to ${region}`);
           let changeRegionPosition = await screen.waitFor(
             imageResource("changeRegion.png"),

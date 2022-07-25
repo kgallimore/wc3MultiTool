@@ -63,6 +63,9 @@ class DiscordBot extends ModuleBase {
   }
 
   protected onLobbyUpdate(updates: LobbyUpdatesExtended): void {
+    if (!this.settings.values.discord.enabled) {
+      return;
+    }
     if (updates.newLobby) {
       this.sendNewLobby();
     } else if (updates.leftLobby) {
@@ -77,6 +80,9 @@ class DiscordBot extends ModuleBase {
   }
 
   protected onGameStateUpdate(updates: Partial<GameState>): void {
+    if (!this.settings.values.discord.enabled) {
+      return;
+    }
     if (updates.menuState === "LOADING_SCREEN") {
       this.lobbyStarted();
     }
@@ -86,12 +92,23 @@ class DiscordBot extends ModuleBase {
   }
 
   protected onGameSocketEvent(events: GameSocketEvents): void {
+    if (!this.settings.values.discord.enabled) {
+      return;
+    }
     if (
       events.disconnected ||
       (events.MultiplayerGameLeave &&
         this.gameState.values.menuState !== "LOADING_SCREEN")
     ) {
       this.lobbyClosed();
+    }
+    if (events.processedChat && this.chatChannel) {
+      this.sendMessage(
+        events.processedChat.sender + ": " + events.processedChat.translated
+          ? events.processedChat.translated + "||" + events.processedChat.content + "||"
+          : events.processedChat.content,
+        "chat"
+      );
     }
   }
 

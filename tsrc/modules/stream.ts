@@ -1,6 +1,6 @@
 import { ModuleBase } from "../moduleBase";
 
-import { settings } from "./../globals/settings";
+import type { SettingsUpdates } from "./../globals/settings";
 
 const io = require("socket.io-client");
 
@@ -41,7 +41,27 @@ class SEClient extends ModuleBase {
 
   constructor() {
     super("Stream", { listeners: ["settingsUpdate"] });
-    if (!this.settings.values.streaming.seToken) {
+    this.initialize();
+  }
+
+  onSettingsUpdate(updates: SettingsUpdates) {
+    if (
+      updates.streaming?.enabled !== undefined ||
+      updates.streaming?.seToken !== undefined
+    ) {
+      this.initialize();
+    }
+  }
+
+  initialize() {
+    if (this.socket) {
+      this.socket.disconnect();
+    }
+    this.socket = null;
+    if (
+      !this.settings.values.streaming.enabled ||
+      !this.settings.values.streaming.seToken
+    ) {
       return;
     }
     this.socket = io("https://realtime.streamelements.com", {
@@ -77,7 +97,7 @@ class SEClient extends ModuleBase {
     this.info("Successfully connected to StreamElements websocket");
     this.socket.emit("authenticate", {
       method: "jwt",
-      token: settings.values.streaming.seToken,
+      token: this.settings.values.streaming.seToken,
     });
   }
 

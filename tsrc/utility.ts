@@ -86,6 +86,7 @@ export interface WindowSend {
     | "openLogs"
     | "openWar"
     | "getMapPath"
+    | "getOpenVPNPath"
     | "updateSettingSingle"
     | "init"
     | "addWhiteBan"
@@ -196,7 +197,7 @@ export type PickByValue<T, V> = Pick<
 export function getTargetRegion(
   regionChangeTimeEU: string,
   regionChangeTimeNA: string
-): "us" | "eu" {
+): "NA" | "EU" {
   let currentTime = new Date().getUTCHours() * 100 + new Date().getUTCMinutes();
   let targetTimes = {
     eu: parseInt(regionChangeTimeEU.replace(":", "")),
@@ -205,15 +206,15 @@ export function getTargetRegion(
   if (targetTimes.us > targetTimes.eu) {
     console.log("US later", currentTime, targetTimes);
     if (currentTime > targetTimes.eu && currentTime < targetTimes.us) {
-      return "eu";
+      return "EU";
     } else {
-      return "us";
+      return "NA";
     }
   } else {
     if (currentTime > targetTimes.us && currentTime < targetTimes.eu) {
-      return "us";
+      return "NA";
     } else {
-      return "eu";
+      return "EU";
     }
   }
 }
