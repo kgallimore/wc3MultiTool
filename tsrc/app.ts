@@ -178,7 +178,6 @@ if (!gotLock) {
   app.on("before-quit", () => {
     HubSingle.sendToHub({ lobbyUpdates: { leftLobby: true } });
     discordBot.lobbyClosed();
-    lobbyControl.clear();
   });
 
   ipcMain.on("toMain", (event, args: WindowSend) => {
@@ -323,7 +322,6 @@ if (!gotLock) {
   app.on("window-all-closed", () => {
     HubSingle.sendToHub({ lobbyUpdates: { leftLobby: true } });
     discordBot.lobbyClosed();
-    lobbyControl?.clear();
     if (process.platform !== "darwin") {
       app.quit();
     }
