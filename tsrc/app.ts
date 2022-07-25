@@ -61,6 +61,11 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
+  if (app.getVersion().includes("beta")) {
+    settings.updateSettings({ client: { releaseChannel: "beta" } });
+  } else if (app.getVersion().includes("alpha")) {
+    settings.updateSettings({ client: { releaseChannel: "alpha" } });
+  }
   autoUpdater.channel = settings.values.client.releaseChannel;
   autoUpdater.logger = log;
   log.catchErrors();
@@ -143,6 +148,7 @@ if (!gotLock) {
     sendWindow({ globalUpdate: { settings: newSettings } });
     if (newSettings.client?.releaseChannel) {
       autoUpdater.channel = newSettings.client.releaseChannel;
+      autoUpdater.checkForUpdatesAndNotify();
     }
   });
   gameState.on("gameStateUpdates", (gameState: Partial<GameState>) =>
