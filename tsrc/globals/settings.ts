@@ -315,8 +315,6 @@ class AppSettingsContainer extends Global {
               : value
           );
           return false;
-        } else {
-          this.error("Something weird happened.");
         }
       });
     });
