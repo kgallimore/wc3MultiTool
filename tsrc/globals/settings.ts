@@ -102,11 +102,17 @@ export interface DiscordSettings {
   sendInGameChat: boolean;
 }
 export interface EloSettings {
-  type: "off" | "wc3stats" | "pyroTD" | "mariaDB" | "mysql" | "sqlite" | "random";
+  type: "off" | "wc3stats" | "pyroTD" | "mariadb" | "mysql" | "sqlite" | "random";
   dbIP: string;
   dbPort: number;
   dbUser: string;
   dbPass: string;
+  dbName: string;
+  dbTableName: string;
+  dbUserColumn: string;
+  dbELOColumn: string;
+  dbDefaultElo: number;
+  sqlitePath: string;
   balanceTeams: boolean;
   announce: boolean;
   excludeHostFromSwap: boolean;
@@ -214,6 +220,12 @@ class AppSettingsContainer extends Global {
         dbPort: store.get("elo.dbPort") ?? 3306,
         dbUser: store.get("elo.dbUser") ?? "",
         dbPass: store.get("elo.dbPass") ?? "",
+        dbName: store.get("elo.dbName") ?? "",
+        dbTableName: store.get("elo.dbTableName") ?? "",
+        dbUserColumn: store.get("elo.dbUserColumns") ?? "player",
+        dbELOColumn: store.get("elo.dbELOColumns") ?? "rating",
+        dbDefaultElo: store.get("elo.dbDefaultElo") ?? 500,
+        sqlitePath: store.get("elo.sqlitePath") ?? "",
         balanceTeams: store.get("elo.balanceTeams") ?? true,
         announce: store.get("elo.announce") ?? true,
         excludeHostFromSwap: store.get("elo.excludeHostFromSwap") ?? true,

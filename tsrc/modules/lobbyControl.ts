@@ -20,6 +20,8 @@ import type { EloSettings } from "./../globals/settings";
 import { Combination, Permutation } from "js-combinatorics";
 import type { GameState } from "./../globals/gameState";
 
+import { Sequelize, QueryTypes, DataTypes, Model, ModelCtor } from "sequelize";
+
 export interface LobbyUpdatesExtended extends LobbyUpdates {
   playerCleared?: string;
   lobbyReady?: true;
@@ -35,6 +37,8 @@ export class LobbyControl extends Module {
   private refreshing: boolean = false;
   private staleTimer: NodeJS.Timeout | null = null;
 
+  dbConn: Sequelize | null = null;
+
   bestCombo: Array<string> | Array<Array<string>> = [];
   microLobby: MicroLobby | null = null;
   eloName: string = "";
@@ -44,6 +48,7 @@ export class LobbyControl extends Module {
   private startTimer: NodeJS.Timeout | null = null;
 
   private expectedSwaps: Array<{ swaps: [string, string]; forBalance: boolean }> = [];
+  userModel: ModelCtor<Model<any, any>> | null = null;
 
   constructor() {
     super("Lobby Control", { listeners: ["gameSocketEvent", "gameStateUpdates"] });
@@ -397,7 +402,7 @@ export class LobbyControl extends Module {
               losses: 0,
               rating: elo,
               lastChange: 0,
-              rank: 9999,
+              rank: 99999,
             };
           } else if (this.settings.values.elo.type === "random") {
             this.info("Generating random stats for: " + name);
@@ -411,6 +416,74 @@ export class LobbyControl extends Module {
               lastChange: Math.floor(Math.random() * 10),
               rank: Math.floor(Math.random() * 1000 + 1),
             };
+          } else if (
+            ["mariadb", "mysql", "sqlite"].includes(this.settings.values.elo.type)
+          ) {
+            if (!this.dbConn) {
+              this.error("Please fix the database connection.");
+              return;
+            }
+            if (!this.userModel) {
+              this.error("Please fix the table and column mappings.");
+              if (!this.settings.values.elo.dbTableName) {
+                this.error("No user table set.");
+              }
+              if (!this.settings.values.elo.dbUserColumn) {
+                this.error("No user name column set.");
+              }
+              if (!this.settings.values.elo.dbELOColumn) {
+                this.error("No ELO/rating column set.");
+              }
+              return;
+            }
+
+            /*let fetched = await this.dbConn.query(
+              "SELECT * FROM :dbTableName WHERE :playerColumn = :playerName",
+              {
+                replacements: {
+                  dbTableName: this.settings.values.elo.dbTableName,
+                  playerColumn: this.settings.values.elo.dbUserColumn,
+                  playerName: name,
+                },
+                type: QueryTypes.SELECT,
+              }
+            );*/
+            let userFetch = (await this.userModel.findOne({
+              //attributes: [[this.settings.values.elo.dbELOColumn, "rating"]],
+              where: {
+                [this.settings.values.elo.dbUserColumn]: name,
+              },
+            })) as {
+              played?: number;
+              wins?: number;
+              losses?: number;
+              lastChange?: number;
+              rank?: number;
+            } | null;
+            if (userFetch === null) {
+              data = {
+                played: 0,
+                wins: 0,
+                losses: 0,
+                rating: this.settings.values.elo.dbDefaultElo,
+                lastChange: 0,
+                rank: 99999,
+              };
+            } else {
+              data = {
+                played: userFetch.played ?? 0,
+                wins: userFetch.wins ?? 0,
+                losses:
+                  userFetch.losses ??
+                  (userFetch.played && userFetch.wins
+                    ? userFetch.played - userFetch.wins
+                    : 0),
+                //@ts-expect-error Dirty for now.
+                rating: userFetch[this.settings.values.elo.dbELOColumn],
+                lastChange: userFetch.lastChange ?? 0,
+                rank: userFetch.rank ?? 99999,
+              };
+            }
           } else {
             this.error("Unknown elo type: " + this.settings.values.elo.type);
             return;
@@ -811,6 +884,89 @@ export class LobbyControl extends Module {
     } else {
       this.warn("Can not autobalance. Stats are not available.");
     }
+  }
+
+  async initDatabase() {
+    if (this.dbConn) {
+      await this.dbConn.close();
+    }
+    this.dbConn = null;
+    if (
+      this.settings.values.elo.type === "mariadb" ||
+      this.settings.values.elo.type === "mysql"
+    ) {
+      let ip = this.settings.values.elo.dbIP;
+      //
+      if (!ip || !/^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)(\.(?!$)|$)){4}$/.test(ip)) {
+        this.info("Missing or invalid DB Ip address");
+        return;
+      }
+      let user = this.settings.values.elo.dbUser;
+      if (!user) {
+        this.info("Missing DB username");
+        return;
+      }
+      let pass = this.settings.values.elo.dbPass;
+      if (!pass) {
+        this.info("Missing DB password");
+        return;
+      }
+      let database = this.settings.values.elo.dbName;
+      if (!pass) {
+        this.info("Missing DB name");
+        return;
+      }
+      this.dbConn = new Sequelize(database, user, pass, {
+        host: ip,
+        dialect: this.settings.values.elo.type,
+      });
+    } else if (this.settings.values.elo.type === "sqlite") {
+      this.dbConn = new Sequelize({
+        dialect: "sqlite",
+        storage: this.settings.values.elo.sqlitePath,
+      });
+    } else {
+      return;
+    }
+    try {
+      await this.dbConn.authenticate();
+      this.info("Database connection has been established successfully.");
+    } catch (error) {
+      this.warn("Unable to connect to the database:", error);
+    }
+  }
+
+  async buildModel() {
+    if (!this.dbConn) {
+      return;
+    }
+    if (this.userModel) {
+      this.userModel = null;
+    }
+    if (!this.settings.values.elo.dbTableName) {
+      return;
+    }
+    if (!this.settings.values.elo.dbUserColumn) {
+      return;
+    }
+    if (!this.settings.values.elo.dbELOColumn) {
+      return;
+    }
+    this.userModel = this.dbConn.define(
+      "Users",
+      {
+        [this.settings.values.elo.dbUserColumn]: {
+          type: DataTypes.STRING,
+          allowNull: false,
+        },
+        [this.settings.values.elo.dbELOColumn]: {
+          type: DataTypes.INTEGER,
+          defaultValue: this.settings.values.elo.dbDefaultElo,
+          allowNull: false,
+        },
+      },
+      { tableName: this.settings.values.elo.dbTableName, freezeTableName: true }
+    );
   }
 
   isLobbyReady() {

@@ -74,6 +74,12 @@
       dbPort: 3306,
       dbUser: "",
       dbPass: "",
+      dbName: "",
+      dbTableName: "",
+      dbUserColumn: "player",
+      dbELOColumn: "rating",
+      dbDefaultElo: 500,
+      sqlitePath: "",
       balanceTeams: true,
       announce: true,
       excludeHostFromSwap: true,
@@ -654,7 +660,7 @@
                   >
                     <option value="off">Disabled</option>
                     <option value="wc3stats">wc3stats.com</option>
-                    <option value="mariaDB">MariaDB</option>
+                    <option value="mariadb">MariaDB</option>
                     <option value="mysql">MySQL</option>
                     <option value="sqlite">Sqlite</option>
                     <option value="random">Random (Test mode)</option>
@@ -666,7 +672,7 @@
                   <div class="row">
                     <div class="col">
                       <div class="d-flex justify-content-center">ELO Settings</div>
-                      {#if ["mysql", "mariaDB"].includes(settings.elo.type)}
+                      {#if ["mysql", "mariadb"].includes(settings.elo.type)}
                         <div class="row">
                           <div class="col">
                             <label for="dbIP">Databse Address</label>
@@ -682,12 +688,13 @@
                           <div class="col">
                             <label for="dbPort">Databse Port</label>
                             <input
-                              type="text"
+                              type="number"
                               class="form-control"
                               id="dbPort"
-                              placeholder="Port"
+                              min="20"
+                              max="25565"
                               value={settings.elo.dbPort}
-                              on:change={onInputChange}
+                              on:change={(e) => updateNumber(e, 20)}
                             />
                           </div>
                         </div>
@@ -713,6 +720,86 @@
                               value={settings.elo.dbPass}
                               on:change={onInputChange}
                             />
+                          </div>
+                        </div>
+                        <div class="row">
+                          <div class="col">
+                            <label for="dbName">Databse Name</label>
+                            <input
+                              type="text"
+                              class="form-control"
+                              id="dbName"
+                              placeholder="Database"
+                              value={settings.elo.dbName}
+                              on:change={onInputChange}
+                            />
+                          </div>
+                        </div>
+                      {:else if settings.elo.type === "sqlite"}
+                        <div class="row">
+                          <div class="col">
+                            <label for="sqlitePath">Sqlite Path</label>
+                            <input
+                              type="text"
+                              class="form-control"
+                              id="sqlitePath"
+                              placeholder="Absolute Path"
+                              value={settings.elo.sqlitePath}
+                              on:change={onInputChange}
+                            />
+                          </div>
+                        </div>
+                      {/if}
+                      {#if ["mysql", "mariadb", "sqlite"].includes(settings.elo.type)}
+                        <div class="row">
+                          <div class="col">
+                            <label for="dbDefaultElo">Default Elo</label>
+                            <input
+                              type="number"
+                              class="form-control"
+                              id="dbDefaultElo"
+                              placeholder="0 for none"
+                              value={settings.elo.dbDefaultElo}
+                              on:change={updateNumber}
+                            />
+                          </div>
+                        </div>
+                        <div class="border m-2 p-2">
+                          <div class="text-center">Column Mappings</div>
+                          <div class="row">
+                            <div class="col">
+                              <label for="dbTableName">User Table</label>
+                              <input
+                                type="text"
+                                class="form-control"
+                                id="dbTableName"
+                                placeholder="User Table"
+                                value={settings.elo.dbTableName}
+                                on:change={onInputChange}
+                              />
+                            </div>
+                            <div class="col">
+                              <label for="dbUserColumn">Username</label>
+                              <input
+                                type="text"
+                                class="form-control"
+                                id="dbUserColumn"
+                                placeholder="Username Column"
+                                value={settings.elo.dbUserColumn}
+                                on:change={onInputChange}
+                              />
+                            </div>
+                            <div class="col">
+                              <label for="dbELOColumn">ELO/Rating</label>
+                              <input
+                                type="text"
+                                class="form-control"
+                                id="dbELOColumn"
+                                placeholder="ELO Column"
+                                value={settings.elo.dbELOColumn}
+                                on:change={onInputChange}
+                              />
+                            </div>
                           </div>
                         </div>
                       {/if}
@@ -1803,7 +1890,7 @@
         {updateStatus}
       </span>
     </div>
-    <div class="d-flex justify-content-center pt-1">
+    <!--<div class="d-flex justify-content-center pt-1">
       <details>
         <summary>Known issues (click to expand)</summary>
         <ul>
@@ -1833,7 +1920,7 @@
           <li>N/A</li>
         </ul>
       </details>
-    </div>
+    </div>-->
     <div class="d-flex justify-content-center pt-1">
       <button
         type="button"
