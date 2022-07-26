@@ -106,11 +106,18 @@ export interface EloSettings {
   dbIP: string;
   dbPort: number;
   dbUser: string;
-  dbPass: string;
+  dbPassword: string;
   dbName: string;
   dbTableName: string;
+  dbSecondaryTable: string;
+  dbPrimaryTableKey: string;
+  dbSecondaryTableKey: string;
   dbUserColumn: string;
   dbELOColumn: string;
+  dbPlayedColumn: string;
+  dbWonColumn: string;
+  dbRankColumn: string;
+  dbLastChangeColumn: string;
   dbDefaultElo: number;
   sqlitePath: string;
   balanceTeams: boolean;
@@ -219,11 +226,18 @@ class AppSettingsContainer extends Global {
         dbIP: store.get("elo.dbIP") ?? "127.0.0.1",
         dbPort: store.get("elo.dbPort") ?? 3306,
         dbUser: store.get("elo.dbUser") ?? "",
-        dbPass: store.get("elo.dbPass") ?? "",
+        dbPassword: store.get("elo.dbPassword") ?? "",
         dbName: store.get("elo.dbName") ?? "",
         dbTableName: store.get("elo.dbTableName") ?? "",
-        dbUserColumn: store.get("elo.dbUserColumns") ?? "player",
-        dbELOColumn: store.get("elo.dbELOColumns") ?? "rating",
+        dbSecondaryTable: store.get("elo.dbSecondaryTable") ?? "",
+        dbPrimaryTableKey: store.get("elo.dbPrimaryTableKey") ?? "",
+        dbSecondaryTableKey: store.get("elo.dbSecondaryTableKey") ?? "",
+        dbUserColumn: store.get("elo.dbUserColumn") ?? "player",
+        dbELOColumn: store.get("elo.dbELOColumn") ?? "rating",
+        dbPlayedColumn: store.get("elo.dbPlayedColumn") ?? "played",
+        dbWonColumn: store.get("elo.dbWonColumn") ?? "wins",
+        dbRankColumn: store.get("elo.dbRankColumn") ?? "rank",
+        dbLastChangeColumn: store.get("elo.dbLastChangeColumn") ?? "",
         dbDefaultElo: store.get("elo.dbDefaultElo") ?? 500,
         sqlitePath: store.get("elo.sqlitePath") ?? "",
         balanceTeams: store.get("elo.balanceTeams") ?? true,

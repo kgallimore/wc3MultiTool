@@ -12,6 +12,7 @@
   import CloseSlot from "./components/CloseSlot.svelte";
   import SettingsCheckbox from "./components/SettingsCheckbox.svelte";
   import WhiteBanList from "./components/WhiteBanList.svelte";
+  import SettingsTextInput from "./components/SettingsTextInput.svelte";
   import type { GameState } from "../../tsrc/globals/gameState";
   import type { ClientState } from "../../tsrc/globals/clientState";
 
@@ -73,12 +74,19 @@
       dbIP: "127.0.0.1",
       dbPort: 3306,
       dbUser: "",
-      dbPass: "",
+      dbPassword: "",
       dbName: "",
       dbTableName: "",
+      dbSecondaryTable: "",
+      dbPrimaryTableKey: "",
+      dbSecondaryTableKey: "",
       dbUserColumn: "player",
       dbELOColumn: "rating",
       dbDefaultElo: 500,
+      dbRankColumn: "rank",
+      dbLastChangeColumn: "",
+      dbPlayedColumn: "played",
+      dbWonColumn: "wins",
       sqlitePath: "",
       balanceTeams: true,
       announce: true,
@@ -699,55 +707,37 @@
                           </div>
                         </div>
                         <div class="row">
-                          <div class="col">
-                            <label for="dbUser">Databse User</label>
-                            <input
-                              type="text"
-                              class="form-control"
-                              id="dbIdbUserP"
-                              placeholder="Username"
-                              value={settings.elo.dbUser}
-                              on:change={onInputChange}
-                            />
-                          </div>
-                          <div class="col">
-                            <label for="dbPass">Databse Pass</label>
-                            <input
-                              type="password"
-                              class="form-control"
-                              id="dbPass"
-                              placeholder="Password"
-                              value={settings.elo.dbPass}
-                              on:change={onInputChange}
-                            />
-                          </div>
+                          <SettingsTextInput
+                            frontFacingName="Databse User"
+                            key="dbUser"
+                            value={settings.elo.dbUser}
+                            on:change={onInputChange}
+                          />
+                          <SettingsTextInput
+                            frontFacingName="Databse Pass"
+                            placeholder="Password"
+                            key="dbPassword"
+                            value={settings.elo.dbPassword}
+                            on:change={onInputChange}
+                          />
                         </div>
                         <div class="row">
-                          <div class="col">
-                            <label for="dbName">Databse Name</label>
-                            <input
-                              type="text"
-                              class="form-control"
-                              id="dbName"
-                              placeholder="Database"
-                              value={settings.elo.dbName}
-                              on:change={onInputChange}
-                            />
-                          </div>
+                          <SettingsTextInput
+                            frontFacingName="Databse Name"
+                            key="dbName"
+                            value={settings.elo.dbName}
+                            on:change={onInputChange}
+                          />
                         </div>
                       {:else if settings.elo.type === "sqlite"}
                         <div class="row">
-                          <div class="col">
-                            <label for="sqlitePath">Sqlite Path</label>
-                            <input
-                              type="text"
-                              class="form-control"
-                              id="sqlitePath"
-                              placeholder="Absolute Path"
-                              value={settings.elo.sqlitePath}
-                              on:change={onInputChange}
-                            />
-                          </div>
+                          <SettingsTextInput
+                            frontFacingName="Sqlite Path"
+                            key="sqlitePath"
+                            placeholder="Absolute Path"
+                            value={settings.elo.sqlitePath}
+                            on:change={onInputChange}
+                          />
                         </div>
                       {/if}
                       {#if ["mysql", "mariadb", "sqlite"].includes(settings.elo.type)}
@@ -797,6 +787,55 @@
                                 id="dbELOColumn"
                                 placeholder="ELO Column"
                                 value={settings.elo.dbELOColumn}
+                                on:change={onInputChange}
+                              />
+                            </div>
+                          </div>
+                          <div class="row pt-2">
+                            <div class="col text-center">Optional (Blank to disable)</div>
+                          </div>
+                          <div class="border m-1 p-1">
+                            <div class="row">
+                              <SettingsTextInput
+                                frontFacingName="Rank"
+                                key="dbRankColumn"
+                                value={settings.elo.dbRankColumn}
+                                on:change={onInputChange}
+                              />
+                              <SettingsTextInput
+                                frontFacingName="Played"
+                                key="dbPlayedColumn"
+                                value={settings.elo.dbPlayedColumn}
+                                on:change={onInputChange}
+                              />
+                              <SettingsTextInput
+                                frontFacingName="Wins"
+                                key="dbWonColumn"
+                                value={settings.elo.dbWonColumn}
+                                on:change={onInputChange}
+                              />
+                            </div>
+                            <div class="row pt-2">
+                              <div class="col text-center">Advanced</div>
+                            </div>
+                            <div class="row">
+                              <SettingsTextInput
+                                frontFacingName="Join Table"
+                                key="dbSecondaryTable"
+                                placeholder="Secondary Table"
+                                value={settings.elo.dbSecondaryTable}
+                                on:change={onInputChange}
+                              />
+                              <SettingsTextInput
+                                frontFacingName="Table 1 Key"
+                                key="dbPrimaryTableKey"
+                                value={settings.elo.dbPrimaryTableKey}
+                                on:change={onInputChange}
+                              />
+                              <SettingsTextInput
+                                frontFacingName="Table 2 Key"
+                                key="dbSecondaryTableKey"
+                                value={settings.elo.dbSecondaryTableKey}
                                 on:change={onInputChange}
                               />
                             </div>

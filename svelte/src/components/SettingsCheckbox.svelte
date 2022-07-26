@@ -20,6 +20,7 @@
   bind:this={label}
   for={key}
   class="btn btn-outline-primary"
+  data-setting={setting}
   data-bs-toggle="tooltip"
   data-bs-placement="top"
   title={tooltip}>{frontFacingName}</label

@@ -15,12 +15,12 @@ import {
 import { ensureInt } from "../utility";
 import type { GameSocketEvents, AvailableHandicaps } from "./../globals/gameSocket";
 import { sleep } from "@nut-tree/nut-js";
-import type { EloSettings } from "./../globals/settings";
+import type { EloSettings, SettingsUpdates } from "./../globals/settings";
 
 import { Combination, Permutation } from "js-combinatorics";
 import type { GameState } from "./../globals/gameState";
 
-import { Sequelize, QueryTypes, DataTypes, Model, ModelCtor } from "sequelize";
+import { Sequelize, QueryTypes } from "sequelize";
 
 export interface LobbyUpdatesExtended extends LobbyUpdates {
   playerCleared?: string;
@@ -48,10 +48,24 @@ export class LobbyControl extends Module {
   private startTimer: NodeJS.Timeout | null = null;
 
   private expectedSwaps: Array<{ swaps: [string, string]; forBalance: boolean }> = [];
-  userModel: ModelCtor<Model<any, any>> | null = null;
 
   constructor() {
-    super("Lobby Control", { listeners: ["gameSocketEvent", "gameStateUpdates"] });
+    super("Lobby Control", {
+      listeners: ["gameSocketEvent", "gameStateUpdates", "settingsUpdate"],
+    });
+    this.initDatabase();
+  }
+
+  onSettingsUpdate(updates: SettingsUpdates) {
+    if (
+      updates.elo?.dbIP !== undefined ||
+      updates.elo?.dbName !== undefined ||
+      updates.elo?.dbPassword !== undefined ||
+      updates.elo?.dbUser !== undefined ||
+      updates.elo?.dbPort !== undefined
+    ) {
+      this.initDatabase();
+    }
   }
 
   protected onGameStateUpdate(updates: Partial<GameState>): void {
@@ -423,44 +437,80 @@ export class LobbyControl extends Module {
               this.error("Please fix the database connection.");
               return;
             }
-            if (!this.userModel) {
-              this.error("Please fix the table and column mappings.");
-              if (!this.settings.values.elo.dbTableName) {
-                this.error("No user table set.");
-              }
-              if (!this.settings.values.elo.dbUserColumn) {
-                this.error("No user name column set.");
-              }
-              if (!this.settings.values.elo.dbELOColumn) {
-                this.error("No ELO/rating column set.");
-              }
+            if (!this.settings.values.elo.dbTableName) {
+              this.error("No user table set.");
               return;
             }
+            if (!this.settings.values.elo.dbUserColumn) {
+              this.error("No user name column set.");
+              return;
+            }
+            if (!this.settings.values.elo.dbELOColumn) {
+              this.error("No ELO/rating column set.");
+              return;
+            }
+            let buildAlias: string = "";
+            if (this.settings.values.elo.dbELOColumn !== "rating") {
+              buildAlias += ` ${this.settings.values.elo.dbELOColumn} as`;
+            }
+            buildAlias += " rating";
+            if (this.settings.values.elo.dbPlayedColumn) {
+              buildAlias += ",";
+              if (this.settings.values.elo.dbPlayedColumn !== "played") {
+                buildAlias += ` ${this.settings.values.elo.dbPlayedColumn} as`;
+              }
+              buildAlias += " played";
+            }
+            if (this.settings.values.elo.dbLastChangeColumn) {
+              buildAlias += ",";
+              if (this.settings.values.elo.dbLastChangeColumn !== "lastChange") {
+                buildAlias += ` ${this.settings.values.elo.dbLastChangeColumn} as`;
+              }
+              buildAlias += " lastChange";
+            }
+            if (this.settings.values.elo.dbWonColumn) {
+              buildAlias += ",";
+              if (this.settings.values.elo.dbWonColumn !== "wins") {
+                buildAlias += ` ${this.settings.values.elo.dbWonColumn} as`;
+              }
+              buildAlias += " wins";
+            }
+            if (this.settings.values.elo.dbRankColumn) {
+              buildAlias += ",";
+              if (this.settings.values.elo.dbRankColumn !== "rank") {
+                buildAlias += ` ${this.settings.values.elo.dbRankColumn} as`;
+              }
+              buildAlias += " rank";
+            }
 
-            /*let fetched = await this.dbConn.query(
-              "SELECT * FROM :dbTableName WHERE :playerColumn = :playerName",
+            let buildJoin = "";
+            if (
+              this.settings.values.elo.dbSecondaryTable &&
+              this.settings.values.elo.dbSecondaryTableKey &&
+              this.settings.values.elo.dbPrimaryTableKey
+            ) {
+              buildJoin = `JOIN ${this.settings.values.elo.dbSecondaryTable} ON ${this.settings.values.elo.dbSecondaryTable}.${this.settings.values.elo.dbSecondaryTableKey}=${this.settings.values.elo.dbTableName}.${this.settings.values.elo.dbPrimaryTableKey}`;
+            }
+
+            let userFetch = (await this.dbConn.query(
+              `SELECT ${buildAlias} FROM \`${this.settings.values.elo.dbTableName}\` ${buildJoin} WHERE \`${this.settings.values.elo.dbUserColumn}\` = :playerName`,
               {
                 replacements: {
-                  dbTableName: this.settings.values.elo.dbTableName,
-                  playerColumn: this.settings.values.elo.dbUserColumn,
                   playerName: name,
                 },
                 type: QueryTypes.SELECT,
               }
-            );*/
-            let userFetch = (await this.userModel.findOne({
-              //attributes: [[this.settings.values.elo.dbELOColumn, "rating"]],
-              where: {
-                [this.settings.values.elo.dbUserColumn]: name,
-              },
-            })) as {
-              played?: number;
-              wins?: number;
-              losses?: number;
-              lastChange?: number;
-              rank?: number;
-            } | null;
-            if (userFetch === null) {
+            )) as
+              | {
+                  rating: number;
+                  played?: number;
+                  wins?: number;
+                  losses?: number;
+                  lastChange?: number;
+                  rank?: number;
+                }[]
+              | null;
+            if (userFetch === null || userFetch.length === 0) {
               data = {
                 played: 0,
                 wins: 0,
@@ -470,18 +520,14 @@ export class LobbyControl extends Module {
                 rank: 99999,
               };
             } else {
+              let user = userFetch[0];
               data = {
-                played: userFetch.played ?? 0,
-                wins: userFetch.wins ?? 0,
-                losses:
-                  userFetch.losses ??
-                  (userFetch.played && userFetch.wins
-                    ? userFetch.played - userFetch.wins
-                    : 0),
-                //@ts-expect-error Dirty for now.
-                rating: userFetch[this.settings.values.elo.dbELOColumn],
-                lastChange: userFetch.lastChange ?? 0,
-                rank: userFetch.rank ?? 99999,
+                played: user.played ?? -1,
+                wins: user.wins ?? -1,
+                losses: user.played && user.wins ? user.played - user.wins : -1,
+                rating: user.rating,
+                lastChange: user.lastChange ?? 0,
+                rank: user.rank ?? -1,
               };
             }
           } else {
@@ -498,14 +544,20 @@ export class LobbyControl extends Module {
             return;
           }
           if (this.settings.values.elo.requireStats) {
-            if (data.played < this.settings.values.elo.minGames) {
+            if (
+              data.played !== undefined &&
+              data.played < this.settings.values.elo.minGames
+            ) {
               this.info(`${name} has not played enough games to qualify for the ladder.`);
               this.gameSocket.sendChatMessage(
                 `${name} has not played enough games to qualify for the ladder.`
               );
               this.banPlayer(name);
               return;
-            } else if (data.rating < this.settings.values.elo.minRating) {
+            } else if (
+              data.rating !== undefined &&
+              data.rating < this.settings.values.elo.minRating
+            ) {
               this.info(`${name} has an ELO rating below the minimum.`);
               this.gameSocket.sendChatMessage(
                 `${name} has an ELO rating below the minimum.`
@@ -514,13 +566,17 @@ export class LobbyControl extends Module {
               return;
             } else if (
               this.settings.values.elo.minRank !== 0 &&
+              data.rank !== undefined &&
               data.rank < this.settings.values.elo.minRank
             ) {
               this.info(`${name} has a rank below the minimum.`);
               this.gameSocket.sendChatMessage(`${name} has a rank below the minimum.`);
               this.banPlayer(name);
               return;
-            } else if (data.wins < this.settings.values.elo.minWins) {
+            } else if (
+              data.wins !== undefined &&
+              data.wins < this.settings.values.elo.minWins
+            ) {
               this.info(`${name} has not won enough games to qualify for the ladder.`);
               this.gameSocket.sendChatMessage(
                 `${name} has not won enough games to qualify for the ladder.`
@@ -546,6 +602,7 @@ export class LobbyControl extends Module {
           }
         }
       } catch (err: any) {
+        console.trace();
         this.error("Failed to fetch stats:");
         this.error(err);
       }
@@ -645,7 +702,7 @@ export class LobbyControl extends Module {
     let smallestEloDiff = Number.POSITIVE_INFINITY;
 
     let totalElo = Object.values(playerData).reduce(
-      (a, b) => (b.extra ? a + ensureInt(b.extra.rating) : a),
+      (a, b) => (b.extra?.rating ? a + ensureInt(b.extra.rating) : a),
       0
     );
 
@@ -713,7 +770,7 @@ export class LobbyControl extends Module {
             (x) => x[1].extra && lobbyCopy.nonSpecPlayers.includes(x[0])
           );
           let totalElo = players.reduce(
-            (a, b) => (b[1].extra ? a + ensureInt(b[1].extra.rating) : a),
+            (a, b) => (b[1].extra?.rating ? a + ensureInt(b[1].extra.rating) : a),
             0
           );
           let smallestEloDiff = Number.POSITIVE_INFINITY;
@@ -906,13 +963,13 @@ export class LobbyControl extends Module {
         this.info("Missing DB username");
         return;
       }
-      let pass = this.settings.values.elo.dbPass;
+      let pass = this.settings.values.elo.dbPassword;
       if (!pass) {
         this.info("Missing DB password");
         return;
       }
       let database = this.settings.values.elo.dbName;
-      if (!pass) {
+      if (!database) {
         this.info("Missing DB name");
         return;
       }
@@ -931,42 +988,14 @@ export class LobbyControl extends Module {
     try {
       await this.dbConn.authenticate();
       this.info("Database connection has been established successfully.");
+      this.notification(
+        "Success",
+        "Database connection has been established successfully."
+      );
+      //this.buildModel();
     } catch (error) {
       this.warn("Unable to connect to the database:", error);
     }
-  }
-
-  async buildModel() {
-    if (!this.dbConn) {
-      return;
-    }
-    if (this.userModel) {
-      this.userModel = null;
-    }
-    if (!this.settings.values.elo.dbTableName) {
-      return;
-    }
-    if (!this.settings.values.elo.dbUserColumn) {
-      return;
-    }
-    if (!this.settings.values.elo.dbELOColumn) {
-      return;
-    }
-    this.userModel = this.dbConn.define(
-      "Users",
-      {
-        [this.settings.values.elo.dbUserColumn]: {
-          type: DataTypes.STRING,
-          allowNull: false,
-        },
-        [this.settings.values.elo.dbELOColumn]: {
-          type: DataTypes.INTEGER,
-          defaultValue: this.settings.values.elo.dbDefaultElo,
-          allowNull: false,
-        },
-      },
-      { tableName: this.settings.values.elo.dbTableName, freezeTableName: true }
-    );
   }
 
   isLobbyReady() {
@@ -992,7 +1021,9 @@ export class LobbyControl extends Module {
           let waitingForStats = team.filter(
             (slot) =>
               slot.realPlayer &&
-              (!slot.data.cleared || !slot.data.extra || slot.data.extra.rating < 0)
+              (!slot.data.cleared ||
+                !slot.data.extra ||
+                (slot.data.extra.rating && slot.data.extra.rating < 0))
           );
           if (waitingForStats.length > 0) {
             this.verbose(
@@ -1245,7 +1276,7 @@ export class LobbyControl extends Module {
       let combinedData = data.map(
         (data) =>
           data.name +
-          (data.data.extra && data.data.extra.rating > -1
+          (data.data.extra && data.data.extra.rating && data.data.extra.rating > -1
             ? ": " +
               [
                 data.data.extra.rating,
