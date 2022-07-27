@@ -57,7 +57,7 @@ class DiscordBot extends ModuleBase {
         updates.discord.chatChannel !== undefined ||
         updates.discord.adminChannel !== undefined
       ) {
-        this.initialize();
+        this.getChannels();
       }
     }
   }
@@ -117,6 +117,9 @@ class DiscordBot extends ModuleBase {
   private initialize() {
     this.client?.destroy();
     this.client = null;
+    if (!this.settings.values.discord.enabled) {
+      return;
+    }
     if (!this.settings.values.discord.token) {
       return;
     }
@@ -156,7 +159,7 @@ class DiscordBot extends ModuleBase {
 
   private getChannels() {
     if (!this.client) {
-      this.error("Tried to get channels before client is available.");
+      this.warn("Tried to get discord channels before client is available.");
       return;
     }
     // Flush channels just in case the new ones don't exist or the channels aren't wanted.

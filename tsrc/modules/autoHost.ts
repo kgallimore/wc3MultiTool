@@ -307,7 +307,11 @@ class AutoHost extends ModuleBase {
         }
         if (
           ["openVPN", "both"].includes(this.settings.values.autoHost.regionChangeType) &&
-          newRegion !== this.clientState.values.vpnActive
+          newRegion !== this.clientState.values.vpnActive &&
+          ((newRegion === "eu" &&
+            this.settings.values.autoHost.regionChangeOpenVPNConfigEU) ||
+            (newRegion === "us" &&
+              this.settings.values.autoHost.regionChangeOpenVPNConfigNA))
         ) {
           this.info(`Changing VPN region to ${newRegion}`);
           await this.warControl.exitGame();
