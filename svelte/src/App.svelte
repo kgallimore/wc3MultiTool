@@ -143,16 +143,18 @@
     currentStepProgress: 0,
     currentIP: "",
     vpnActive: false,
+    ipCountry: "",
+    ipIsEU: false,
   };
   let gameState: GameState = {
     selfRegion: "",
     menuState: "OUT_OF_MENUS",
-    screenState: "",
     selfBattleTag: "",
     inGame: false,
     action: "openingWarcraft",
     openLobbyParams: undefined,
     connected: false,
+    gameVersion: "",
   };
   let updateStatus: string = "";
   let lobby: MicroLobby;
@@ -1992,12 +1994,23 @@
         Discord
       </a>
     </div>
-    {#each Object.entries(gameState) as [key, value]}
-      <div class="d-flex justify-content-center pt-1">
-        {key} : {typeof value !== "object" ? value : JSON.stringify(value)}
-      </div>
-    {/each}
-    <h4>Current Step: <span />{clientState.currentStepProgress}</h4>
+    <div class="d-flex justify-content-center pt-1">
+      <details class="bg-primary rounded-2 m-1">
+        <summary class="bg-secondary rounded-2 p-2">Advanced Status </summary>
+        {#each Object.entries(gameState) as [key, value]}
+          <div class="d-flex justify-content-center pt-1">
+            {key}: {typeof value !== "object" ? value : JSON.stringify(value)}
+          </div>
+        {/each}
+        {#each Object.entries(clientState) as [key, value]}
+          <div class="d-flex justify-content-center pt-1">
+            {key}: {typeof value !== "object" ? value : JSON.stringify(value)}
+          </div>
+        {/each}
+      </details>
+    </div>
+
+    <h4>Current Step: <span />{clientState.currentStep}</h4>
     <div class="progress">
       <div
         id="progressBar"

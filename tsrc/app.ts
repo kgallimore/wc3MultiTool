@@ -45,6 +45,7 @@ import { performanceMode } from "./modules/performanceMode";
 import { protocolHandler } from "./modules/protocolHandler";
 import { replayHandler } from "./modules/replayHandler";
 import { SEClientSingle } from "./modules/stream";
+import { monitor } from "./modules/antiCrash";
 
 import type { EmitEvents } from "./moduleBasePre";
 
@@ -142,6 +143,7 @@ if (!gotLock) {
     protocolHandler,
     replayHandler,
     SEClientSingle,
+    monitor,
   ];
 
   settings.on("settingsUpdates", (newSettings: SettingsUpdates) => {
