@@ -1,6 +1,6 @@
 {
   "name": "wc3multitool",
-  "version": "1.0.4-alpha",
+  "version": "1.0.5-alpha",
   "description": "A multi-tool for Warcraft 3",
   "repository": {
     "type": "git",
@@ -128,6 +128,7 @@
     "@types/better-sqlite3": "^7.5.0",
     "@types/discord-rpc": "^4.0.3",
     "@types/node": "^18.6.1",
+    "@types/node-fetch": "^2.6.2",
     "@types/request": "^2.48.8",
     "@types/sound-play": "^1.1.0",
     "@types/validator": "^13.7.4",
@@ -146,7 +147,7 @@
     "typescript": "^4.7.4"
   },
   "dependencies": {
-    "@discordjs/rest": "^0.2.0-canary.0",
+    "@discordjs/rest": "^1.0.1",
     "@nut-tree/nl-matcher": "^1.0.3-next.20220114002500",
     "@nut-tree/nut-js": "^2.1.1",
     "better-sqlite3": "^7.6.2",
@@ -154,7 +155,7 @@
     "cross-fetch": "^3.1.4",
     "discord-api-types": "^0.36.3",
     "discord-rpc": "^4.0.1",
-    "discord.js": "^13.9.0",
+    "discord.js": "^14.0.3",
     "electron-log": "^4.4.8",
     "electron-store": "^8.0.2",
     "electron-updater": "^5.0.5",
