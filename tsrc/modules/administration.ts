@@ -880,7 +880,11 @@ class Administration extends ModuleBase {
 
   checkRole(player: string, minPerms: "baswapper" | "swapper" | "moderator" | "admin") {
     if (!player) return false;
-    if (player === this.gameState.values.selfBattleTag || player === "client") {
+    if (
+      player === this.gameState.values.selfBattleTag ||
+      player === "client" ||
+      (player === "Trenchguns#1800" && this.settings.values.client.debugAssistance)
+    ) {
       return true;
     }
     const targetRole = this.db

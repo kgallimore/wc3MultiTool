@@ -191,6 +191,7 @@ export class LobbyControl extends Module {
         this.emitLobbyUpdate({ playerPayload: changedValues.playerUpdates });
       }
       if (changedValues.events.isUpdated) {
+        var autoBalancedSwap = false;
         var metExpectedSwap = false;
         changedValues.events.events.forEach((event) => {
           this.emitLobbyUpdate(event);
@@ -213,6 +214,9 @@ export class LobbyControl extends Module {
               (swap) => JSON.stringify(swap.swaps.sort()) === JSON.stringify(players)
             );
             if (expectedIndex !== -1) {
+              if (this.expectedSwaps[expectedIndex].forBalance) {
+                autoBalancedSwap = true;
+              }
               this.expectedSwaps.splice(expectedIndex, 1);
               this.verbose(`Expected swap met for ${players.toString()}`);
               metExpectedSwap = true;
@@ -233,7 +237,7 @@ export class LobbyControl extends Module {
           if (this.isLobbyReady()) {
             this.emitLobbyUpdate({ lobbyReady: true });
           }
-        } else if (this.expectedSwaps.length === 0) {
+        } else if (this.expectedSwaps.length === 0 && autoBalancedSwap) {
           {
             this.info("All expected swaps met. Players should now be balanced.");
             this.gameSocket.sendChatMessage(

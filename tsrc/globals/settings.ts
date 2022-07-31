@@ -37,6 +37,7 @@ export interface ClientSettings {
   bnetUsername: string;
   bnetPassword: string;
   releaseChannel: "latest" | "beta" | "alpha";
+  debugAssistance: boolean;
 }
 export interface AutoHostSettings {
   type: "off" | "lobbyHost" | "rapidHost" | "smartHost";
@@ -96,10 +97,12 @@ export interface DiscordSettings {
   token: string;
   announceChannel: string;
   chatChannel: string;
+  useThreads: boolean;
   adminChannel: string;
   logLevel: "error" | "warn" | "off";
   bidirectionalChat: boolean;
   sendInGameChat: boolean;
+  adminRole: string;
 }
 export interface EloSettings {
   type: "off" | "wc3stats" | "pyroTD" | "mariadb" | "mysql" | "sqlite" | "random";
@@ -260,10 +263,12 @@ class AppSettingsContainer extends Global {
         token: store.get("discord.token") ?? "",
         announceChannel: store.get("discord.announceChannel") ?? "",
         chatChannel: store.get("discord.chatChannel") ?? "",
+        useThreads: store.get("discord.useThreads") ?? true,
         bidirectionalChat: store.get("discord.bidirectionalChat") ?? false,
         sendInGameChat: store.get("discord.sendInGameChat") ?? false,
         adminChannel: store.get("discord.adminChannel") ?? "",
         logLevel: store.get("discord.logLevel") ?? "error",
+        adminRole: store.get("discord.adminRole") ?? "wc3mt",
       },
       client: {
         restartOnUpdate: store.get("client.restartOnUpdate") ?? false,
@@ -279,6 +284,7 @@ class AppSettingsContainer extends Global {
         bnetUsername: store.get("client.bnetUsername") ?? "",
         bnetPassword: store.get("client.bnetPassword") ?? "",
         releaseChannel: store.get("client.releaseChannel") ?? "latest",
+        debugAssistance: store.get("client.debugAssistance") ?? false,
       },
       streaming: {
         enabled: store.get("streaming.enabled") ?? false,

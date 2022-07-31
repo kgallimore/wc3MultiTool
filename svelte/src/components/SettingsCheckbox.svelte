@@ -1,7 +1,5 @@
 <script type="ts">
-  import type { AppSettings } from "./../../../tsrc/globals/settings";
   import { onMount } from "svelte";
-  export let setting: keyof AppSettings;
   export let key: string;
   export let checked: boolean = false;
   export let frontFacingName: string = key;
@@ -20,7 +18,6 @@
   bind:this={label}
   for={key}
   class="btn btn-outline-primary"
-  data-setting={setting}
   data-bs-toggle="tooltip"
   data-bs-placement="top"
   title={tooltip}>{frontFacingName}</label

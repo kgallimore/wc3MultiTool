@@ -3,9 +3,7 @@ import { Global } from "../globalBase";
 import WebSocket from "ws";
 
 import type { MenuStates } from "./gameState";
-import { settings } from "./settings";
 
-import { warControl } from "./warControl";
 import type { GameClientLobbyPayload, Regions } from "wc3mt-lobby-container";
 
 export interface GameList {
@@ -74,7 +72,7 @@ export interface CreateLobbyPayload {
   };
   privateGame?: boolean;
 }
-interface BaseMessage {
+export interface BaseMessage {
   sender: string;
   content: string;
 }
@@ -180,6 +178,9 @@ class GameSocket extends Global {
   }
 
   sendChatMessage(content: string) {
+    if (this.gameWebSocket?.readyState !== 1) {
+      return;
+    }
     if (typeof content === "string" && content.length > 0) {
       let newChatSplit = content.match(/.{1,255}/g);
       if (!newChatSplit) {

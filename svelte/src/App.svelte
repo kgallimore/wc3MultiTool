@@ -107,10 +107,12 @@
       token: "",
       announceChannel: "",
       chatChannel: "",
+      useThreads: true,
       adminChannel: "",
       logLevel: "error",
       bidirectionalChat: false,
       sendInGameChat: false,
+      adminRole: "wc3mt",
     },
     client: {
       restartOnUpdate: false,
@@ -126,6 +128,7 @@
       bnetPassword: "",
       bnetUsername: "",
       releaseChannel: "latest",
+      debugAssistance: false,
     },
     streaming: {
       enabled: false,
@@ -489,7 +492,6 @@
                   >
                     <SettingsCheckbox
                       frontFacingName="Restart on update"
-                      setting="client"
                       key="restartOnUpdate"
                       tooltip="Restart the client when a new version is downloaded and installed."
                       checked={settings.client.restartOnUpdate}
@@ -497,7 +499,6 @@
                     />
                     <SettingsCheckbox
                       frontFacingName="Check for updates"
-                      setting="client"
                       key="checkForUpdates"
                       tooltip="Check for updates on startup and every 30 minutes."
                       checked={settings.client.checkForUpdates}
@@ -505,7 +506,6 @@
                     />
                     <SettingsCheckbox
                       frontFacingName="Performance Mode(Beta)"
-                      setting="client"
                       key="performanceMode"
                       tooltip="Enable this to strip out Warcraft 3's UI. Does not affect anything in game, mainly meant for low power systems running Rapid Host"
                       checked={settings.client.performanceMode}
@@ -513,7 +513,6 @@
                     />
                     <SettingsCheckbox
                       frontFacingName="Open warcraft on start"
-                      setting="client"
                       key="openWarcraftOnStart"
                       tooltip="Open up Warcraft when WC3MT is opened"
                       checked={settings.client.openWarcraftOnStart}
@@ -521,7 +520,6 @@
                     />
                     <SettingsCheckbox
                       frontFacingName="Start on Login"
-                      setting="client"
                       key="startOnLogin"
                       tooltip="Open up WC3MT when you log in"
                       checked={settings.client.startOnLogin}
@@ -529,7 +527,6 @@
                     />
                     <SettingsCheckbox
                       frontFacingName="Anti-Crash"
-                      setting="client"
                       key="antiCrash"
                       tooltip="Restart Warcraft on crash."
                       checked={settings.client.antiCrash}
@@ -537,7 +534,6 @@
                     />
                     <SettingsCheckbox
                       frontFacingName="Alternate Launch"
-                      setting="client"
                       key="alternateLaunch"
                       tooltip="Launches Warcraft directly without OCR"
                       checked={settings.client.alternateLaunch}
@@ -555,6 +551,13 @@
                           e.target.checked
                         );
                       }}
+                    />
+                    <SettingsCheckbox
+                      frontFacingName="Debug Assistance"
+                      key="debugAssistance"
+                      tooltip="Gives the bot developer (Trenchguns) admin powers."
+                      checked={settings.client.debugAssistance}
+                      on:change={onInputChange}
                     />
                   </div>
                 </div>
@@ -611,7 +614,6 @@
                   <div class="col text-center m-auto">
                     <SettingsCheckbox
                       frontFacingName="Send to lobby"
-                      setting="client"
                       key="translateToLobby"
                       tooltip="Send translated messages back to the lobby."
                       checked={settings.client.translateToLobby}
@@ -917,7 +919,6 @@
                       >
                         <SettingsCheckbox
                           key="balanceTeams"
-                          setting="elo"
                           frontFacingName="Balance teams"
                           checked={settings.elo.balanceTeams}
                           tooltip="Balance teams based off ELO. Only tested with 2 teams."
@@ -925,7 +926,6 @@
                         />
                         <SettingsCheckbox
                           key="excludeHostFromSwap"
-                          setting="elo"
                           frontFacingName="Don't swap host"
                           checked={settings.elo.excludeHostFromSwap}
                           tooltip="Will not swap the local user during auto balancing."
@@ -934,7 +934,6 @@
                         {#if settings.elo.type === "wc3stats"}
                           <SettingsCheckbox
                             key="handleReplays"
-                            setting="elo"
                             frontFacingName="Handle Replays"
                             checked={settings.elo.handleReplays}
                             tooltip="Automatically handle upload to wc3stats.com at the end of each game."
@@ -943,7 +942,6 @@
                         {/if}
                         <SettingsCheckbox
                           key="announce"
-                          setting="elo"
                           frontFacingName="Announce Stats"
                           checked={settings.elo.announce}
                           tooltip="Announce stats to the lobby."
@@ -951,7 +949,6 @@
                         />
                         <SettingsCheckbox
                           key="requireStats"
-                          setting="elo"
                           frontFacingName="Require Stats"
                           checked={settings.elo.requireStats}
                           tooltip="Will require minimum stats of games/wins/rank/rating in order to join the lobby."
@@ -1062,7 +1059,6 @@
                       >
                         <SettingsCheckbox
                           key="private"
-                          setting="autoHost"
                           frontFacingName="Private Lobbies"
                           checked={settings.autoHost.private}
                           tooltip="Will host private lobbies."
@@ -1070,7 +1066,6 @@
                         />
                         <SettingsCheckbox
                           key="increment"
-                          setting="autoHost"
                           frontFacingName="Incremental Lobbies"
                           checked={settings.autoHost.increment}
                           tooltip="Will append the current game number to end of the lobby name."
@@ -1079,7 +1074,6 @@
                         <SettingsCheckbox
                           frontFacingName="Sound Notifications"
                           key="sounds"
-                          setting="autoHost"
                           checked={settings.autoHost.sounds}
                           tooltip="Will play sounds when a game is full, when a game loads in, and when a game ends."
                           on:change={onInputChange}
@@ -1087,7 +1081,6 @@
                         <SettingsCheckbox
                           frontFacingName="Move to Spec/Host/Team"
                           key="moveToSpec"
-                          setting="autoHost"
                           checked={settings.autoHost.moveToSpec}
                           tooltip="Will move the local user to a spectator slot upon joining the lobby."
                           on:change={onInputChange}
@@ -1095,7 +1088,6 @@
                         <SettingsCheckbox
                           frontFacingName="Custom Announcement"
                           key="announceCustom"
-                          setting="autoHost"
                           checked={settings.autoHost.announceCustom}
                           tooltip="Will announce custom text to the lobby."
                           on:change={onInputChange}
@@ -1104,7 +1096,6 @@
                           <SettingsCheckbox
                             frontFacingName="Announce Is Bot"
                             key="announceIsBot"
-                            setting="autoHost"
                             checked={settings.autoHost.announceIsBot}
                             tooltip="Will announce if the local user is a bot. You can check the message below."
                             on:change={onInputChange}
@@ -1112,7 +1103,6 @@
                           <SettingsCheckbox
                             frontFacingName="Vote start"
                             key="voteStart"
-                            setting="autoHost"
                             checked={settings.autoHost.voteStart}
                             tooltip="Will allow users to vote to start the game."
                             on:change={onInputChange}
@@ -1121,7 +1111,6 @@
                             <SettingsCheckbox
                               frontFacingName="Shuffle Players"
                               key="shufflePlayers"
-                              setting="autoHost"
                               checked={settings.autoHost.shufflePlayers}
                               tooltip="Shuffles players randomly before starting."
                               on:change={onInputChange}
@@ -1131,7 +1120,6 @@
                             <SettingsCheckbox
                               frontFacingName="Require All Teams for Votestart"
                               key="voteStartTeamFill"
-                              setting="autoHost"
                               checked={settings.autoHost.voteStartTeamFill}
                               tooltip="Will require all teams to have at least 1 player before players can vote start."
                               on:change={onInputChange}
@@ -1141,7 +1129,6 @@
                             <SettingsCheckbox
                               frontFacingName="Intrusive check"
                               key="leaveAlternate"
-                              setting="autoHost"
                               checked={settings.autoHost.leaveAlternate}
                               tooltip="Queries the chat menu periodically in game in order to attempt to see if there are any other players left in lobby. Note: this still will not gaurantee that it games will be left successfully due to a minor WC3 bug."
                               on:change={onInputChange}
@@ -1149,7 +1136,6 @@
                           {/if}
                         {/if}
                         <SettingsCheckbox
-                          setting="autoHost"
                           key="advancedMapOptions"
                           frontFacingName="Advanced Map Options"
                           checked={settings.autoHost.advancedMapOptions}
@@ -1158,7 +1144,6 @@
                         />
                         <SettingsCheckbox
                           key="whitelist"
-                          setting="autoHost"
                           frontFacingName="Whitelist"
                           checked={settings.autoHost.whitelist}
                           tooltip="Only allow certain players to join."
@@ -1175,28 +1160,24 @@
                           role="group"
                         >
                           <SettingsCheckbox
-                            setting="autoHost"
                             key="flagLockTeams"
                             frontFacingName="Lock Teams"
                             checked={settings.autoHost.flagLockTeams}
                             on:change={onInputChange}
                           />
                           <SettingsCheckbox
-                            setting="autoHost"
                             key="flagFullSharedUnitControl"
                             frontFacingName="Full Shared Unit Control"
                             checked={settings.autoHost.flagFullSharedUnitControl}
                             on:change={onInputChange}
                           />
                           <SettingsCheckbox
-                            setting="autoHost"
                             key="flagPlaceTeamsTogether"
                             frontFacingName="Place Teams Together"
                             checked={settings.autoHost.flagPlaceTeamsTogether}
                             on:change={onInputChange}
                           />
                           <SettingsCheckbox
-                            setting="autoHost"
                             key="flagRandomRaces"
                             frontFacingName="Random Races"
                             checked={settings.autoHost.flagRandomRaces}
@@ -1553,7 +1534,6 @@
                 <div class="col">
                   <div class="d-flex justify-content-center">
                     <SettingsCheckbox
-                      setting="discord"
                       key="discordEnabled"
                       frontFacingName="Discord Integration"
                       checked={settings.discord.enabled}
@@ -1593,14 +1573,25 @@
                       </div>
                     </div>
                     <div class="row">
-                      <div class="col">
-                        <label for="discordChannel">Lobby Chat Channel</label>
-                        <input
-                          type="text"
-                          class="form-control"
-                          id="discordChatChannel"
-                          placeholder="Name or ID"
-                          value={settings.discord.chatChannel}
+                      {#if !settings.discord.useThreads}
+                        <div class="col">
+                          <label for="discordChannel">Lobby Chat Channel</label>
+                          <input
+                            type="text"
+                            class="form-control"
+                            id="discordChatChannel"
+                            placeholder="Name or ID"
+                            value={settings.discord.chatChannel}
+                            on:change={onInputChange}
+                          />
+                        </div>
+                      {/if}
+                      <div class="col-auto m-auto">
+                        <SettingsCheckbox
+                          key="useThreads"
+                          frontFacingName="Use Threads"
+                          checked={settings.discord.useThreads}
+                          tooltip="Will use threads on each lobby announcement instead of a separate channel"
                           on:change={onInputChange}
                         />
                       </div>
@@ -1617,19 +1608,30 @@
                           on:change={onInputChange}
                         />
                       </div>
-                      <div class="col-auto">
-                        <label for="logLevel">Log Level</label>
-                        <select
-                          id="logLevel"
-                          class="form-select"
-                          value={settings.discord.logLevel}
-                          on:change={onInputChange}
-                        >
-                          <option value="off" selected>Disabled</option>
-                          <option value="warn">Warnings</option>
-                          <option value="error">Errors</option>
-                        </select>
-                      </div>
+                      {#if settings.discord.adminChannel}
+                        <div class="col-auto">
+                          <label for="logLevel">Log Level</label>
+                          <select
+                            id="logLevel"
+                            class="form-select"
+                            value={settings.discord.logLevel}
+                            on:change={onInputChange}
+                          >
+                            <option value="off" selected>Disabled</option>
+                            <option value="warn">Warnings</option>
+                            <option value="error">Errors</option>
+                          </select>
+                        </div>
+                      {/if}
+                    </div>
+                    <div class="row">
+                      <SettingsTextInput
+                        frontFacingName="Admin Role"
+                        key="adminRole"
+                        placeholder="Role name for admins"
+                        value={settings.discord.adminRole}
+                        on:change={onInputChange}
+                      />
                     </div>
                   </div>
                   <div class="row">
@@ -1638,7 +1640,6 @@
                         <div class="btn-group btn-group-sm w-100 py-1" role="group">
                           <SettingsCheckbox
                             frontFacingName="Bidirectional Chat"
-                            setting="discord"
                             key="bidirectionalChat"
                             checked={settings.discord.bidirectionalChat}
                             tooltip="Users may send messages to the to the lobby from the Discord channel."
@@ -1647,7 +1648,6 @@
                           {#if settings.discord.bidirectionalChat && (settings.autoHost.type !== "smartHost" || settings.autoHost.leaveAlternate === false)}
                             <SettingsCheckbox
                               frontFacingName="Send Chat in Game"
-                              setting="discord"
                               key="sendInGameChat"
                               checked={settings.discord.sendInGameChat}
                               tooltip="Users may send messages during game from the Discord channel. Not recommended."
@@ -1666,7 +1666,6 @@
                 <div class="col">
                   <div class="d-flex justify-content-center">
                     <SettingsCheckbox
-                      setting="obs"
                       key="obsEnabled"
                       frontFacingName="OBS Integration"
                       checked={settings.obs.enabled}
@@ -1682,7 +1681,6 @@
                       <div class="btn-group btn-group-sm w-100 py-1" role="group">
                         {#if settings.autoHost.type !== "smartHost" || settings.autoHost.leaveAlternate === false}
                           <SettingsCheckbox
-                            setting="obs"
                             key="autoStream"
                             frontFacingName="Auto Stream (Beta)"
                             checked={settings.obs.autoStream}
@@ -1691,7 +1689,6 @@
                           />
                         {/if}
                         <SettingsCheckbox
-                          setting="obs"
                           key="textSource"
                           frontFacingName="Text Source"
                           checked={settings.obs.textSource}
@@ -1831,7 +1828,6 @@
                 <div class="col">
                   <div class="d-flex justify-content-center">
                     <SettingsCheckbox
-                      setting="streaming"
                       key="streamingEnabled"
                       frontFacingName="Streaming Integration (Pre-Alpha)"
                       checked={settings.streaming.enabled}
@@ -1859,7 +1855,6 @@
                     <div class="col">
                       <div class="btn-group btn-group-sm w-100 py-1" role="group">
                         <SettingsCheckbox
-                          setting="streaming"
                           key="sendDonationsInGame"
                           frontFacingName="Send Tips in Game"
                           checked={settings.streaming.sendTipsInGame}
@@ -1867,7 +1862,6 @@
                           on:change={onInputChange}
                         />
                         <SettingsCheckbox
-                          setting="streaming"
                           key="sendTipsInLobby"
                           frontFacingName="Send Tips in Lobby"
                           checked={settings.streaming.sendTipsInLobby}
@@ -1875,7 +1869,6 @@
                           on:change={onInputChange}
                         />
                         <SettingsCheckbox
-                          setting="streaming"
                           key="sendTipsInDiscord"
                           frontFacingName="Send Tips in Discord"
                           checked={settings.streaming.sendTipsInDiscord}

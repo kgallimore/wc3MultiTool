@@ -55,12 +55,13 @@ class WarControl extends Global {
   async openWarcraft(
     region: Regions | "" = "",
     callCount = 0,
-    focusAttempted = false
+    reopen: boolean = false
   ): Promise<boolean> {
     gameState.updateGameState({ action: "openingWarcraft" });
     try {
-      if (callCount > 60) {
-        this.error("Failed to open Warcraft after 60 attempts");
+      if (callCount > 180) {
+        this.error("Failed to open Warcraft. Giving up.");
+        return false;
       }
       if (await this.isWarcraftOpen()) {
         this.info("Warcraft is now open");
@@ -75,13 +76,17 @@ class WarControl extends Global {
           );
         }
         await sleep(1000);
-        return await this.openWarcraft(region, callCount + 1);
+        return await this.openWarcraft(region, callCount + 1, reopen);
       }
       let battleNetOpen = await this.checkProcess("Battle.net.exe");
       if (battleNetOpen !== true) {
         shell.openPath(this.warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe");
         await sleep(1000);
-        return await this.openWarcraft(region, callCount + 1);
+        return await this.openWarcraft(region, callCount + 1, reopen);
+      } else if (callCount > 60 && !reopen) {
+        this.error("Failed to open Warcraft. Restarting Battle.net");
+        await this.forceQuitProcess("Battle.net.exe");
+        return await this.openWarcraft(region, callCount + 10, true);
       }
       let battleNetWindow;
       let windows = windowManager.getWindows();
@@ -89,7 +94,7 @@ class WarControl extends Global {
         let title = window.getTitle();
         if (title === "Battle.net Login") {
           await sleep(1000);
-          return await this.openWarcraft(region, callCount + 1);
+          return await this.openWarcraft(region, callCount + 1, reopen);
         }
         if (title === "Blizzard Battle.net Login") {
           this.error("A login is required to open Warcraft");
@@ -105,7 +110,7 @@ class WarControl extends Global {
           shell.openPath(this.warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe");
         }
         await sleep(3000);
-        return await this.openWarcraft(region, callCount + 3);
+        return await this.openWarcraft(region, callCount + 3, reopen);
       }
       battleNetWindow.restore();
       battleNetWindow.show();
@@ -116,7 +121,7 @@ class WarControl extends Global {
       if (activeWindowTitle !== "Battle.net") {
         this.verbose("Nut.js and NWM title mismatch.");
         await sleep(500);
-        return await this.openWarcraft(region, callCount + 1);
+        return await this.openWarcraft(region, callCount + 1, reopen);
       }
       let searchRegion = await activeWindow.region;
       searchRegion.width = searchRegion.width * 0.35;
@@ -157,7 +162,7 @@ class WarControl extends Global {
         await mouse.setPosition(playRegionCenter);
         await mouse.leftClick();
         this.info("Found and clicked play");
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 20; i++) {
           if (await this.isWarcraftOpen()) {
             this.info("Warcraft is now open.");
             gameState.updateGameState({ action: "nothing" });
@@ -174,7 +179,7 @@ class WarControl extends Global {
       gameState.updateGameState({ action: "nothing" });
       return false;
     } catch (e) {
-      this.error(e as string);
+      this.error(e);
       gameState.updateGameState({ action: "nothing" });
       return false;
     }
