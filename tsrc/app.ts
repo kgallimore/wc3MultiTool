@@ -472,17 +472,6 @@ if (!gotLock) {
                 }
               }
               settings.updateSettings({ autoHost: { mapPath: newMapPath } });
-              if (mapName) {
-                mapName = mapName.substring(0, mapName.length - 4);
-                settings.updateSettings({ autoHost: { mapName } });
-                lobbyControl
-                  .eloMapName(settings.values.autoHost.mapName, settings.values.elo.type)
-                  .then((data) => {
-                    settings.updateSettings({
-                      elo: { available: data.elo, lookupName: data.name },
-                    });
-                  });
-              }
             }
           })
           .catch((err) => {

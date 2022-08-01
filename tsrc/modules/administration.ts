@@ -705,9 +705,21 @@ class Administration extends ModuleBase {
     return { type: false };
   }
 
-  banPlayer(player: string, admin: string, region: Regions | "client", reason = "") {
-    if (this.checkRole(admin, "moderator")) {
+  banPlayer(
+    player: string,
+    admin: string,
+    region: Regions | "client",
+    reason = "",
+    bypassCheck: boolean = false
+  ): true | { reason: string } {
+    if (this.checkRole(admin, "moderator") || bypassCheck) {
       if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
+        if (this.checkRole(player, "admin")) {
+          this.warn(
+            "Can not ban an admin (" + player + ") without removing permissions first."
+          );
+          return { reason: "Can not ban an admin without removing permissions first." };
+        }
         this.db
           .prepare(
             "INSERT INTO banList (username, admin, region, reason) VALUES (?, ?, ?, ?)"
@@ -729,14 +741,23 @@ class Administration extends ModuleBase {
             player + " banned" + (reason ? " for " + reason : "")
           );
         }
+        return true;
       } else {
         this.error("Failed to ban, invalid battleTag: " + player);
+        return { reason: "Failed to ban, invalid battleTag: " + player };
       }
     }
+    return { reason: "Missing required permissions." };
   }
 
-  whitePlayer(player: string, admin: string, region: Regions | "client", reason = "") {
-    if (this.checkRole(admin, "moderator")) {
+  whitePlayer(
+    player: string,
+    admin: string,
+    region: Regions | "client",
+    reason = "",
+    bypassCheck: boolean = false
+  ): true | { reason: string } {
+    if (this.checkRole(admin, "moderator") || bypassCheck) {
       if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
         this.db
           .prepare(
@@ -764,10 +785,13 @@ class Administration extends ModuleBase {
             player + " whitelisted" + (reason ? " for " + reason : "")
           );
         }
+        return true;
       } else {
         this.error("Failed to whitelist, invalid battleTag: " + player);
+        return { reason: "Invalid battleTag" };
       }
     }
+    return { reason: "Missing required permissions" };
   }
 
   unWhitePlayer(player: string, admin: string) {
@@ -785,28 +809,35 @@ class Administration extends ModuleBase {
     });
   }
 
-  unBanPlayer(player: string, admin: string) {
-    this.db
-      .prepare(
-        "UPDATE banList SET removal_date = DateTime('now') WHERE username = ? AND removal_date IS NULL"
-      )
-      .run(player);
-    this.info("Unbanned " + player + " by " + admin);
-    this.sendWindow({
-      legacy: {
-        messageType: "action",
-        data: { value: "Unbanned " + player + " by " + admin },
-      },
-    });
+  unBanPlayer(player: string, admin: string): boolean {
+    try {
+      this.db
+        .prepare(
+          "UPDATE banList SET removal_date = DateTime('now') WHERE username = ? AND removal_date IS NULL"
+        )
+        .run(player);
+      this.info("Unbanned " + player + " by " + admin);
+      this.sendWindow({
+        legacy: {
+          messageType: "action",
+          data: { value: "Unbanned " + player + " by " + admin },
+        },
+      });
+      return true;
+    } catch (e) {
+      this.error("Failed to unban " + player + " by " + admin, e);
+      return false;
+    }
   }
 
   addAdmin(
     player: string,
     admin: string,
     region: Regions | "client",
-    role: "baswapper" | "swapper" | "moderator" | "admin" = "moderator"
-  ) {
-    if (this.checkRole(admin, "admin")) {
+    role: "baswapper" | "swapper" | "moderator" | "admin" = "moderator",
+    bypassCheck: boolean = false
+  ): true | { reason: string } {
+    if (this.checkRole(admin, "admin") || bypassCheck) {
       if (["baswapper", "swapper", "moderator", "admin"].includes(role)) {
         if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
           if (this.checkRole(player, "moderator")) {
@@ -842,20 +873,24 @@ class Administration extends ModuleBase {
           }
         } else {
           this.info("Failed to add admin, invalid battleTag: " + player);
-          return false;
+          return { reason: "Invalid battleTag" };
         }
       } else {
         this.info("Failed to add admin, invalid role: " + role);
-        return false;
+        return { reason: "Invalid role" };
       }
     } else {
       this.info(admin + " is not an admin and can not set perms.");
-      return false;
+      return { reason: "Missing required permissions" };
     }
   }
 
-  removeAdmin(player: string, admin: string) {
-    if (this.checkRole(admin, "admin")) {
+  removeAdmin(
+    player: string,
+    admin: string,
+    bypassCheck: boolean = false
+  ): true | { reason: string } {
+    if (this.checkRole(admin, "admin") || bypassCheck) {
       if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
         if (this.checkRole(player, "baswapper")) {
           this.db.prepare("DELETE FROM adminList WHERE username = ?").run(player);
@@ -868,14 +903,20 @@ class Administration extends ModuleBase {
           });
         } else {
           this.info(player + " is not a moderator");
-          return false;
+          return { reason: "Target has no roles." };
         }
       } else {
         this.error("Failed to remove admin, invalid battleTag: " + player);
-        return false;
+        return { reason: "Invalid battleTag" };
       }
       return true;
     }
+    return { reason: "Missing required permissions" };
+  }
+
+  getRole(player: string): "baswapper" | "swapper" | "moderator" | "admin" | null {
+    return this.db.prepare("SELECT role FROM adminList WHERE username = ?").get(player)
+      ?.role;
   }
 
   checkRole(player: string, minPerms: "baswapper" | "swapper" | "moderator" | "admin") {
@@ -887,9 +928,9 @@ class Administration extends ModuleBase {
     ) {
       return true;
     }
-    const targetRole = this.db
-      .prepare("SELECT role FROM adminList WHERE username = ?")
-      .get(player)?.role;
+
+    let targetRole = this.getRole(player);
+
     if (targetRole) {
       if (
         minPerms === "baswapper" &&

@@ -66,6 +66,15 @@ export class LobbyControl extends Module {
     ) {
       this.initDatabase();
     }
+    if (updates.autoHost?.mapName) {
+      this.eloMapName(updates.autoHost.mapName, this.settings.values.elo.type).then(
+        (data) => {
+          this.settings.updateSettings({
+            elo: { available: data.elo, lookupName: data.name },
+          });
+        }
+      );
+    }
   }
 
   protected onGameStateUpdate(updates: Partial<GameState>): void {

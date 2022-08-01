@@ -330,9 +330,23 @@ class AppSettingsContainer extends Global {
               (typeof value === "boolean" || typeof value === "object"))) &&
           targetCurrentValue !== value
         ) {
+          if (key === "mapPath" && typeof value === "string") {
+            value.replace(/\\/g, "/");
+            let splitName = (value as string).split("/");
+            let mapName = splitName[splitName.length - 1];
+            if (mapName) {
+              mapName = mapName.substring(0, mapName.length - 4);
+              this._values.autoHost.mapName = mapName;
+              if (!filteredUpdates.autoHost) {
+                filteredUpdates.autoHost = { mapName };
+              } else {
+                filteredUpdates.autoHost.mapName = mapName;
+              }
+            }
+          }
           // @ts-expect-error
           this._values[settingName][key] = value;
-          // TODO Make this not update the whole settingName section
+
           store.set(settingName + "." + key, value);
           this.info(
             settingName + " settings changed: " + key,
