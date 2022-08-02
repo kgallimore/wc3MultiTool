@@ -965,9 +965,9 @@ export class LobbyControl extends Module {
       this.settings.values.elo.type === "mariadb" ||
       this.settings.values.elo.type === "mysql"
     ) {
-      let ip = this.settings.values.elo.dbIP;
+      let host = this.settings.values.elo.dbIP;
       //
-      if (!ip || !/^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)(\.(?!$)|$)){4}$/.test(ip)) {
+      if (!host || !/^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)(\.(?!$)|$)){4}$/.test(host)) {
         this.info("Missing or invalid DB Ip address");
         return;
       }
@@ -986,8 +986,14 @@ export class LobbyControl extends Module {
         this.info("Missing DB name");
         return;
       }
+      let port = this.settings.values.elo.dbPort;
+      if (!port) {
+        this.info("Missing DB name");
+        return;
+      }
       this.dbConn = new Sequelize(database, user, pass, {
-        host: ip,
+        host,
+        port,
         dialect: this.settings.values.elo.type,
       });
     } else if (this.settings.values.elo.type === "sqlite") {
