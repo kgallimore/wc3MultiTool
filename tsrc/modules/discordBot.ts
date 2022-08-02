@@ -3,7 +3,7 @@ import { ModuleBase } from "../moduleBase";
 import type { SettingsUpdates } from "../globals/settings";
 
 import Discord, { Collection } from "discord.js";
-import { EmbedBuilder, Interaction, CacheType } from "discord.js";
+import { EmbedBuilder, Interaction, InteractionType } from "discord.js";
 import { Routes } from "discord-api-types/v10";
 import { REST } from "@discordjs/rest";
 import type { mmdResults } from "./replayHandler";
@@ -44,7 +44,11 @@ class DiscordBot extends ModuleBase {
     string,
     {
       execute: (
-        interaction: Interaction<CacheType>,
+        interaction: Interaction<"cached">,
+        channel: ChatChannelMatch
+      ) => Promise<void>;
+      autoComplete?: (
+        interaction: Discord.AutocompleteInteraction<"cached">,
         channel: ChatChannelMatch
       ) => Promise<void>;
     }
@@ -183,14 +187,14 @@ class DiscordBot extends ModuleBase {
     });
 
     this.client.on("interactionCreate", async (interaction) => {
+      if (!interaction.inCachedGuild()) return;
+      let channelMatch = this.matchChannel(interaction.channel);
       if (interaction.isChatInputCommand()) {
         const command = this.commandInteractions.get(interaction.commandName);
 
         if (!command) {
           return;
         }
-
-        let channelMatch = this.matchChannel(interaction.channel);
 
         try {
           await command.execute(interaction, channelMatch);
@@ -200,6 +204,16 @@ class DiscordBot extends ModuleBase {
             content: "There was an error while executing this command!",
             ephemeral: true,
           });
+        }
+      } else if (interaction.type === InteractionType.ApplicationCommandAutocomplete) {
+        const command = this.commandInteractions.get(interaction.commandName);
+        if (!command?.autoComplete) {
+          return;
+        }
+        try {
+          await command.autoComplete(interaction, channelMatch);
+        } catch (error) {
+          this.error(error);
         }
       }
     });

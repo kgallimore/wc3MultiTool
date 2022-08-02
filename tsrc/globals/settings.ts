@@ -305,6 +305,35 @@ class AppSettingsContainer extends Global {
     throw new Error("Can not set values directly. Use updateSettings.");
   }
 
+  getCleanSetting(
+    setting: keyof AppSettings
+  ):
+    | DiscordSettings
+    | ClientSettings
+    | StreamingSettings
+    | AutoHostSettings
+    | ObsSettings
+    | EloSettings {
+    let copy = this._values[setting];
+    Object.keys(copy)
+      .filter(
+        (key) =>
+          key.toLowerCase().includes("token") || key.toLowerCase().includes("password")
+      )
+      //@ts-expect-error This is fine.
+      .forEach((key) => (copy[key] = copy[key] ? "*****" : ""));
+    return copy;
+  }
+
+  getAllSettingsClean(): AppSettings {
+    let fullCopy = this._values;
+    Object.keys(this._values).forEach((sett) => {
+      // @ts-expect-error Not sure
+      fullCopy[sett as keyof AppSettings] = this.cleanSetting(sett as keyof AppSettings);
+    });
+    return fullCopy;
+  }
+
   updateSettings(updates: SettingsUpdates) {
     let filteredUpdates: SettingsUpdates = {};
     (

@@ -1,7 +1,8 @@
-import { SlashCommandBuilder, Interaction, CacheType } from "discord.js";
+import { SlashCommandBuilder, Interaction, AutocompleteInteraction } from "discord.js";
 import type { ChatChannelMatch } from "./../discordBot";
-import { settings } from "./../../globals/settings";
 import { administration } from "./../administration";
+import { checkAdminRequired } from "./../discordUtility/utility";
+import { lobbyControl } from "./../lobbyControl";
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -16,7 +17,11 @@ module.exports = {
             .setName("ban")
             .setDescription("Ban a user")
             .addStringOption((option) =>
-              option.setName("user").setRequired(true).setDescription("BattleTag to ban")
+              option
+                .setName("user")
+                .setRequired(true)
+                .setDescription("BattleTag to ban")
+                .setAutocomplete(true)
             )
             .addStringOption((option) =>
               option.setName("reason").setDescription("Reason")
@@ -42,6 +47,7 @@ module.exports = {
                 .setName("user")
                 .setRequired(true)
                 .setDescription("BattleTag to set permissions of")
+                .setAutocomplete(true)
             )
             .addStringOption((option) =>
               option
@@ -63,6 +69,7 @@ module.exports = {
                 .setName("user")
                 .setRequired(true)
                 .setDescription("BattleTag to unperm")
+                .setAutocomplete(true)
             )
         )
     )
@@ -71,18 +78,17 @@ module.exports = {
         .setName("checkuser")
         .setDescription("Check a user's ban/whitelist status and/or perms")
         .addStringOption((option) =>
-          option.setName("user").setRequired(true).setDescription("BattleTag to check")
+          option
+            .setName("user")
+            .setRequired(true)
+            .setDescription("BattleTag to check")
+            .setAutocomplete(true)
         )
     ),
-  async execute(interaction: Interaction<CacheType>, channelMatch: ChatChannelMatch) {
-    if (!interaction.isChatInputCommand() || !interaction.inCachedGuild()) return;
+  async execute(interaction: Interaction<"cached">, channelMatch: ChatChannelMatch) {
+    if (!interaction.isChatInputCommand()) return;
     let adminOnly = interaction.options.getSubcommandGroup() === "adminonly";
-    if (
-      adminOnly &&
-      channelMatch !== "admin" &&
-      !interaction.memberPermissions?.has("Administrator") &&
-      !interaction.member.roles.cache.has(settings.values.discord.adminRole)
-    ) {
+    if (adminOnly && checkAdminRequired(interaction, channelMatch)) {
       await interaction.reply({
         content: "You are not allowed to run this command.",
         ephemeral: true,
@@ -153,6 +159,34 @@ module.exports = {
         content,
         ephemeral: adminOnly && channelMatch !== "admin",
       });
+    }
+  },
+  async autoComplete(
+    interaction: AutocompleteInteraction<"cached">,
+    channelMatch: ChatChannelMatch
+  ) {
+    // TODO: add autocomplete from database
+    let command = interaction.options.getSubcommand();
+    if (!["checkuser", "ban", "mod", "unperm"].includes(command)) {
+      return;
+    }
+    let adminOnly = interaction.options.getSubcommandGroup() === "adminonly";
+    if (adminOnly && checkAdminRequired(interaction, channelMatch)) {
+      await interaction.respond([
+        { name: "You are not allowed to run this command.", value: "null" },
+      ]);
+      return;
+    }
+    const focusedOption = interaction.options.getFocused(true);
+    if (lobbyControl.microLobby) {
+      let matches = lobbyControl.microLobby.searchPlayer(focusedOption.value);
+      await interaction.respond(
+        matches.map((playerName) => {
+          return { name: playerName, value: playerName };
+        })
+      );
+    } else {
+      await interaction.respond([]);
     }
   },
 };
