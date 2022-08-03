@@ -163,7 +163,12 @@ export class LobbyControl extends Module {
       ) {
         try {
           this.startTimer = null;
-          this.microLobby = new MicroLobby({ region, payload });
+          this.microLobby = new MicroLobby({
+            region,
+            payload,
+            statsAvailableOverride:
+              this.dbConn !== null || this.settings.values.elo.type === "random",
+          });
           if (this.settings.values.elo.type !== "off") {
             this.eloMapName(payload.mapData.mapName, this.settings.values.elo.type).then(
               (eloMapName) => {
@@ -377,7 +382,7 @@ export class LobbyControl extends Module {
     } else
       return {
         name: encodeURI(mapName.trim().replace(/\s*v?\.?(\d+\.)?(\*|\d+)\w*\s*$/gi, "")),
-        elo: false,
+        elo: ["mariadb", "mysql", "sqlite", "random"].includes(type),
       };
   }
 
@@ -390,7 +395,8 @@ export class LobbyControl extends Module {
             this.fetchStats(name);
           }, 1000);
           return;
-        } else if (this.microLobby?.statsAvailable) {
+        }
+        if (this.microLobby?.statsAvailable) {
           this.verbose("Starting search for stats for: " + name);
           this.fetchingStats.push(name);
           let data: PlayerData["extra"] | undefined;
@@ -504,16 +510,14 @@ export class LobbyControl extends Module {
             ) {
               buildJoin = `JOIN ${this.settings.values.elo.dbSecondaryTable} ON ${this.settings.values.elo.dbSecondaryTable}.${this.settings.values.elo.dbSecondaryTableKey}=${this.settings.values.elo.dbTableName}.${this.settings.values.elo.dbPrimaryTableKey}`;
             }
-
-            let userFetch = (await this.dbConn.query(
-              `SELECT ${buildAlias} FROM \`${this.settings.values.elo.dbTableName}\` ${buildJoin} WHERE \`${this.settings.values.elo.dbUserColumn}\` = :playerName`,
-              {
-                replacements: {
-                  playerName: name,
-                },
-                type: QueryTypes.SELECT,
-              }
-            )) as
+            let query = `SELECT ${buildAlias} FROM \`${this.settings.values.elo.dbTableName}\` ${buildJoin} WHERE \`${this.settings.values.elo.dbUserColumn}\` = :playerName`;
+            this.info("Query: " + query);
+            let userFetch = (await this.dbConn.query(query, {
+              replacements: {
+                playerName: name,
+              },
+              type: QueryTypes.SELECT,
+            })) as
               | {
                   rating: number;
                   played?: number;
