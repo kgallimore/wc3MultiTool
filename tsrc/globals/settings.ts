@@ -121,6 +121,8 @@ export interface EloSettings {
   dbWonColumn: string;
   dbRankColumn: string;
   dbLastChangeColumn: string;
+  dbSeasonColumn: string;
+  dbCurrentSeason: string;
   dbDefaultElo: number;
   sqlitePath: string;
   balanceTeams: boolean;
@@ -241,6 +243,8 @@ class AppSettingsContainer extends Global {
         dbWonColumn: store.get("elo.dbWonColumn") ?? "wins",
         dbRankColumn: store.get("elo.dbRankColumn") ?? "rank",
         dbLastChangeColumn: store.get("elo.dbLastChangeColumn") ?? "",
+        dbSeasonColumn: store.get("elo.dbSeasonColumn") ?? "",
+        dbCurrentSeason: store.get("elo.dbCurrentSeason") ?? "",
         dbDefaultElo: store.get("elo.dbDefaultElo") ?? 500,
         sqlitePath: store.get("elo.sqlitePath") ?? "",
         balanceTeams: store.get("elo.balanceTeams") ?? true,

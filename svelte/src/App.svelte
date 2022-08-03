@@ -87,6 +87,8 @@
       dbLastChangeColumn: "",
       dbPlayedColumn: "played",
       dbWonColumn: "wins",
+      dbSeasonColumn: "",
+      dbCurrentSeason: "",
       sqlitePath: "",
       balanceTeams: true,
       announce: true,
@@ -799,6 +801,7 @@
                             <div class="col text-center">Optional (Blank to disable)</div>
                           </div>
                           <div class="border m-1 p-1">
+                            <div class="text-center">Extra Column Mappings</div>
                             <div class="row">
                               <SettingsTextInput
                                 frontFacingName="Rank"
@@ -819,12 +822,29 @@
                                 on:change={onInputChange}
                               />
                             </div>
+                            <div class="text-center">Seasons</div>
+                            <div class="row">
+                              <SettingsTextInput
+                                frontFacingName="Season Column"
+                                placeholder="Season Column"
+                                key="dbSeasonColumn"
+                                value={settings.elo.dbSeasonColumn}
+                                on:change={onInputChange}
+                              />
+                              <SettingsTextInput
+                                frontFacingName="Use Season"
+                                placeholder="Default: Desc Order"
+                                key="dbCurrentSeason"
+                                value={settings.elo.dbCurrentSeason}
+                                on:change={onInputChange}
+                              />
+                            </div>
                             <div class="row pt-2">
                               <div class="col text-center">Advanced</div>
                             </div>
                             <div class="row">
                               <SettingsTextInput
-                                frontFacingName="Join Table"
+                                frontFacingName="Join Table (2)"
                                 key="dbSecondaryTable"
                                 placeholder="Secondary Table"
                                 value={settings.elo.dbSecondaryTable}

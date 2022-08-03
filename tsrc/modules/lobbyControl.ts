@@ -510,12 +510,23 @@ export class LobbyControl extends Module {
             ) {
               buildJoin = `JOIN ${this.settings.values.elo.dbSecondaryTable} ON ${this.settings.values.elo.dbSecondaryTable}.${this.settings.values.elo.dbSecondaryTableKey}=${this.settings.values.elo.dbTableName}.${this.settings.values.elo.dbPrimaryTableKey}`;
             }
-            let query = `SELECT ${buildAlias} FROM \`${this.settings.values.elo.dbTableName}\` ${buildJoin} WHERE \`${this.settings.values.elo.dbUserColumn}\` = :playerName`;
+
+            let buildSeason = "";
+            let replacements: { playerName: string; currentSeason?: string } = {
+              playerName: name,
+            };
+            if (this.settings.values.elo.dbSeasonColumn) {
+              if (this.settings.values.elo.dbCurrentSeason) {
+                buildSeason = ` AND \`${this.settings.values.elo.dbSeasonColumn}\` = :currentSeason`;
+                replacements.currentSeason = this.settings.values.elo.dbCurrentSeason;
+              } else {
+                buildSeason = ` ORDER BY \`${this.settings.values.elo.dbSeasonColumn}\` DESC`;
+              }
+            }
+            let query = `SELECT ${buildAlias} FROM \`${this.settings.values.elo.dbTableName}\` ${buildJoin} WHERE \`${this.settings.values.elo.dbUserColumn}\` = :playerName ${buildSeason}`;
             this.info("Query: " + query);
             let userFetch = (await this.dbConn.query(query, {
-              replacements: {
-                playerName: name,
-              },
+              replacements,
               type: QueryTypes.SELECT,
             })) as
               | {
