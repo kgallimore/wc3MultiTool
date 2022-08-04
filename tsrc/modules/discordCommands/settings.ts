@@ -1,6 +1,6 @@
 import {
   SlashCommandBuilder,
-  Interaction,
+  ChatInputCommandInteraction,
   AutocompleteInteraction,
   EmbedBuilder,
 } from "discord.js";
@@ -68,8 +68,10 @@ module.exports = {
           option.setName("key").setDescription("The key to get").setAutocomplete(true)
         )
     ),
-  async execute(interaction: Interaction<"cached">, channelMatch: ChatChannelMatch) {
-    if (!interaction.isChatInputCommand()) return;
+  async execute(
+    interaction: ChatInputCommandInteraction<"cached">,
+    channelMatch: ChatChannelMatch
+  ) {
     if (checkAdminRequired(interaction, channelMatch)) {
       await interaction.reply({
         content: "You are not allowed to run this command.",

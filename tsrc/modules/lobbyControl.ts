@@ -802,7 +802,12 @@ export class LobbyControl extends Module {
   }
 
   autoBalance() {
-    let teams = Object.entries(this.exportDataStructure("Self export 5", true)).filter(
+let data =this.exportDataStructure("Self export 5", true)
+if(!data){
+  this.error("Can not autobalance with empty teams");
+  return;
+}
+    let teams =  Object.entries(data).filter(
       // Filter out empty teams
       ([teamName, teamPlayers]) =>
         Object.values(teamPlayers).filter((player) => player.realPlayer).length > 0
@@ -1057,6 +1062,9 @@ export class LobbyControl extends Module {
 
   isLobbyReady() {
     let teams = this.exportDataStructure("Self export 4", true);
+    if(!teams){
+      return false;
+    }
     if (this.refreshing) {
       this.verbose("Refreshing slots, not ready.");
       return false;
@@ -1281,8 +1289,11 @@ export class LobbyControl extends Module {
     }
   }
 
-  allPlayerTeamsContainPlayers() {
+  allPlayerTeamsContainPlayers(): boolean {
     let teams = this.exportDataStructure("Self export 3");
+    if(!teams){
+      return false;
+    }
     for (const team of Object.values(teams)) {
       if (team.filter((slot) => slot.realPlayer).length === 0) {
         return false;
@@ -1291,8 +1302,11 @@ export class LobbyControl extends Module {
     return true;
   }
 
-  exportDataStructureString(playerTeamsOnly: boolean = true) {
+  exportDataStructureString(playerTeamsOnly: boolean = true): string | false {
     let data = this.exportDataStructure("Self export 2", playerTeamsOnly);
+    if(!data){
+      return false;
+    }
     let exportString = "";
     Object.entries(data).forEach(([teamName, data]) => {
       exportString += teamName + ":\n";
@@ -1315,18 +1329,20 @@ export class LobbyControl extends Module {
     return exportString;
   }
 
-  exportDataStructure(source: string, playerTeamsOnly: boolean = true): PlayerTeamsData {
+  exportDataStructure(source: string, playerTeamsOnly: boolean = true): PlayerTeamsData | false {
     let lobby = this.microLobby;
-    let returnValue = {};
     if (!lobby) {
-      this.error("No lobby to export data from.", source);
-      return returnValue;
+      this.warn("No lobby to export data from.", source);
+      return false;
     }
     return lobby.exportTeamStructure(playerTeamsOnly);
   }
 
-  exportTeamStructureString(playerTeamsOnly: boolean = true) {
+  exportTeamStructureString(playerTeamsOnly: boolean = true): string | false {
     let data = this.exportDataStructure("Self export 1", playerTeamsOnly);
+    if(!data){
+      return false;
+    }
     let exportString = "";
     Object.entries(data).forEach(([teamName, data]) => {
       exportString += teamName + ":\n";

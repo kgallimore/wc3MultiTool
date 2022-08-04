@@ -1,4 +1,8 @@
-import { SlashCommandBuilder, Interaction, EmbedBuilder } from "discord.js";
+import {
+  SlashCommandBuilder,
+  ChatInputCommandInteraction,
+  EmbedBuilder,
+} from "discord.js";
 import type { ChatChannelMatch } from "./../discordBot";
 import { clientState } from "./../../globals/clientState";
 import { gameState } from "./../../globals/gameState";
@@ -6,7 +10,10 @@ import { checkAdminRequired } from "./../discordUtility/utility";
 
 module.exports = {
   data: new SlashCommandBuilder().setName("state").setDescription("Get current status."),
-  async execute(interaction: Interaction<"cached">, channelMatch: ChatChannelMatch) {
+  async execute(
+    interaction: ChatInputCommandInteraction<"cached">,
+    channelMatch: ChatChannelMatch
+  ) {
     if (!interaction.isChatInputCommand() || !interaction.inCachedGuild()) return;
     if (channelMatch !== "admin" && checkAdminRequired(interaction, channelMatch)) {
       await interaction.reply({

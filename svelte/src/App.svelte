@@ -116,6 +116,7 @@
       bidirectionalChat: false,
       sendInGameChat: false,
       adminRole: "wc3mt",
+      customName: "",
     },
     client: {
       restartOnUpdate: false,
@@ -1575,6 +1576,14 @@
                   <div class="row">
                     <div class="col d-flex justify-content-center">Discord Settings</div>
                     <div class="row">
+                      <SettingsTextInput
+                        frontFacingName="Custom Name (For Multi. Clients)"
+                        key="customName"
+                        value={settings.discord.customName}
+                        on:change={onInputChange}
+                      />
+                    </div>
+                    <div class="row">
                       <div class="col">
                         <label for="discordToken">Token</label>
                         <input
@@ -1617,11 +1626,17 @@
                       <div class="col-auto m-auto">
                         <SettingsCheckbox
                           key="useThreads"
-                          frontFacingName="Use Threads"
+                          frontFacingName="Use Threads For Chat"
                           checked={settings.discord.useThreads}
-                          tooltip="Will use threads on each lobby announcement instead of a separate channel"
+                          tooltip="Will use threads on each lobby announcement for chat instead of a separate channel"
                           on:change={onInputChange}
                         />
+                      </div>
+                    </div>
+                    <div class="row">
+                      <div class="col d-flex justify-content-center">
+                        Users within the channel or with the role will have admin
+                        permissions
                       </div>
                     </div>
                     <div class="row">

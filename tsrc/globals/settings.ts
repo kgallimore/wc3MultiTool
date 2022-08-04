@@ -103,6 +103,7 @@ export interface DiscordSettings {
   bidirectionalChat: boolean;
   sendInGameChat: boolean;
   adminRole: string;
+  customName: string;
 }
 export interface EloSettings {
   type: "off" | "wc3stats" | "pyroTD" | "mariadb" | "mysql" | "sqlite" | "random";
@@ -275,6 +276,7 @@ class AppSettingsContainer extends Global {
         adminChannel: store.get("discord.adminChannel") ?? "",
         logLevel: store.get("discord.logLevel") ?? "error",
         adminRole: store.get("discord.adminRole") ?? "wc3mt",
+        customName: store.get("client.customName") ?? store.get("anonymousIdentifier"),
       },
       client: {
         restartOnUpdate: store.get("client.restartOnUpdate") ?? false,

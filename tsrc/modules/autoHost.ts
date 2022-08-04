@@ -80,6 +80,9 @@ class AutoHost extends ModuleBase {
         return;
       }
       let teams = this.lobby.exportDataStructure("Autohost 1", true);
+      if (!teams) {
+        return;
+      }
       if (this.settings.values.autoHost.minPlayers !== 0) {
         if (
           this.lobby.microLobby.nonSpecPlayers.length <

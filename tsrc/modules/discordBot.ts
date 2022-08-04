@@ -3,7 +3,7 @@ import { ModuleBase } from "../moduleBase";
 import type { SettingsUpdates } from "../globals/settings";
 
 import Discord, { Collection } from "discord.js";
-import { EmbedBuilder, Interaction, InteractionType } from "discord.js";
+import { EmbedBuilder, InteractionType } from "discord.js";
 import { Routes } from "discord-api-types/v10";
 import { REST } from "@discordjs/rest";
 import type { mmdResults } from "./replayHandler";
@@ -44,7 +44,7 @@ class DiscordBot extends ModuleBase {
     string,
     {
       execute: (
-        interaction: Interaction<"cached">,
+        interaction: Discord.ChatInputCommandInteraction<"cached">,
         channel: ChatChannelMatch
       ) => Promise<void>;
       autoComplete?: (
@@ -424,7 +424,7 @@ class DiscordBot extends ModuleBase {
       ]);
       this._lobbyState.status = "started";
       this._sentEmbed.edit({ embeds: [newEmbed] });
-      if (this._lobbyState.name)
+      if (this._lobbyState.name && !this.settings.values.discord.useThreads)
         this.sendMessage("Game started. End of chat for " + this._lobbyState.name);
     }
   }
@@ -482,7 +482,7 @@ class DiscordBot extends ModuleBase {
             { name: "Lobby Closed", value: `<t:${Math.floor(Date.now() / 1000)}:R>` },
           ]);
           this._sentEmbed.edit({ embeds: [newEmbed] });
-          if (this._lobbyState.name && !this._currentThread)
+          if (this._lobbyState.name && !this.settings.values.discord.useThreads)
             this.sendMessage("Lobby left. End of chat for " + this._lobbyState.name);
         }
       } catch (error) {

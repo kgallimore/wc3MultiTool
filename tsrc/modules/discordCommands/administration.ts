@@ -1,4 +1,8 @@
-import { SlashCommandBuilder, Interaction, AutocompleteInteraction } from "discord.js";
+import {
+  SlashCommandBuilder,
+  ChatInputCommandInteraction,
+  AutocompleteInteraction,
+} from "discord.js";
 import type { ChatChannelMatch } from "./../discordBot";
 import { administration } from "./../administration";
 import { checkAdminRequired } from "./../discordUtility/utility";
@@ -85,8 +89,10 @@ module.exports = {
             .setAutocomplete(true)
         )
     ),
-  async execute(interaction: Interaction<"cached">, channelMatch: ChatChannelMatch) {
-    if (!interaction.isChatInputCommand()) return;
+  async execute(
+    interaction: ChatInputCommandInteraction<"cached">,
+    channelMatch: ChatChannelMatch
+  ) {
     let adminOnly = interaction.options.getSubcommandGroup() === "adminonly";
     if (adminOnly && checkAdminRequired(interaction, channelMatch)) {
       await interaction.reply({

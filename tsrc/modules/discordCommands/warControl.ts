@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, Interaction } from "discord.js";
+import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
 import type { ChatChannelMatch } from "./../discordBot";
 import { checkAdminRequired } from "./../discordUtility/utility";
 
@@ -30,9 +30,10 @@ module.exports = {
             )
         )
     ),
-  async execute(interaction: Interaction<"cached">, channelMatch: ChatChannelMatch) {
-    if (!interaction.isChatInputCommand() || !interaction.inCachedGuild()) return;
-
+  async execute(
+    interaction: ChatInputCommandInteraction<"cached">,
+    channelMatch: ChatChannelMatch
+  ) {
     if (channelMatch !== "admin" && checkAdminRequired(interaction, channelMatch)) {
       await interaction.reply({
         content: "You are not allowed to run this command.",

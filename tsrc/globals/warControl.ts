@@ -116,6 +116,7 @@ class WarControl extends Global {
       battleNetWindow.show();
       battleNetWindow.bringToTop();
       battleNetWindow.setBounds({ x: 0, y: 0 });
+      await sleep(500);
       let activeWindow = await getActiveWindow();
       let activeWindowTitle = await activeWindow.title;
       if (activeWindowTitle !== "Battle.net") {
