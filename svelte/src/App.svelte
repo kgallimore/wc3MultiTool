@@ -1580,8 +1580,19 @@
                   <div class="row">
                     <div class="col d-flex justify-content-center">Discord Settings</div>
                     <div class="row">
+                      <div class="col d-flex justify-content-center">
+                        1 Discord bot per client
+                      </div>
+                    </div>
+                    <div class="row">
+                      <div class="col d-flex justify-content-center">
+                        (If not, slash cmds will break.)
+                      </div>
+                    </div>
+
+                    <div class="row">
                       <SettingsTextInput
-                        frontFacingName="Custom Name (For Multi. Clients)"
+                        frontFacingName="Custom Name (For Multi. Clients, future use)"
                         key="customName"
                         value={settings.discord.customName}
                         on:change={onInputChange}
