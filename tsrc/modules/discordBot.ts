@@ -394,7 +394,7 @@ class DiscordBot extends ModuleBase {
           (data.data.extra && data.data.extra.rating > -1
             ? ": " +
               [
-                data.data.extra.rating,
+                this.settings.values.elo.hideElo ? "Hidden" : data.data.extra.rating,
                 data.data.extra.rank,
                 data.data.extra.wins,
                 data.data.extra.losses,
@@ -535,7 +535,10 @@ class DiscordBot extends ModuleBase {
               (data.data.extra && data.data.extra.rating > -1
                 ? ": " +
                   [
-                    "Rating: " + data.data.extra.rating,
+                    "Rating: " +
+                      (this.settings.values.elo.hideElo
+                        ? "Hidden"
+                        : data.data.extra.rating),
                     "Rank: " + data.data.extra.rank,
                     "Wins: " + data.data.extra.wins,
                     "Losses: " + data.data.extra.losses,

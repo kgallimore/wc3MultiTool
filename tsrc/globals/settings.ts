@@ -127,6 +127,7 @@ export interface EloSettings {
   sqlitePath: string;
   balanceTeams: boolean;
   announce: boolean;
+  hideElo: boolean;
   excludeHostFromSwap: boolean;
   lookupName: string;
   privateKey: string;
@@ -249,6 +250,7 @@ class AppSettingsContainer extends Global {
         sqlitePath: store.get("elo.sqlitePath") ?? "",
         balanceTeams: store.get("elo.balanceTeams") ?? true,
         announce: store.get("elo.announce") ?? true,
+        hideElo: store.get("elo.hideElo") ?? false,
         excludeHostFromSwap: store.get("elo.excludeHostFromSwap") ?? true,
         lookupName: store.get("elo.lookupName") ?? "",
         privateKey: store.get("elo.privateKey") ?? "",

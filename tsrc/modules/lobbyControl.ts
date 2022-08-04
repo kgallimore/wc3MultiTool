@@ -33,6 +33,37 @@ export type SlotInteractions =
   | "KickPlayerFromGameLobby"
   | "OpenSlot";
 
+export function statsToString(
+  stats: PlayerData["extra"],
+  hideElo: boolean = false
+): string {
+  let buildString = "";
+
+  if (!stats) {
+    return "";
+  }
+  let valid: [string, number][] = Object.entries(stats).filter(
+    ([key, value]) => value > -1
+  );
+  valid.forEach(([key, value]) => {
+    if (key === "rating" && value > -1) {
+      buildString += "ELO: ";
+      if (hideElo) {
+        buildString += "Hidden";
+      } else {
+        buildString += value;
+      }
+      buildString += ", ";
+    } else {
+      buildString += key.charAt(0).toUpperCase() + key.substring(1) + ": " + value + ", ";
+    }
+  });
+  if (buildString) {
+    buildString = buildString.substring(0, buildString.length - 2);
+  }
+  return buildString;
+}
+
 export class LobbyControl extends Module {
   private refreshing: boolean = false;
   private staleTimer: NodeJS.Timeout | null = null;
@@ -128,20 +159,12 @@ export class LobbyControl extends Module {
             if (!data.extra || data.extra?.rating === -1) {
               this.gameSocket.sendChatMessage("Data pending");
             } else {
+              let statsString = statsToString(
+                data.extra,
+                this.settings.values.elo.hideElo
+              );
               this.gameSocket.sendChatMessage(
-                events.nonAdminChat.sender +
-                  " ELO: " +
-                  data.extra.rating +
-                  ", Rank: " +
-                  data.extra.rank +
-                  ", Played: " +
-                  data.extra.played +
-                  ", Wins: " +
-                  data.extra.wins +
-                  ", Losses: " +
-                  data.extra.losses +
-                  ", Last Change: " +
-                  data.extra.lastChange
+                events.nonAdminChat.sender + " " + statsString || "None available"
               );
             }
           } else {
@@ -553,7 +576,7 @@ export class LobbyControl extends Module {
                 played: user.played ?? -1,
                 wins: user.wins ?? -1,
                 losses: user.played && user.wins ? user.played - user.wins : -1,
-                rating: user.rating,
+                rating: Math.round(user.rating),
                 lastChange: user.lastChange ?? 0,
                 rank: user.rank ?? -1,
               };

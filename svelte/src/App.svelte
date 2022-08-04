@@ -92,6 +92,7 @@
       sqlitePath: "",
       balanceTeams: true,
       announce: true,
+      hideElo: false,
       excludeHostFromSwap: true,
       lookupName: "",
       privateKey: "",
@@ -965,6 +966,13 @@
                           frontFacingName="Announce Stats"
                           checked={settings.elo.announce}
                           tooltip="Announce stats to the lobby."
+                          on:change={onInputChange}
+                        />
+                        <SettingsCheckbox
+                          frontFacingName="Hide ELO"
+                          key="hideElo"
+                          tooltip="Will hide ELO from all channels."
+                          checked={settings.elo.hideElo}
                           on:change={onInputChange}
                         />
                         <SettingsCheckbox

@@ -20,7 +20,7 @@ import {
 } from "@nut-tree/nut-js";
 require("@nut-tree/nl-matcher");
 import { GameState } from "./../globals/gameState";
-import type { LobbyUpdatesExtended } from "./lobbyControl";
+import { LobbyUpdatesExtended, statsToString } from "./lobbyControl";
 import type { Regions } from "wc3mt-lobby-container";
 const exec = require("child_process").exec;
 
@@ -42,6 +42,22 @@ class AutoHost extends ModuleBase {
   }
 
   protected onLobbyUpdate(updates: LobbyUpdatesExtended): void {
+    // TODO: this works w/o Autohost on. Move to elo module?
+    console.log(updates);
+    if (
+      updates.playerData?.extraData &&
+      this.settings.values.elo.type !== "off" &&
+      this.settings.values.elo.announce
+    ) {
+      let statsString = statsToString(
+        updates.playerData.extraData,
+        this.settings.values.elo.hideElo
+      );
+      this.gameSocket.sendChatMessage(
+        updates.playerData.name + " " + statsString || "None available"
+      );
+    }
+
     if (
       this.settings.values.autoHost.type === "off" ||
       this.settings.values.autoHost.type === "lobbyHost"
@@ -113,27 +129,6 @@ class AutoHost extends ModuleBase {
         currentStep: "Starting Game",
         currentStepProgress: 100,
       });
-    }
-    if (
-      updates.playerData?.extraData &&
-      this.settings.values.elo.type !== "off" &&
-      this.settings.values.elo.announce
-    ) {
-      this.gameSocket.sendChatMessage(
-        updates.playerData.name +
-          " ELO: " +
-          updates.playerData.extraData.rating +
-          ", Rank: " +
-          updates.playerData.extraData.rank +
-          ", Played: " +
-          updates.playerData.extraData.played +
-          ", Wins: " +
-          updates.playerData.extraData.wins +
-          ", Losses: " +
-          updates.playerData.extraData.losses +
-          ", Last Change: " +
-          updates.playerData.extraData.lastChange
-      );
     }
   }
 
