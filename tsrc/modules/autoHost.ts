@@ -524,7 +524,7 @@ class AutoHost extends ModuleBase {
         },
         privateGame: this.settings.values.autoHost.private,
       };
-      this.info("Sending autoHost payload", payloadData);
+      this.info("Sending autoHost payload", JSON.stringify(payloadData));
       this.gameSocket.sendMessage({ CreateLobby: payloadData });
     }
     await sleep(1000);

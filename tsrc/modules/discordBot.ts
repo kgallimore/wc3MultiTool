@@ -7,7 +7,7 @@ import { EmbedBuilder, InteractionType } from "discord.js";
 import { Routes } from "discord-api-types/v10";
 import { REST } from "@discordjs/rest";
 import type { mmdResults } from "./replayHandler";
-import type { PlayerTeamsData } from "wc3mt-lobby-container";
+import type { PlayerData, PlayerTeamsData } from "wc3mt-lobby-container";
 import type { LobbyUpdatesExtended } from "./lobbyControl";
 import { DeColorName } from "../utility";
 import { app } from "electron";
@@ -385,7 +385,16 @@ class DiscordBot extends ModuleBase {
           inline: true,
         },
       ]);
-    if (data) {
+    if (
+      Object.keys(data).length ===
+      Object.values(data).reduce((currentNum, players) => currentNum + players.length, 0)
+    ) {
+      data = {
+        FFA: Object.values(data).reduce(
+          (currentNum, players) => currentNum.concat(players),
+          []
+        ),
+      };
     }
     Object.entries(data).forEach(([teamName, data]) => {
       let combinedData = data.map(
@@ -404,6 +413,7 @@ class DiscordBot extends ModuleBase {
       );
       this._embed?.addFields([{ name: teamName, value: combinedData.join("\n") ?? "" }]);
     });
+
     this.client?.user?.setActivity({
       name: "Warcraft III - " + lobbyData.lobbyStatic.lobbyName,
       type: Discord.ActivityType.Playing,

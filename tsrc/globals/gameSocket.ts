@@ -158,10 +158,10 @@ class GameSocket extends Global {
           "UpdateReadyState",
         ].includes(parsedData.messageType)
       ) {
+        if (parsedData.messageType === "MultiplayerGameLeave") {
+          this.sentMessages = [];
+        }
         this.emitEvent({ [parsedData.messageType]: parsedData.payload });
-      }
-      if (parsedData.messageType === "MultiplayerGameLeave") {
-        this.sentMessages = [];
       }
     });
     this.gameWebSocket.on("close", () => {

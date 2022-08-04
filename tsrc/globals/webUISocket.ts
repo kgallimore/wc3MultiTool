@@ -108,6 +108,10 @@ class WebUISocket extends Global {
       case "info":
         this.info(JSON.stringify(data.data));
         break;
+      case "sendMessage":
+        // Debugging
+        console.log(JSON.stringify(data.data));
+        break;
       default:
         this.info(data);
     }

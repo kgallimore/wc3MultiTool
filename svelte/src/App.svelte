@@ -274,9 +274,13 @@
   }
 
   function updateNumber(
-    e: Event & {
-      currentTarget: EventTarget & HTMLInputElement;
-    },
+    e:
+      | (Event & {
+          currentTarget: EventTarget & HTMLInputElement;
+        })
+      | (Event & {
+          currentTarget: EventTarget & HTMLSelectElement;
+        }),
     min: number = 0
   ) {
     let val = parseInt(e.currentTarget.value);
@@ -1212,10 +1216,10 @@
                             checked={settings.autoHost.flagRandomRaces}
                             on:change={onInputChange}
                           />
-                          <label for="observerType">Add observers:</label>
+                          <label for="observers">Add observers:</label>
                           <select
                             class="form-control form-control-sm"
-                            id="observerType"
+                            id="observers"
                             value={settings.autoHost.observers}
                             on:change={onInputChange}
                           >

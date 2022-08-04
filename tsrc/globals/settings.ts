@@ -397,8 +397,20 @@ class AppSettingsContainer extends Global {
           // @ts-expect-error Still need to figure out how to type this
           filteredUpdates[settingName][key] = value;
         } else if (targetCurrentValue !== value) {
+          let errorText: string = "Unknown issue";
+          if (targetCurrentValue === undefined) {
+            errorText = "Invalid setting";
+          } else if (typeof targetCurrentValue !== typeof value) {
+            errorText =
+              "Invalid type. Target is " +
+              typeof targetCurrentValue +
+              ". Given was " +
+              typeof value +
+              ".";
+          }
           this.warn(
             "Invalid update:",
+            errorText,
             settingName,
             key,
             key.toLowerCase().includes("token") || key.toLowerCase().includes("password")
