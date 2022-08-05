@@ -15,10 +15,12 @@ import {
 import { ensureInt } from "../utility";
 import type { GameSocketEvents, AvailableHandicaps } from "./../globals/gameSocket";
 import { sleep } from "@nut-tree/nut-js";
-import type { EloSettings } from "./../globals/settings";
+import type { EloSettings, SettingsUpdates } from "./../globals/settings";
 
 import { Combination, Permutation } from "js-combinatorics";
 import type { GameState } from "./../globals/gameState";
+
+import { Sequelize, QueryTypes } from "sequelize";
 
 export interface LobbyUpdatesExtended extends LobbyUpdates {
   playerCleared?: string;
@@ -31,9 +33,42 @@ export type SlotInteractions =
   | "KickPlayerFromGameLobby"
   | "OpenSlot";
 
+export function statsToString(
+  stats: PlayerData["extra"],
+  hideElo: boolean = false
+): string {
+  let buildString = "";
+
+  if (!stats) {
+    return "";
+  }
+  let valid: [string, number][] = Object.entries(stats).filter(
+    ([key, value]) => value > -1
+  );
+  valid.forEach(([key, value]) => {
+    if (key === "rating" && value > -1) {
+      buildString += "ELO: ";
+      if (hideElo) {
+        buildString += "Hidden";
+      } else {
+        buildString += value;
+      }
+      buildString += ", ";
+    } else {
+      buildString += key.charAt(0).toUpperCase() + key.substring(1) + ": " + value + ", ";
+    }
+  });
+  if (buildString) {
+    buildString = buildString.substring(0, buildString.length - 2);
+  }
+  return buildString;
+}
+
 export class LobbyControl extends Module {
   private refreshing: boolean = false;
   private staleTimer: NodeJS.Timeout | null = null;
+
+  dbConn: Sequelize | null = null;
 
   bestCombo: Array<string> | Array<Array<string>> = [];
   microLobby: MicroLobby | null = null;
@@ -46,7 +81,31 @@ export class LobbyControl extends Module {
   private expectedSwaps: Array<{ swaps: [string, string]; forBalance: boolean }> = [];
 
   constructor() {
-    super("Lobby Control", { listeners: ["gameSocketEvent", "gameStateUpdates"] });
+    super("Lobby Control", {
+      listeners: ["gameSocketEvent", "gameStateUpdates", "settingsUpdate"],
+    });
+    this.initDatabase();
+  }
+
+  onSettingsUpdate(updates: SettingsUpdates) {
+    if (
+      updates.elo?.dbIP !== undefined ||
+      updates.elo?.dbName !== undefined ||
+      updates.elo?.dbPassword !== undefined ||
+      updates.elo?.dbUser !== undefined ||
+      updates.elo?.dbPort !== undefined
+    ) {
+      this.initDatabase();
+    }
+    if (updates.autoHost?.mapName) {
+      this.eloMapName(updates.autoHost.mapName, this.settings.values.elo.type).then(
+        (data) => {
+          this.settings.updateSettings({
+            elo: { available: data.elo, lookupName: data.name },
+          });
+        }
+      );
+    }
   }
 
   protected onGameStateUpdate(updates: Partial<GameState>): void {
@@ -100,20 +159,12 @@ export class LobbyControl extends Module {
             if (!data.extra || data.extra?.rating === -1) {
               this.gameSocket.sendChatMessage("Data pending");
             } else {
+              let statsString = statsToString(
+                data.extra,
+                this.settings.values.elo.hideElo
+              );
               this.gameSocket.sendChatMessage(
-                events.nonAdminChat.sender +
-                  " ELO: " +
-                  data.extra.rating +
-                  ", Rank: " +
-                  data.extra.rank +
-                  ", Played: " +
-                  data.extra.played +
-                  ", Wins: " +
-                  data.extra.wins +
-                  ", Losses: " +
-                  data.extra.losses +
-                  ", Last Change: " +
-                  data.extra.lastChange
+                events.nonAdminChat.sender + " " + statsString || "None available"
               );
             }
           } else {
@@ -135,7 +186,12 @@ export class LobbyControl extends Module {
       ) {
         try {
           this.startTimer = null;
-          this.microLobby = new MicroLobby({ region, payload });
+          this.microLobby = new MicroLobby({
+            region,
+            payload,
+            statsAvailableOverride:
+              this.dbConn !== null || this.settings.values.elo.type === "random",
+          });
           if (this.settings.values.elo.type !== "off") {
             this.eloMapName(payload.mapData.mapName, this.settings.values.elo.type).then(
               (eloMapName) => {
@@ -172,6 +228,7 @@ export class LobbyControl extends Module {
         this.emitLobbyUpdate({ playerPayload: changedValues.playerUpdates });
       }
       if (changedValues.events.isUpdated) {
+        var autoBalancedSwap = false;
         var metExpectedSwap = false;
         changedValues.events.events.forEach((event) => {
           this.emitLobbyUpdate(event);
@@ -194,6 +251,9 @@ export class LobbyControl extends Module {
               (swap) => JSON.stringify(swap.swaps.sort()) === JSON.stringify(players)
             );
             if (expectedIndex !== -1) {
+              if (this.expectedSwaps[expectedIndex].forBalance) {
+                autoBalancedSwap = true;
+              }
               this.expectedSwaps.splice(expectedIndex, 1);
               this.verbose(`Expected swap met for ${players.toString()}`);
               metExpectedSwap = true;
@@ -214,7 +274,7 @@ export class LobbyControl extends Module {
           if (this.isLobbyReady()) {
             this.emitLobbyUpdate({ lobbyReady: true });
           }
-        } else if (this.expectedSwaps.length === 0) {
+        } else if (this.expectedSwaps.length === 0 && autoBalancedSwap) {
           {
             this.info("All expected swaps met. Players should now be balanced.");
             this.gameSocket.sendChatMessage(
@@ -345,7 +405,7 @@ export class LobbyControl extends Module {
     } else
       return {
         name: encodeURI(mapName.trim().replace(/\s*v?\.?(\d+\.)?(\*|\d+)\w*\s*$/gi, "")),
-        elo: false,
+        elo: ["mariadb", "mysql", "sqlite", "random"].includes(type),
       };
   }
 
@@ -358,7 +418,8 @@ export class LobbyControl extends Module {
             this.fetchStats(name);
           }, 1000);
           return;
-        } else if (this.microLobby?.statsAvailable) {
+        }
+        if (this.microLobby?.statsAvailable) {
           this.verbose("Starting search for stats for: " + name);
           this.fetchingStats.push(name);
           let data: PlayerData["extra"] | undefined;
@@ -397,7 +458,7 @@ export class LobbyControl extends Module {
               losses: 0,
               rating: elo,
               lastChange: 0,
-              rank: 9999,
+              rank: 99999,
             };
           } else if (this.settings.values.elo.type === "random") {
             this.info("Generating random stats for: " + name);
@@ -411,6 +472,115 @@ export class LobbyControl extends Module {
               lastChange: Math.floor(Math.random() * 10),
               rank: Math.floor(Math.random() * 1000 + 1),
             };
+          } else if (
+            ["mariadb", "mysql", "sqlite"].includes(this.settings.values.elo.type)
+          ) {
+            if (!this.dbConn) {
+              this.error("Please fix the database connection.");
+              return;
+            }
+            if (!this.settings.values.elo.dbTableName) {
+              this.error("No user table set.");
+              return;
+            }
+            if (!this.settings.values.elo.dbUserColumn) {
+              this.error("No user name column set.");
+              return;
+            }
+            if (!this.settings.values.elo.dbELOColumn) {
+              this.error("No ELO/rating column set.");
+              return;
+            }
+            let buildAlias: string = "";
+            if (this.settings.values.elo.dbELOColumn !== "rating") {
+              buildAlias += ` ${this.settings.values.elo.dbELOColumn} as`;
+            }
+            buildAlias += " rating";
+            if (this.settings.values.elo.dbPlayedColumn) {
+              buildAlias += ",";
+              if (this.settings.values.elo.dbPlayedColumn !== "played") {
+                buildAlias += ` ${this.settings.values.elo.dbPlayedColumn} as`;
+              }
+              buildAlias += " played";
+            }
+            if (this.settings.values.elo.dbLastChangeColumn) {
+              buildAlias += ",";
+              if (this.settings.values.elo.dbLastChangeColumn !== "lastChange") {
+                buildAlias += ` ${this.settings.values.elo.dbLastChangeColumn} as`;
+              }
+              buildAlias += " lastChange";
+            }
+            if (this.settings.values.elo.dbWonColumn) {
+              buildAlias += ",";
+              if (this.settings.values.elo.dbWonColumn !== "wins") {
+                buildAlias += ` ${this.settings.values.elo.dbWonColumn} as`;
+              }
+              buildAlias += " wins";
+            }
+            if (this.settings.values.elo.dbRankColumn) {
+              buildAlias += ",";
+              if (this.settings.values.elo.dbRankColumn !== "rank") {
+                buildAlias += ` ${this.settings.values.elo.dbRankColumn} as`;
+              }
+              buildAlias += " rank";
+            }
+
+            let buildJoin = "";
+            if (
+              this.settings.values.elo.dbSecondaryTable &&
+              this.settings.values.elo.dbSecondaryTableKey &&
+              this.settings.values.elo.dbPrimaryTableKey
+            ) {
+              buildJoin = `JOIN ${this.settings.values.elo.dbSecondaryTable} ON ${this.settings.values.elo.dbSecondaryTable}.${this.settings.values.elo.dbSecondaryTableKey}=${this.settings.values.elo.dbTableName}.${this.settings.values.elo.dbPrimaryTableKey}`;
+            }
+
+            let buildSeason = "";
+            let replacements: { playerName: string; currentSeason?: string } = {
+              playerName: name,
+            };
+            if (this.settings.values.elo.dbSeasonColumn) {
+              if (this.settings.values.elo.dbCurrentSeason) {
+                buildSeason = ` AND \`${this.settings.values.elo.dbSeasonColumn}\` = :currentSeason`;
+                replacements.currentSeason = this.settings.values.elo.dbCurrentSeason;
+              } else {
+                buildSeason = ` ORDER BY \`${this.settings.values.elo.dbSeasonColumn}\` DESC`;
+              }
+            }
+            let query = `SELECT ${buildAlias} FROM \`${this.settings.values.elo.dbTableName}\` ${buildJoin} WHERE \`${this.settings.values.elo.dbUserColumn}\` = :playerName ${buildSeason}`;
+            this.info("Query: " + query);
+            let userFetch = (await this.dbConn.query(query, {
+              replacements,
+              type: QueryTypes.SELECT,
+            })) as
+              | {
+                  rating: number;
+                  played?: number;
+                  wins?: number;
+                  losses?: number;
+                  lastChange?: number;
+                  rank?: number;
+                }[]
+              | null;
+            if (userFetch === null || userFetch.length === 0) {
+              data = {
+                played: 0,
+                wins: 0,
+                losses: 0,
+                rating: this.settings.values.elo.dbDefaultElo,
+                lastChange: 0,
+                rank: 99999,
+              };
+            } else {
+              let user = userFetch[0];
+              data = {
+                played: user.played ?? -1,
+                wins: user.wins ?? -1,
+                losses: user.played && user.wins ? user.played - user.wins : -1,
+                rating: Math.round(user.rating),
+                lastChange: user.lastChange ?? 0,
+                rank: user.rank ?? -1,
+              };
+            }
           } else {
             this.error("Unknown elo type: " + this.settings.values.elo.type);
             return;
@@ -425,14 +595,20 @@ export class LobbyControl extends Module {
             return;
           }
           if (this.settings.values.elo.requireStats) {
-            if (data.played < this.settings.values.elo.minGames) {
+            if (
+              data.played !== undefined &&
+              data.played < this.settings.values.elo.minGames
+            ) {
               this.info(`${name} has not played enough games to qualify for the ladder.`);
               this.gameSocket.sendChatMessage(
                 `${name} has not played enough games to qualify for the ladder.`
               );
               this.banPlayer(name);
               return;
-            } else if (data.rating < this.settings.values.elo.minRating) {
+            } else if (
+              data.rating !== undefined &&
+              data.rating < this.settings.values.elo.minRating
+            ) {
               this.info(`${name} has an ELO rating below the minimum.`);
               this.gameSocket.sendChatMessage(
                 `${name} has an ELO rating below the minimum.`
@@ -441,13 +617,17 @@ export class LobbyControl extends Module {
               return;
             } else if (
               this.settings.values.elo.minRank !== 0 &&
+              data.rank !== undefined &&
               data.rank < this.settings.values.elo.minRank
             ) {
               this.info(`${name} has a rank below the minimum.`);
               this.gameSocket.sendChatMessage(`${name} has a rank below the minimum.`);
               this.banPlayer(name);
               return;
-            } else if (data.wins < this.settings.values.elo.minWins) {
+            } else if (
+              data.wins !== undefined &&
+              data.wins < this.settings.values.elo.minWins
+            ) {
               this.info(`${name} has not won enough games to qualify for the ladder.`);
               this.gameSocket.sendChatMessage(
                 `${name} has not won enough games to qualify for the ladder.`
@@ -473,6 +653,7 @@ export class LobbyControl extends Module {
           }
         }
       } catch (err: any) {
+        console.trace();
         this.error("Failed to fetch stats:");
         this.error(err);
       }
@@ -572,7 +753,7 @@ export class LobbyControl extends Module {
     let smallestEloDiff = Number.POSITIVE_INFINITY;
 
     let totalElo = Object.values(playerData).reduce(
-      (a, b) => (b.extra ? a + ensureInt(b.extra.rating) : a),
+      (a, b) => (b.extra?.rating ? a + ensureInt(b.extra.rating) : a),
       0
     );
 
@@ -621,7 +802,12 @@ export class LobbyControl extends Module {
   }
 
   autoBalance() {
-    let teams = Object.entries(this.exportDataStructure("Self export 5", true)).filter(
+let data =this.exportDataStructure("Self export 5", true)
+if(!data){
+  this.error("Can not autobalance with empty teams");
+  return;
+}
+    let teams =  Object.entries(data).filter(
       // Filter out empty teams
       ([teamName, teamPlayers]) =>
         Object.values(teamPlayers).filter((player) => player.realPlayer).length > 0
@@ -640,7 +826,7 @@ export class LobbyControl extends Module {
             (x) => x[1].extra && lobbyCopy.nonSpecPlayers.includes(x[0])
           );
           let totalElo = players.reduce(
-            (a, b) => (b[1].extra ? a + ensureInt(b[1].extra.rating) : a),
+            (a, b) => (b[1].extra?.rating ? a + ensureInt(b[1].extra.rating) : a),
             0
           );
           let smallestEloDiff = Number.POSITIVE_INFINITY;
@@ -813,8 +999,72 @@ export class LobbyControl extends Module {
     }
   }
 
+  async initDatabase() {
+    if (this.dbConn) {
+      await this.dbConn.close();
+    }
+    this.dbConn = null;
+    if (
+      this.settings.values.elo.type === "mariadb" ||
+      this.settings.values.elo.type === "mysql"
+    ) {
+      let host = this.settings.values.elo.dbIP;
+      //
+      if (!host || !/^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)(\.(?!$)|$)){4}$/.test(host)) {
+        this.info("Missing or invalid DB Ip address");
+        return;
+      }
+      let user = this.settings.values.elo.dbUser;
+      if (!user) {
+        this.info("Missing DB username");
+        return;
+      }
+      let pass = this.settings.values.elo.dbPassword;
+      if (!pass) {
+        this.info("Missing DB password");
+        return;
+      }
+      let database = this.settings.values.elo.dbName;
+      if (!database) {
+        this.info("Missing DB name");
+        return;
+      }
+      let port = this.settings.values.elo.dbPort;
+      if (!port) {
+        this.info("Missing DB name");
+        return;
+      }
+      this.dbConn = new Sequelize(database, user, pass, {
+        host,
+        port,
+        dialect: this.settings.values.elo.type,
+      });
+    } else if (this.settings.values.elo.type === "sqlite") {
+      this.dbConn = new Sequelize({
+        dialect: "sqlite",
+        storage: this.settings.values.elo.sqlitePath,
+      });
+    } else {
+      return;
+    }
+    try {
+      await this.dbConn.authenticate();
+      this.info("Database connection has been established successfully.");
+      this.notification(
+        "Success",
+        "Database connection has been established successfully."
+      );
+      //this.buildModel();
+    } catch (error) {
+      this.warn("Unable to connect to the database:", error);
+    }
+  }
+
   isLobbyReady() {
     let teams = this.exportDataStructure("Self export 4", true);
+    if(!teams){
+      return false;
+    }
     if (this.refreshing) {
       this.verbose("Refreshing slots, not ready.");
       return false;
@@ -836,7 +1086,9 @@ export class LobbyControl extends Module {
           let waitingForStats = team.filter(
             (slot) =>
               slot.realPlayer &&
-              (!slot.data.cleared || !slot.data.extra || slot.data.extra.rating < 0)
+              (!slot.data.cleared ||
+                !slot.data.extra ||
+                (slot.data.extra.rating && slot.data.extra.rating < 0))
           );
           if (waitingForStats.length > 0) {
             this.verbose(
@@ -1037,8 +1289,11 @@ export class LobbyControl extends Module {
     }
   }
 
-  allPlayerTeamsContainPlayers() {
+  allPlayerTeamsContainPlayers(): boolean {
     let teams = this.exportDataStructure("Self export 3");
+    if(!teams){
+      return false;
+    }
     for (const team of Object.values(teams)) {
       if (team.filter((slot) => slot.realPlayer).length === 0) {
         return false;
@@ -1047,8 +1302,11 @@ export class LobbyControl extends Module {
     return true;
   }
 
-  exportDataStructureString(playerTeamsOnly: boolean = true) {
+  exportDataStructureString(playerTeamsOnly: boolean = true): string | false {
     let data = this.exportDataStructure("Self export 2", playerTeamsOnly);
+    if(!data){
+      return false;
+    }
     let exportString = "";
     Object.entries(data).forEach(([teamName, data]) => {
       exportString += teamName + ":\n";
@@ -1071,25 +1329,27 @@ export class LobbyControl extends Module {
     return exportString;
   }
 
-  exportDataStructure(source: string, playerTeamsOnly: boolean = true): PlayerTeamsData {
+  exportDataStructure(source: string, playerTeamsOnly: boolean = true): PlayerTeamsData | false {
     let lobby = this.microLobby;
-    let returnValue = {};
     if (!lobby) {
-      this.error("No lobby to export data from.", source);
-      return returnValue;
+      this.warn("No lobby to export data from.", source);
+      return false;
     }
     return lobby.exportTeamStructure(playerTeamsOnly);
   }
 
-  exportTeamStructureString(playerTeamsOnly: boolean = true) {
+  exportTeamStructureString(playerTeamsOnly: boolean = true): string | false {
     let data = this.exportDataStructure("Self export 1", playerTeamsOnly);
+    if(!data){
+      return false;
+    }
     let exportString = "";
     Object.entries(data).forEach(([teamName, data]) => {
       exportString += teamName + ":\n";
       let combinedData = data.map(
         (data) =>
           data.name +
-          (data.data.extra && data.data.extra.rating > -1
+          (data.data.extra && data.data.extra.rating && data.data.extra.rating > -1
             ? ": " +
               [
                 data.data.extra.rating,

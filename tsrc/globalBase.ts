@@ -13,7 +13,7 @@ export class Global extends EventEmitter {
   }
 
   protected notification(title: string, body: string) {
-    new Notification({ title, body });
+    new Notification({ title, body }).show();
   }
 
   protected info(...args: any[]) {

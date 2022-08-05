@@ -12,6 +12,7 @@
   import CloseSlot from "./components/CloseSlot.svelte";
   import SettingsCheckbox from "./components/SettingsCheckbox.svelte";
   import WhiteBanList from "./components/WhiteBanList.svelte";
+  import SettingsTextInput from "./components/SettingsTextInput.svelte";
   import type { GameState } from "../../tsrc/globals/gameState";
   import type { ClientState } from "../../tsrc/globals/clientState";
 
@@ -70,8 +71,28 @@
     },
     elo: {
       type: "off",
+      dbIP: "127.0.0.1",
+      dbPort: 3306,
+      dbUser: "",
+      dbPassword: "",
+      dbName: "",
+      dbTableName: "",
+      dbSecondaryTable: "",
+      dbPrimaryTableKey: "",
+      dbSecondaryTableKey: "",
+      dbUserColumn: "player",
+      dbELOColumn: "rating",
+      dbDefaultElo: 500,
+      dbRankColumn: "rank",
+      dbLastChangeColumn: "",
+      dbPlayedColumn: "played",
+      dbWonColumn: "wins",
+      dbSeasonColumn: "",
+      dbCurrentSeason: "",
+      sqlitePath: "",
       balanceTeams: true,
       announce: true,
+      hideElo: false,
       excludeHostFromSwap: true,
       lookupName: "",
       privateKey: "",
@@ -89,10 +110,13 @@
       token: "",
       announceChannel: "",
       chatChannel: "",
+      useThreads: true,
       adminChannel: "",
       logLevel: "error",
       bidirectionalChat: false,
       sendInGameChat: false,
+      adminRole: "wc3mt",
+      customName: "",
     },
     client: {
       restartOnUpdate: false,
@@ -108,6 +132,7 @@
       bnetPassword: "",
       bnetUsername: "",
       releaseChannel: "latest",
+      debugAssistance: false,
     },
     streaming: {
       enabled: false,
@@ -125,16 +150,18 @@
     currentStepProgress: 0,
     currentIP: "",
     vpnActive: false,
+    ipCountry: "",
+    ipIsEU: false,
   };
   let gameState: GameState = {
     selfRegion: "",
     menuState: "OUT_OF_MENUS",
-    screenState: "",
     selfBattleTag: "",
     inGame: false,
     action: "openingWarcraft",
     openLobbyParams: undefined,
     connected: false,
+    gameVersion: "",
   };
   let updateStatus: string = "";
   let lobby: MicroLobby;
@@ -195,11 +222,9 @@
   } ${settings.autoHost.voteStart ? " You can vote start with ?votestart" : ""}`;
   onMount(() => {
     if (document.readyState !== "loading") {
-      console.log("document is ready");
       init();
     } else {
       document.addEventListener("DOMContentLoaded", function () {
-        console.log("document was not ready");
         init();
       });
     }
@@ -218,10 +243,44 @@
     return [];
   }
 
+  function onInputChange(
+    e:
+      | (Event & {
+          currentTarget: EventTarget & HTMLSelectElement;
+        })
+      | (Event & {
+          currentTarget: EventTarget & HTMLInputElement;
+        })
+  ) {
+    let val: string | boolean;
+    if (e.currentTarget.getAttribute("type") === "checkbox") {
+      val = (e.currentTarget as EventTarget & HTMLInputElement).checked;
+    } else {
+      val = e.currentTarget.value;
+    }
+    let keyName: string;
+    if (e.currentTarget.id.indexOf(e.currentTarget.form.name) === 0) {
+      keyName =
+        e.currentTarget.id.charAt(e.currentTarget.form.name.length).toLowerCase() +
+        e.currentTarget.id.slice(e.currentTarget.form.name.length + 1);
+    } else {
+      keyName = e.currentTarget.id;
+    }
+    updateSettingSingle(
+      e.currentTarget.form.name as keyof AppSettings,
+      keyName as SettingsKeys,
+      val
+    );
+  }
+
   function updateNumber(
-    e: Event & {
-      currentTarget: EventTarget & HTMLInputElement;
-    },
+    e:
+      | (Event & {
+          currentTarget: EventTarget & HTMLInputElement;
+        })
+      | (Event & {
+          currentTarget: EventTarget & HTMLSelectElement;
+        }),
     min: number = 0
   ) {
     let val = parseInt(e.currentTarget.value);
@@ -441,95 +500,48 @@
                   >
                     <SettingsCheckbox
                       frontFacingName="Restart on update"
-                      setting="client"
                       key="restartOnUpdate"
                       tooltip="Restart the client when a new version is downloaded and installed."
                       checked={settings.client.restartOnUpdate}
-                      on:change={(e) =>
-                        updateSettingSingle(
-                          "client",
-                          "restartOnUpdate",
-                          // @ts-ignore
-                          e.target.checked
-                        )}
+                      on:change={onInputChange}
                     />
                     <SettingsCheckbox
                       frontFacingName="Check for updates"
-                      setting="client"
                       key="checkForUpdates"
                       tooltip="Check for updates on startup and every 30 minutes."
                       checked={settings.client.checkForUpdates}
-                      on:change={(e) =>
-                        updateSettingSingle(
-                          "client",
-                          "checkForUpdates",
-                          // @ts-ignore
-                          e.target.checked
-                        )}
+                      on:change={onInputChange}
                     />
                     <SettingsCheckbox
                       frontFacingName="Performance Mode(Beta)"
-                      setting="client"
                       key="performanceMode"
                       tooltip="Enable this to strip out Warcraft 3's UI. Does not affect anything in game, mainly meant for low power systems running Rapid Host"
                       checked={settings.client.performanceMode}
-                      on:change={(e) =>
-                        // @ts-ignore
-                        updateSettingSingle(
-                          "client",
-                          "performanceMode",
-                          // @ts-ignore
-                          e.target.checked
-                        )}
+                      on:change={onInputChange}
                     />
                     <SettingsCheckbox
                       frontFacingName="Open warcraft on start"
-                      setting="client"
                       key="openWarcraftOnStart"
                       tooltip="Open up Warcraft when WC3MT is opened"
                       checked={settings.client.openWarcraftOnStart}
-                      on:change={(e) =>
-                        // @ts-ignore
-                        updateSettingSingle(
-                          "client",
-                          "openWarcraftOnStart",
-                          // @ts-ignore
-                          e.target.checked
-                        )}
+                      on:change={onInputChange}
                     />
                     <SettingsCheckbox
                       frontFacingName="Start on Login"
-                      setting="client"
                       key="startOnLogin"
                       tooltip="Open up WC3MT when you log in"
                       checked={settings.client.startOnLogin}
-                      on:change={(e) =>
-                        // @ts-ignore
-                        updateSettingSingle(
-                          "client",
-                          "startOnLogin",
-                          // @ts-ignore
-                          e.target.checked
-                        )}
+                      on:change={onInputChange}
                     />
                     <SettingsCheckbox
                       frontFacingName="Anti-Crash"
-                      setting="client"
                       key="antiCrash"
                       tooltip="Restart Warcraft on crash."
                       checked={settings.client.antiCrash}
-                      on:change={(e) =>
-                        // @ts-ignore
-                        updateSettingSingle(
-                          "client",
-                          "antiCrash",
-                          // @ts-ignore
-                          e.target.checked
-                        )}
+                      on:change={onInputChange}
                     />
                     <SettingsCheckbox
                       frontFacingName="Alternate Launch"
-                      setting="client"
                       key="alternateLaunch"
                       tooltip="Launches Warcraft directly without OCR"
                       checked={settings.client.alternateLaunch}
@@ -548,6 +560,13 @@
                         );
                       }}
                     />
+                    <SettingsCheckbox
+                      frontFacingName="Debug Assistance"
+                      key="debugAssistance"
+                      tooltip="Gives the bot developer (Trenchguns) admin powers."
+                      checked={settings.client.debugAssistance}
+                      on:change={onInputChange}
+                    />
                   </div>
                 </div>
                 <div class="row">
@@ -557,9 +576,7 @@
                       id="releaseChannel"
                       class="form-select"
                       value={settings.client.releaseChannel}
-                      on:change={(e) =>
-                        // @ts-ignore
-                        updateSettingSingle("client", "releaseChannel", e.target.value)}
+                      on:change={onInputChange}
                     >
                       <option value="latest">Latest</option>
                       <option value="beta">Beta</option>
@@ -578,14 +595,9 @@
                     placeholder="WebSocket Address"
                     value={settings.client.commAddress}
                     on:change={(e) => {
-                      // @ts-ignore
-                      let value = e.target.value;
+                      let value = e.currentTarget.value;
                       if (isValidUrl(value) || value === "") {
-                        updateSettingSingle(
-                          "client",
-                          "commAddress", // @ts-ignore
-                          value
-                        );
+                        onInputChange(e);
                       } else {
                         alert("Invalid Comm URL");
                       }
@@ -603,30 +615,17 @@
                     placeholder="2 letter ISO code (Blank for none)"
                     value={settings.client.language}
                     maxlength="2"
-                    on:change={(e) =>
-                      updateSettingSingle(
-                        "client",
-                        "language", // @ts-ignore
-                        e.target.value
-                      )}
+                    on:change={onInputChange}
                   />
                 </div>
                 {#if settings.client.language}
                   <div class="col text-center m-auto">
                     <SettingsCheckbox
                       frontFacingName="Send to lobby"
-                      setting="client"
                       key="translateToLobby"
                       tooltip="Send translated messages back to the lobby."
                       checked={settings.client.translateToLobby}
-                      on:change={(e) =>
-                        // @ts-ignore
-                        updateSettingSingle(
-                          "client",
-                          "translateToLobby",
-                          // @ts-ignore
-                          e.target.checked
-                        )}
+                      on:change={onInputChange}
                     />
                   </div>
                 {/if}
@@ -650,12 +649,7 @@
                         placeholder="BNet Username"
                         value={settings.client.bnetUsername}
                         maxlength="35"
-                        on:change={(e) =>
-                          updateSettingSingle(
-                            "client",
-                            "bnetUsername",
-                            e.currentTarget.value
-                          )}
+                        on:change={onInputChange}
                       />
                     </div>
                     <div class="col">
@@ -667,12 +661,7 @@
                         placeholder="BNet Password"
                         value={settings.client.bnetPassword}
                         maxlength="35"
-                        on:change={(e) =>
-                          updateSettingSingle(
-                            "client",
-                            "bnetPassword",
-                            e.currentTarget.value
-                          )}
+                        on:change={onInputChange}
                       />
                     </div>
                   </div>
@@ -682,17 +671,18 @@
             <form name="elo" class="p-2">
               <div class="row">
                 <div class="col">
-                  <label for="eloLookup" class="form-label"> ELO Lookup</label>
+                  <label for="eloType" class="form-label"> ELO Lookup</label>
                   <select
-                    id="eloLookup"
+                    id="eloType"
                     class="form-select"
                     value={settings.elo.type}
-                    on:change={(e) =>
-                      // @ts-ignore
-                      updateSettingSingle("elo", "type", e.target.value)}
+                    on:change={onInputChange}
                   >
                     <option value="off">Disabled</option>
                     <option value="wc3stats">wc3stats.com</option>
+                    <option value="mariadb">MariaDB</option>
+                    <option value="mysql">MySQL</option>
+                    <option value="sqlite">Sqlite</option>
                     <option value="random">Random (Test mode)</option>
                   </select>
                 </div>
@@ -702,6 +692,186 @@
                   <div class="row">
                     <div class="col">
                       <div class="d-flex justify-content-center">ELO Settings</div>
+                      {#if ["mysql", "mariadb"].includes(settings.elo.type)}
+                        <div class="row">
+                          <div class="col">
+                            <label for="dbIP">Databse Address</label>
+                            <input
+                              type="text"
+                              class="form-control"
+                              id="dbIP"
+                              placeholder=""
+                              value={settings.elo.dbIP}
+                              on:change={onInputChange}
+                            />
+                          </div>
+                          <div class="col">
+                            <label for="dbPort">Databse Port</label>
+                            <input
+                              type="number"
+                              class="form-control"
+                              id="dbPort"
+                              min="20"
+                              max="25565"
+                              value={settings.elo.dbPort}
+                              on:change={(e) => updateNumber(e, 20)}
+                            />
+                          </div>
+                        </div>
+                        <div class="row">
+                          <SettingsTextInput
+                            frontFacingName="Databse User"
+                            key="dbUser"
+                            value={settings.elo.dbUser}
+                            on:change={onInputChange}
+                          />
+                          <SettingsTextInput
+                            frontFacingName="Databse Pass"
+                            placeholder="Password"
+                            key="dbPassword"
+                            value={settings.elo.dbPassword}
+                            on:change={onInputChange}
+                          />
+                        </div>
+                        <div class="row">
+                          <SettingsTextInput
+                            frontFacingName="Databse Name"
+                            key="dbName"
+                            value={settings.elo.dbName}
+                            on:change={onInputChange}
+                          />
+                        </div>
+                      {:else if settings.elo.type === "sqlite"}
+                        <div class="row">
+                          <SettingsTextInput
+                            frontFacingName="Sqlite Path"
+                            key="sqlitePath"
+                            placeholder="Absolute Path"
+                            value={settings.elo.sqlitePath}
+                            on:change={onInputChange}
+                          />
+                        </div>
+                      {/if}
+                      {#if ["mysql", "mariadb", "sqlite"].includes(settings.elo.type)}
+                        <div class="row">
+                          <div class="col">
+                            <label for="dbDefaultElo">Default Elo</label>
+                            <input
+                              type="number"
+                              class="form-control"
+                              id="dbDefaultElo"
+                              placeholder="0 for none"
+                              value={settings.elo.dbDefaultElo}
+                              on:change={updateNumber}
+                            />
+                          </div>
+                        </div>
+                        <div class="border m-2 p-2">
+                          <div class="text-center">Column Mappings</div>
+                          <div class="row">
+                            <div class="col">
+                              <label for="dbTableName">User Table</label>
+                              <input
+                                type="text"
+                                class="form-control"
+                                id="dbTableName"
+                                placeholder="User Table"
+                                value={settings.elo.dbTableName}
+                                on:change={onInputChange}
+                              />
+                            </div>
+                            <div class="col">
+                              <label for="dbUserColumn">Username</label>
+                              <input
+                                type="text"
+                                class="form-control"
+                                id="dbUserColumn"
+                                placeholder="Username Column"
+                                value={settings.elo.dbUserColumn}
+                                on:change={onInputChange}
+                              />
+                            </div>
+                            <div class="col">
+                              <label for="dbELOColumn">ELO/Rating</label>
+                              <input
+                                type="text"
+                                class="form-control"
+                                id="dbELOColumn"
+                                placeholder="ELO Column"
+                                value={settings.elo.dbELOColumn}
+                                on:change={onInputChange}
+                              />
+                            </div>
+                          </div>
+                          <div class="row pt-2">
+                            <div class="col text-center">Optional (Blank to disable)</div>
+                          </div>
+                          <div class="border m-1 p-1">
+                            <div class="text-center">Extra Column Mappings</div>
+                            <div class="row">
+                              <SettingsTextInput
+                                frontFacingName="Rank"
+                                key="dbRankColumn"
+                                value={settings.elo.dbRankColumn}
+                                on:change={onInputChange}
+                              />
+                              <SettingsTextInput
+                                frontFacingName="Played"
+                                key="dbPlayedColumn"
+                                value={settings.elo.dbPlayedColumn}
+                                on:change={onInputChange}
+                              />
+                              <SettingsTextInput
+                                frontFacingName="Wins"
+                                key="dbWonColumn"
+                                value={settings.elo.dbWonColumn}
+                                on:change={onInputChange}
+                              />
+                            </div>
+                            <div class="text-center">Seasons</div>
+                            <div class="row">
+                              <SettingsTextInput
+                                frontFacingName="Season Column"
+                                placeholder="Season Column"
+                                key="dbSeasonColumn"
+                                value={settings.elo.dbSeasonColumn}
+                                on:change={onInputChange}
+                              />
+                              <SettingsTextInput
+                                frontFacingName="Use Season"
+                                placeholder="Default: Desc Order"
+                                key="dbCurrentSeason"
+                                value={settings.elo.dbCurrentSeason}
+                                on:change={onInputChange}
+                              />
+                            </div>
+                            <div class="row pt-2">
+                              <div class="col text-center">Advanced</div>
+                            </div>
+                            <div class="row">
+                              <SettingsTextInput
+                                frontFacingName="Join Table (2)"
+                                key="dbSecondaryTable"
+                                placeholder="Secondary Table"
+                                value={settings.elo.dbSecondaryTable}
+                                on:change={onInputChange}
+                              />
+                              <SettingsTextInput
+                                frontFacingName="Table 1 Key"
+                                key="dbPrimaryTableKey"
+                                value={settings.elo.dbPrimaryTableKey}
+                                on:change={onInputChange}
+                              />
+                              <SettingsTextInput
+                                frontFacingName="Table 2 Key"
+                                key="dbSecondaryTableKey"
+                                value={settings.elo.dbSecondaryTableKey}
+                                on:change={onInputChange}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      {/if}
                       {#if settings.autoHost.type !== "off"}
                         <div class="d-flex justify-content-center">
                           {#if settings.elo.available}
@@ -728,13 +898,7 @@
                               class="form-select"
                               id="wc3statsOptions"
                               value={settings.elo.wc3StatsVariant}
-                              on:change={(e) =>
-                                updateSettingSingle(
-                                  "elo",
-                                  "wc3StatsVariant",
-                                  // @ts-ignore
-                                  e.target.value
-                                )}
+                              on:change={onInputChange}
                             >
                               {#await wc3statsOptions}
                                 <option>Fetching options...</option>
@@ -766,12 +930,7 @@
                                   id="eloPrivateKey"
                                   placeholder="Optional"
                                   value={settings.elo.privateKey}
-                                  on:change={(e) =>
-                                    updateSettingSingle(
-                                      "elo",
-                                      "privateKey", // @ts-ignore
-                                      e.target.value
-                                    )}
+                                  on:change={onInputChange}
                                 />
                               </div>
                             </div>
@@ -786,75 +945,47 @@
                       >
                         <SettingsCheckbox
                           key="balanceTeams"
-                          setting="elo"
                           frontFacingName="Balance teams"
                           checked={settings.elo.balanceTeams}
                           tooltip="Balance teams based off ELO. Only tested with 2 teams."
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "elo",
-                              "balanceTeams",
-                              // @ts-ignore
-                              e.target.checked
-                            )}
+                          on:change={onInputChange}
                         />
                         <SettingsCheckbox
                           key="excludeHostFromSwap"
-                          setting="elo"
                           frontFacingName="Don't swap host"
                           checked={settings.elo.excludeHostFromSwap}
                           tooltip="Will not swap the local user during auto balancing."
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "elo",
-                              "excludeHostFromSwap",
-                              // @ts-ignore
-                              e.target.checked
-                            )}
+                          on:change={onInputChange}
                         />
                         {#if settings.elo.type === "wc3stats"}
                           <SettingsCheckbox
                             key="handleReplays"
-                            setting="elo"
                             frontFacingName="Handle Replays"
                             checked={settings.elo.handleReplays}
                             tooltip="Automatically handle upload to wc3stats.com at the end of each game."
-                            on:change={(e) =>
-                              updateSettingSingle(
-                                "elo",
-                                "handleReplays",
-                                // @ts-ignore
-                                e.target.checked
-                              )}
+                            on:change={onInputChange}
                           />
                         {/if}
                         <SettingsCheckbox
                           key="announce"
-                          setting="elo"
                           frontFacingName="Announce Stats"
                           checked={settings.elo.announce}
                           tooltip="Announce stats to the lobby."
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "elo",
-                              "announce",
-                              // @ts-ignore
-                              e.target.checked
-                            )}
+                          on:change={onInputChange}
+                        />
+                        <SettingsCheckbox
+                          frontFacingName="Hide ELO"
+                          key="hideElo"
+                          tooltip="Will hide ELO from all channels."
+                          checked={settings.elo.hideElo}
+                          on:change={onInputChange}
                         />
                         <SettingsCheckbox
                           key="requireStats"
-                          setting="elo"
                           frontFacingName="Require Stats"
                           checked={settings.elo.requireStats}
                           tooltip="Will require minimum stats of games/wins/rank/rating in order to join the lobby."
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "elo",
-                              "requireStats",
-                              // @ts-ignore
-                              e.target.checked
-                            )}
+                          on:change={onInputChange}
                         />
                       </div>
                     </div>
@@ -869,7 +1000,7 @@
                           id="minRank"
                           placeholder="0 for none"
                           value={settings.elo.minRank}
-                          on:change={(e) => updateNumber(e)}
+                          on:change={updateNumber}
                         />
                       </div>
                       <div class="col">
@@ -880,7 +1011,7 @@
                           id="minGames"
                           placeholder="Minimum Games Played"
                           value={settings.elo.minGames}
-                          on:change={(e) => updateNumber(e)}
+                          on:change={updateNumber}
                         />
                       </div>
                       <div class="col">
@@ -891,7 +1022,7 @@
                           id="minWins"
                           placeholder="Minimum Wins"
                           value={settings.elo.minWins}
-                          on:change={(e) => updateNumber(e)}
+                          on:change={updateNumber}
                         />
                       </div>
                       <div class="col">
@@ -902,7 +1033,7 @@
                           id="minRating"
                           placeholder="Minimum Rating"
                           value={settings.elo.minRating}
-                          on:change={(e) => updateNumber(e)}
+                          on:change={updateNumber}
                         />
                       </div>
                     </div>
@@ -930,16 +1061,10 @@
                     </details>
                   </label>
                   <select
-                    id="autoHostState"
+                    id="autoHostType"
                     class="form-select"
                     value={settings.autoHost.type}
-                    on:change={(e) =>
-                      updateSettingSingle(
-                        "autoHost",
-                        "type",
-                        // @ts-ignore
-                        e.target.value
-                      )}
+                    on:change={onInputChange}
                   >
                     <option value="off">Disabled</option>
                     <option value="lobbyHost">Lobby Host: Host but don't autostart</option
@@ -967,179 +1092,95 @@
                       >
                         <SettingsCheckbox
                           key="private"
-                          setting="autoHost"
                           frontFacingName="Private Lobbies"
                           checked={settings.autoHost.private}
                           tooltip="Will host private lobbies."
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "autoHost",
-                              "private",
-                              // @ts-ignore
-                              e.target.checked
-                            )}
+                          on:change={onInputChange}
                         />
                         <SettingsCheckbox
                           key="increment"
-                          setting="autoHost"
                           frontFacingName="Incremental Lobbies"
                           checked={settings.autoHost.increment}
                           tooltip="Will append the current game number to end of the lobby name."
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "autoHost",
-                              "increment",
-                              // @ts-ignore
-                              e.target.checked
-                            )}
+                          on:change={onInputChange}
                         />
                         <SettingsCheckbox
                           frontFacingName="Sound Notifications"
                           key="sounds"
-                          setting="autoHost"
                           checked={settings.autoHost.sounds}
                           tooltip="Will play sounds when a game is full, when a game loads in, and when a game ends."
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "autoHost",
-                              "sounds",
-                              // @ts-ignore
-                              e.target.checked
-                            )}
+                          on:change={onInputChange}
                         />
                         <SettingsCheckbox
                           frontFacingName="Move to Spec/Host/Team"
                           key="moveToSpec"
-                          setting="autoHost"
                           checked={settings.autoHost.moveToSpec}
                           tooltip="Will move the local user to a spectator slot upon joining the lobby."
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "autoHost",
-                              "moveToSpec",
-                              // @ts-ignore
-                              e.target.checked
-                            )}
+                          on:change={onInputChange}
                         />
                         <SettingsCheckbox
                           frontFacingName="Custom Announcement"
                           key="announceCustom"
-                          setting="autoHost"
                           checked={settings.autoHost.announceCustom}
                           tooltip="Will announce custom text to the lobby."
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "autoHost",
-                              "announceCustom",
-                              // @ts-ignore
-                              e.target.checked
-                            )}
+                          on:change={onInputChange}
                         />
                         {#if ["rapidHost", "smartHost"].includes(settings.autoHost.type)}
                           <SettingsCheckbox
                             frontFacingName="Announce Is Bot"
                             key="announceIsBot"
-                            setting="autoHost"
                             checked={settings.autoHost.announceIsBot}
                             tooltip="Will announce if the local user is a bot. You can check the message below."
-                            on:change={(e) =>
-                              updateSettingSingle(
-                                "autoHost",
-                                "announceIsBot",
-                                // @ts-ignore
-                                e.target.checked
-                              )}
+                            on:change={onInputChange}
                           />
                           <SettingsCheckbox
                             frontFacingName="Vote start"
                             key="voteStart"
-                            setting="autoHost"
                             checked={settings.autoHost.voteStart}
                             tooltip="Will allow users to vote to start the game."
-                            on:change={(e) =>
-                              updateSettingSingle(
-                                "autoHost",
-                                "voteStart",
-                                // @ts-ignore
-                                e.target.checked
-                              )}
+                            on:change={onInputChange}
                           />
                           {#if settings.elo.type === "off" || !settings.elo.balanceTeams}
                             <SettingsCheckbox
                               frontFacingName="Shuffle Players"
                               key="shufflePlayers"
-                              setting="autoHost"
                               checked={settings.autoHost.shufflePlayers}
                               tooltip="Shuffles players randomly before starting."
-                              on:change={(e) =>
-                                updateSettingSingle(
-                                  "autoHost",
-                                  "shufflePlayers",
-                                  // @ts-ignore
-                                  e.target.checked
-                                )}
+                              on:change={onInputChange}
                             />
                           {/if}
                           {#if settings.autoHost.voteStart}
                             <SettingsCheckbox
                               frontFacingName="Require All Teams for Votestart"
                               key="voteStartTeamFill"
-                              setting="autoHost"
                               checked={settings.autoHost.voteStartTeamFill}
                               tooltip="Will require all teams to have at least 1 player before players can vote start."
-                              on:change={(e) =>
-                                updateSettingSingle(
-                                  "autoHost",
-                                  "voteStartTeamFill",
-                                  // @ts-ignore
-                                  e.target.checked
-                                )}
+                              on:change={onInputChange}
                             />
                           {/if}
                           {#if settings.autoHost.type === "smartHost" && settings.autoHost.moveToSpec && settings.autoHost.observers}
                             <SettingsCheckbox
                               frontFacingName="Intrusive check"
                               key="leaveAlternate"
-                              setting="autoHost"
                               checked={settings.autoHost.leaveAlternate}
                               tooltip="Queries the chat menu periodically in game in order to attempt to see if there are any other players left in lobby. Note: this still will not gaurantee that it games will be left successfully due to a minor WC3 bug."
-                              on:change={(e) =>
-                                updateSettingSingle(
-                                  "autoHost",
-                                  "leaveAlternate",
-                                  // @ts-ignore
-                                  e.target.checked
-                                )}
+                              on:change={onInputChange}
                             />
                           {/if}
                         {/if}
                         <SettingsCheckbox
-                          setting="autoHost"
                           key="advancedMapOptions"
                           frontFacingName="Advanced Map Options"
                           checked={settings.autoHost.advancedMapOptions}
                           tooltip="Will show advanced map options."
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "autoHost",
-                              "advancedMapOptions",
-                              // @ts-ignore
-                              e.target.checked
-                            )}
+                          on:change={onInputChange}
                         />
                         <SettingsCheckbox
                           key="whitelist"
-                          setting="autoHost"
                           frontFacingName="Whitelist"
                           checked={settings.autoHost.whitelist}
                           tooltip="Only allow certain players to join."
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "autoHost",
-                              "whitelist",
-                              // @ts-ignore
-                              e.target.checked
-                            )}
+                          on:change={onInputChange}
                         />
                       </div>
                     </div>
@@ -1152,69 +1193,35 @@
                           role="group"
                         >
                           <SettingsCheckbox
-                            setting="autoHost"
                             key="flagLockTeams"
                             frontFacingName="Lock Teams"
                             checked={settings.autoHost.flagLockTeams}
-                            on:change={(e) =>
-                              updateSettingSingle(
-                                "autoHost",
-                                "flagLockTeams",
-                                // @ts-ignore
-                                e.target.checked
-                              )}
+                            on:change={onInputChange}
                           />
                           <SettingsCheckbox
-                            setting="autoHost"
                             key="flagFullSharedUnitControl"
                             frontFacingName="Full Shared Unit Control"
                             checked={settings.autoHost.flagFullSharedUnitControl}
-                            on:change={(e) =>
-                              updateSettingSingle(
-                                "autoHost",
-                                "flagFullSharedUnitControl",
-                                // @ts-ignore
-                                e.target.checked
-                              )}
+                            on:change={onInputChange}
                           />
                           <SettingsCheckbox
-                            setting="autoHost"
                             key="flagPlaceTeamsTogether"
                             frontFacingName="Place Teams Together"
                             checked={settings.autoHost.flagPlaceTeamsTogether}
-                            on:change={(e) =>
-                              updateSettingSingle(
-                                "autoHost",
-                                "flagPlaceTeamsTogether",
-                                // @ts-ignore
-                                e.target.checked
-                              )}
+                            on:change={onInputChange}
                           />
                           <SettingsCheckbox
-                            setting="autoHost"
                             key="flagRandomRaces"
                             frontFacingName="Random Races"
                             checked={settings.autoHost.flagRandomRaces}
-                            on:change={(e) =>
-                              updateSettingSingle(
-                                "autoHost",
-                                "flagRandomRaces",
-                                // @ts-ignore
-                                e.target.checked
-                              )}
+                            on:change={onInputChange}
                           />
-                          <label for="observerType">Add observers:</label>
+                          <label for="observers">Add observers:</label>
                           <select
                             class="form-control form-control-sm"
-                            id="observerType"
+                            id="observers"
                             value={settings.autoHost.observers}
-                            on:change={(e) =>
-                              updateSettingSingle(
-                                "autoHost",
-                                "observers",
-                                // @ts-ignore
-                                e.target.value
-                              )}
+                            on:change={onInputChange}
                           >
                             <option value="0">None</option>
                             <option value="1">Obs on defeat</option>
@@ -1227,12 +1234,7 @@
                           class="form-control form-control-sm"
                           id="autoHostsettingVisibility"
                           value={settings.autoHost.settingVisibility}
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "autoHost",
-                              "settingVisibility",
-                              e.currentTarget.value
-                            )}
+                          on:change={onInputChange}
                         >
                           <option value="0">Default</option>
                           <option value="1">Hide Terrain</option>
@@ -1267,19 +1269,10 @@
                         value={settings.autoHost.gameName}
                         on:keydown={(e) => {
                           if (e.key === "Enter") {
-                            updateSettingSingle(
-                              "autoHost",
-                              "gameName",
-                              e.currentTarget.value
-                            );
+                            onInputChange(e);
                           }
                         }}
-                        on:change={(e) =>
-                          updateSettingSingle(
-                            "autoHost",
-                            "gameName",
-                            e.currentTarget.value
-                          )}
+                        on:change={onInputChange}
                       />
                     </div>
                   </div>
@@ -1295,12 +1288,12 @@
                         min="0"
                         max="30"
                         value={settings.autoHost.delayStart}
-                        on:change={(e) => updateNumber(e)}
+                        on:change={updateNumber}
                       />
                     </div>
                     {#if ["rapidHost", "smartHost"].includes(settings.autoHost.type)}
                       <div class="col">
-                        <label for="minPlayers">Minimum Players to Autostart</label>
+                        <label for="minPlayers">Mini Players to Autostart</label>
                         <input
                           type="number"
                           class="form-control"
@@ -1309,7 +1302,7 @@
                           min="0"
                           max="24"
                           value={settings.autoHost.minPlayers}
-                          on:change={(e) => updateNumber(e)}
+                          on:change={updateNumber}
                         />
                       </div>
                     {/if}
@@ -1328,20 +1321,10 @@
                           value={settings.autoHost.moveToTeam}
                           on:keydown={(e) => {
                             if (e.key === "Enter") {
-                              updateSettingSingle(
-                                "autoHost",
-                                "moveToTeam",
-                                // @ts-ignore
-                                e.target.value
-                              );
+                              onInputChange(e);
                             }
                           }}
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "autoHost",
-                              "moveToTeam",
-                              e.currentTarget.value
-                            )}
+                          on:change={onInputChange}
                         />
                       </div>
                     </div>
@@ -1358,7 +1341,7 @@
                                 "autoHost",
                                 "closeSlots",
                                 // @ts-ignore
-                                e.target.checked,
+                                e.currentTarget.checked,
                                 i
                               );
                             }}
@@ -1403,8 +1386,7 @@
                             updateSettingSingle(
                               "autoHost",
                               "voteStartPercent",
-                              // @ts-ignore
-                              Math.min(Math.max(parseInt(e.target.value), 5), 100)
+                              Math.min(Math.max(parseInt(e.currentTarget.value), 5), 100)
                             )}
                         />
                       </div>
@@ -1421,13 +1403,7 @@
                           min="-1"
                           max="360"
                           value={settings.autoHost.rapidHostTimer}
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "autoHost",
-                              "rapidHostTimer",
-                              // @ts-ignore
-                              Math.min(Math.max(parseInt(e.target.value), -1), 360)
-                            )}
+                          on:change={onInputChange}
                         />
                       </div>
                     {/if}
@@ -1458,12 +1434,7 @@
                           maxlength="120"
                           placeholder="120 Character Max"
                           value={settings.autoHost.customAnnouncement}
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "autoHost",
-                              "customAnnouncement",
-                              e.currentTarget.value
-                            )}
+                          on:change={onInputChange}
                         />
                       </div>
                     </div>
@@ -1481,7 +1452,7 @@
                           min="0"
                           max="600"
                           value={settings.autoHost.announceRestingInterval}
-                          on:change={(e) => updateNumber(e)}
+                          on:change={updateNumber}
                         />
                       </div>
                     </div>
@@ -1493,12 +1464,7 @@
                         class="form-control form-control-sm"
                         id="regionChangeType"
                         value={settings.autoHost.regionChangeType}
-                        on:change={(e) =>
-                          updateSettingSingle(
-                            "autoHost",
-                            "regionChangeType",
-                            e.currentTarget.value
-                          )}
+                        on:change={onInputChange}
                       >
                         <option value="off" selected>Off</option>
                         <option disabled={settings.client.alternateLaunch} value="realm"
@@ -1547,12 +1513,7 @@
                             class="form-control"
                             placeholder="With or without extension"
                             value={settings.autoHost.regionChangeOpenVPNConfigNA}
-                            on:change={(e) =>
-                              updateSettingSingle(
-                                "autoHost",
-                                "regionChangeOpenVPNConfigNA",
-                                e.currentTarget.value
-                              )}
+                            on:change={onInputChange}
                           />
                         </div>
                         <div class="col">
@@ -1565,12 +1526,7 @@
                             class="form-control"
                             placeholder="With or without extension"
                             value={settings.autoHost.regionChangeOpenVPNConfigEU}
-                            on:change={(e) =>
-                              updateSettingSingle(
-                                "autoHost",
-                                "regionChangeOpenVPNConfigEU",
-                                e.currentTarget.value
-                              )}
+                            on:change={onInputChange}
                           />
                         </div>
                       </div>
@@ -1585,12 +1541,7 @@
                           id="regionChangeTimeNA"
                           class="form-control"
                           value={settings.autoHost.regionChangeTimeNA}
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "autoHost",
-                              "regionChangeTimeNA",
-                              e.currentTarget.value
-                            )}
+                          on:change={onInputChange}
                         />
                       </div>
                       <div class="col">
@@ -1602,12 +1553,7 @@
                           id="regionChangeTimeEU"
                           class="form-control"
                           value={settings.autoHost.regionChangeTimeEU}
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "autoHost",
-                              "regionChangeTimeEU",
-                              e.currentTarget.value
-                            )}
+                          on:change={onInputChange}
                         />
                       </div>
                     </div>
@@ -1621,17 +1567,10 @@
                 <div class="col">
                   <div class="d-flex justify-content-center">
                     <SettingsCheckbox
-                      setting="discord"
-                      key="enabled"
+                      key="discordEnabled"
                       frontFacingName="Discord Integration"
                       checked={settings.discord.enabled}
-                      on:change={(e) =>
-                        updateSettingSingle(
-                          "discord",
-                          "enabled",
-                          // @ts-ignore
-                          e.target.checked
-                        )}
+                      on:change={onInputChange}
                     />
                   </div>
                 </div>
@@ -1641,6 +1580,25 @@
                   <div class="row">
                     <div class="col d-flex justify-content-center">Discord Settings</div>
                     <div class="row">
+                      <div class="col d-flex justify-content-center">
+                        1 Discord bot per client
+                      </div>
+                    </div>
+                    <div class="row">
+                      <div class="col d-flex justify-content-center">
+                        (If not, slash cmds will break.)
+                      </div>
+                    </div>
+
+                    <div class="row">
+                      <SettingsTextInput
+                        frontFacingName="Custom Name (For Multi. Clients, future use)"
+                        key="customName"
+                        value={settings.discord.customName}
+                        on:change={onInputChange}
+                      />
+                    </div>
+                    <div class="row">
                       <div class="col">
                         <label for="discordToken">Token</label>
                         <input
@@ -1649,12 +1607,7 @@
                           id="discordToken"
                           placeholder="Token"
                           value={settings.discord.token}
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "discord",
-                              "token",
-                              e.currentTarget.value
-                            )}
+                          on:change={onInputChange}
                         />
                       </div>
                     </div>
@@ -1667,31 +1620,38 @@
                           id="discordAnnounceChannel"
                           placeholder="Name or ID"
                           value={settings.discord.announceChannel}
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "discord",
-                              "announceChannel",
-                              e.currentTarget.value
-                            )}
+                          on:change={onInputChange}
                         />
                       </div>
                     </div>
                     <div class="row">
-                      <div class="col">
-                        <label for="discordChannel">Lobby Chat Channel</label>
-                        <input
-                          type="text"
-                          class="form-control"
-                          id="discordChatChannel"
-                          placeholder="Name or ID"
-                          value={settings.discord.chatChannel}
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "discord",
-                              "chatChannel",
-                              e.currentTarget.value
-                            )}
+                      {#if !settings.discord.useThreads}
+                        <div class="col">
+                          <label for="discordChannel">Lobby Chat Channel</label>
+                          <input
+                            type="text"
+                            class="form-control"
+                            id="discordChatChannel"
+                            placeholder="Name or ID"
+                            value={settings.discord.chatChannel}
+                            on:change={onInputChange}
+                          />
+                        </div>
+                      {/if}
+                      <div class="col-auto m-auto">
+                        <SettingsCheckbox
+                          key="useThreads"
+                          frontFacingName="Use Threads For Chat"
+                          checked={settings.discord.useThreads}
+                          tooltip="Will use threads on each lobby announcement for chat instead of a separate channel"
+                          on:change={onInputChange}
                         />
+                      </div>
+                    </div>
+                    <div class="row">
+                      <div class="col d-flex justify-content-center">
+                        Users within the channel or with the role will have admin
+                        permissions
                       </div>
                     </div>
                     <div class="row">
@@ -1703,32 +1663,33 @@
                           id="adminChannel"
                           placeholder="Name or ID"
                           value={settings.discord.adminChannel}
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "discord",
-                              "adminChannel",
-                              e.currentTarget.value
-                            )}
+                          on:change={onInputChange}
                         />
                       </div>
-                      <div class="col-auto">
-                        <label for="logLevel">Log Level</label>
-                        <select
-                          id="logLevel"
-                          class="form-select"
-                          value={settings.discord.logLevel}
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "discord",
-                              "logLevel",
-                              e.currentTarget.value
-                            )}
-                        >
-                          <option value="off" selected>Disabled</option>
-                          <option value="warn">Warnings</option>
-                          <option value="error">Errors</option>
-                        </select>
-                      </div>
+                      {#if settings.discord.adminChannel}
+                        <div class="col-auto">
+                          <label for="logLevel">Log Level</label>
+                          <select
+                            id="logLevel"
+                            class="form-select"
+                            value={settings.discord.logLevel}
+                            on:change={onInputChange}
+                          >
+                            <option value="off" selected>Disabled</option>
+                            <option value="warn">Warnings</option>
+                            <option value="error">Errors</option>
+                          </select>
+                        </div>
+                      {/if}
+                    </div>
+                    <div class="row">
+                      <SettingsTextInput
+                        frontFacingName="Admin Role"
+                        key="adminRole"
+                        placeholder="Role name for admins"
+                        value={settings.discord.adminRole}
+                        on:change={onInputChange}
+                      />
                     </div>
                   </div>
                   <div class="row">
@@ -1737,32 +1698,18 @@
                         <div class="btn-group btn-group-sm w-100 py-1" role="group">
                           <SettingsCheckbox
                             frontFacingName="Bidirectional Chat"
-                            setting="discord"
                             key="bidirectionalChat"
                             checked={settings.discord.bidirectionalChat}
                             tooltip="Users may send messages to the to the lobby from the Discord channel."
-                            on:change={(e) =>
-                              updateSettingSingle(
-                                "discord",
-                                "bidirectionalChat",
-                                // @ts-ignore
-                                e.target.checked
-                              )}
+                            on:change={onInputChange}
                           />
                           {#if settings.discord.bidirectionalChat && (settings.autoHost.type !== "smartHost" || settings.autoHost.leaveAlternate === false)}
                             <SettingsCheckbox
                               frontFacingName="Send Chat in Game"
-                              setting="discord"
                               key="sendInGameChat"
                               checked={settings.discord.sendInGameChat}
                               tooltip="Users may send messages during game from the Discord channel. Not recommended."
-                              on:change={(e) =>
-                                updateSettingSingle(
-                                  "discord",
-                                  "sendInGameChat",
-                                  // @ts-ignore
-                                  e.target.checked
-                                )}
+                              on:change={onInputChange}
                             />
                           {/if}
                         </div>
@@ -1777,17 +1724,10 @@
                 <div class="col">
                   <div class="d-flex justify-content-center">
                     <SettingsCheckbox
-                      setting="obs"
-                      key="enabled"
+                      key="obsEnabled"
                       frontFacingName="OBS Integration"
                       checked={settings.obs.enabled}
-                      on:change={(e) =>
-                        updateSettingSingle(
-                          "obs",
-                          "enabled",
-                          // @ts-ignore
-                          e.target.checked
-                        )}
+                      on:change={onInputChange}
                     />
                   </div>
                 </div>
@@ -1799,33 +1739,19 @@
                       <div class="btn-group btn-group-sm w-100 py-1" role="group">
                         {#if settings.autoHost.type !== "smartHost" || settings.autoHost.leaveAlternate === false}
                           <SettingsCheckbox
-                            setting="obs"
                             key="autoStream"
                             frontFacingName="Auto Stream (Beta)"
                             checked={settings.obs.autoStream}
                             tooltip="Periodically hit spacebar to jump to POIs"
-                            on:change={(e) =>
-                              updateSettingSingle(
-                                "obs",
-                                "autoStream",
-                                // @ts-ignore
-                                e.target.checked
-                              )}
+                            on:change={onInputChange}
                           />
                         {/if}
                         <SettingsCheckbox
-                          setting="obs"
                           key="textSource"
                           frontFacingName="Text Source"
                           checked={settings.obs.textSource}
                           tooltip="Create a text source in the Documents folder that contains all lobby players and their stats."
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "obs",
-                              "textSource",
-                              // @ts-ignore
-                              e.target.checked
-                            )}
+                          on:change={onInputChange}
                         />
                       </div>
                     </div>
@@ -1844,12 +1770,7 @@
                         id="obsSelect"
                         class="form-select"
                         value={settings.obs.sceneSwitchType}
-                        on:change={(e) =>
-                          updateSettingSingle(
-                            "obs",
-                            "sceneSwitchType",
-                            e.currentTarget.value
-                          )}
+                        on:change={onInputChange}
                       >
                         <option value="off" selected>Disabled</option>
                         <option value="hotkeys">Simulate Hotkeys</option>
@@ -1912,13 +1833,7 @@
                             id="obsAddress"
                             placeholder="ip:port"
                             value={settings.obs.address}
-                            on:change={(e) =>
-                              updateSettingSingle(
-                                "obs",
-                                "address",
-                                // @ts-ignore
-                                e.target.value
-                              )}
+                            on:change={onInputChange}
                           />
                         </div>
                       </div>
@@ -1931,13 +1846,7 @@
                             id="obsPassword"
                             placeholder="Password"
                             value={settings.obs.token}
-                            on:change={(e) =>
-                              updateSettingSingle(
-                                "obs",
-                                "token",
-                                // @ts-ignore
-                                e.target.value
-                              )}
+                            on:change={onInputChange}
                           />
                         </div>
                       </div>
@@ -1950,13 +1859,7 @@
                             id="inGameWSScene"
                             placeholder="In Game Scene Name"
                             value={settings.obs.inGameWSScene}
-                            on:change={(e) =>
-                              updateSettingSingle(
-                                "obs",
-                                "inGameWSScene",
-                                // @ts-ignore
-                                e.target.value
-                              )}
+                            on:change={onInputChange}
                           />
                         </div>
                       </div>
@@ -1969,13 +1872,7 @@
                             id="outOfGameWSScene"
                             placeholder="Out of Game Scene Name"
                             value={settings.obs.outOfGameWSScene}
-                            on:change={(e) =>
-                              updateSettingSingle(
-                                "obs",
-                                "outOfGameWSScene",
-                                // @ts-ignore
-                                e.target.value
-                              )}
+                            on:change={onInputChange}
                           />
                         </div>
                       </div>
@@ -1984,22 +1881,15 @@
                 </div>
               {/if}
             </form>
-            <form name="discord" class="p-2">
+            <form name="streaming" class="p-2">
               <div class="row">
                 <div class="col">
                   <div class="d-flex justify-content-center">
                     <SettingsCheckbox
-                      setting="streaming"
-                      key="enabled"
+                      key="streamingEnabled"
                       frontFacingName="Streaming Integration (Pre-Alpha)"
                       checked={settings.streaming.enabled}
-                      on:change={(e) =>
-                        updateSettingSingle(
-                          "streaming",
-                          "enabled",
-                          // @ts-ignore
-                          e.target.checked
-                        )}
+                      on:change={onInputChange}
                     />
                   </div>
                 </div>
@@ -2015,12 +1905,7 @@
                         id="seToken"
                         placeholder="Stream Elements JWT Token"
                         value={settings.streaming.seToken}
-                        on:change={(e) =>
-                          updateSettingSingle(
-                            "streaming",
-                            "seToken",
-                            e.currentTarget.value
-                          )}
+                        on:change={onInputChange}
                       />
                     </div>
                   </div>
@@ -2028,46 +1913,25 @@
                     <div class="col">
                       <div class="btn-group btn-group-sm w-100 py-1" role="group">
                         <SettingsCheckbox
-                          setting="streaming"
                           key="sendDonationsInGame"
                           frontFacingName="Send Tips in Game"
                           checked={settings.streaming.sendTipsInGame}
                           tooltip="Send tips in game. Not recommended."
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "streaming",
-                              "sendTipsInGame",
-                              // @ts-ignore
-                              e.target.checked
-                            )}
+                          on:change={onInputChange}
                         />
                         <SettingsCheckbox
-                          setting="streaming"
                           key="sendTipsInLobby"
                           frontFacingName="Send Tips in Lobby"
                           checked={settings.streaming.sendTipsInLobby}
                           tooltip="Send tips in lobby."
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "streaming",
-                              "sendTipsInLobby",
-                              // @ts-ignore
-                              e.target.checked
-                            )}
+                          on:change={onInputChange}
                         />
                         <SettingsCheckbox
-                          setting="streaming"
                           key="sendTipsInDiscord"
                           frontFacingName="Send Tips in Discord"
                           checked={settings.streaming.sendTipsInDiscord}
                           tooltip="Send tips in Discord."
-                          on:change={(e) =>
-                            updateSettingSingle(
-                              "streaming",
-                              "sendTipsInDiscord",
-                              // @ts-ignore
-                              e.target.checked
-                            )}
+                          on:change={onInputChange}
                         />
                       </div>
                     </div>
@@ -2118,7 +1982,7 @@
         {updateStatus}
       </span>
     </div>
-    <div class="d-flex justify-content-center pt-1">
+    <!--<div class="d-flex justify-content-center pt-1">
       <details>
         <summary>Known issues (click to expand)</summary>
         <ul>
@@ -2148,7 +2012,7 @@
           <li>N/A</li>
         </ul>
       </details>
-    </div>
+    </div>-->
     <div class="d-flex justify-content-center pt-1">
       <button
         type="button"
@@ -2181,12 +2045,23 @@
         Discord
       </a>
     </div>
-    {#each Object.entries(gameState) as [key, value]}
-      <div class="d-flex justify-content-center pt-1">
-        {key} : {typeof value !== "object" ? value : JSON.stringify(value)}
-      </div>
-    {/each}
-    <h4>Current Step: <span />{clientState.currentStepProgress}</h4>
+    <div class="d-flex justify-content-center pt-1">
+      <details class="bg-primary rounded-2 m-1">
+        <summary class="bg-secondary rounded-2 p-2">Advanced Status </summary>
+        {#each Object.entries(gameState) as [key, value]}
+          <div class="d-flex justify-content-center pt-1">
+            {key}: {typeof value !== "object" ? value : JSON.stringify(value)}
+          </div>
+        {/each}
+        {#each Object.entries(clientState) as [key, value]}
+          <div class="d-flex justify-content-center pt-1">
+            {key}: {typeof value !== "object" ? value : JSON.stringify(value)}
+          </div>
+        {/each}
+      </details>
+    </div>
+
+    <h4>Current Step: <span />{clientState.currentStep}</h4>
     <div class="progress">
       <div
         id="progressBar"

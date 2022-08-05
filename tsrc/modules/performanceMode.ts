@@ -1,43 +1,46 @@
 import { ModuleBase } from "../moduleBase";
 
-import { existsSync, renameSync } from "fs";
+import { existsSync, rename } from "fs";
 import Store from "electron-store";
 import { SettingsUpdates } from "./../globals/settings";
-import { GameSocketEvents } from "./../globals/gameSocket";
+import { GameState } from "./../globals/gameState";
 const store = new Store();
 
 class PerformanceMode extends ModuleBase {
   warInstallLoc: string;
 
   constructor() {
-    super("Performance Mode", { listeners: ["settingsUpdate"] });
+    super("Performance Mode", { listeners: ["settingsUpdate", "gameStateUpdates"] });
     this.warInstallLoc = store.get("warInstallLoc") as string;
     this.togglePerformanceMode(this.settings.values.client.performanceMode);
   }
 
-  protected onGameSocketEvent(events: GameSocketEvents): void {
+  protected onGameStateUpdate(updates: Partial<GameState>): void {
     if (
       this.settings.values.client.performanceMode &&
-      events.SetGlueScreen?.screen === "LOGIN_DOORS"
+      updates.menuState === "LOGIN_DOORS"
     ) {
-      [
-        "GetLocalPlayerName",
-        "FriendsGetInvitations",
-        "FriendsGetFriends",
-        "MultiplayerSendRecentPlayers",
-        "ClanGetClanInfo",
-        "ClanGetMembers",
-        "StopOverworldMusic",
-        "StopAmbientSound",
-        "LoginDoorClose",
-        "StopAmbientSound",
-        "StopAmbientSound",
-        "OnWebUILoad",
-      ].forEach((message, index) => {
-        setTimeout(() => {
-          this.gameSocket.sendMessage({ [message]: {} });
-        }, 50 * index);
-      });
+      setTimeout(() => {
+        [
+          "GetLocalPlayerName",
+          "FriendsGetInvitations",
+          "FriendsGetFriends",
+          "MultiplayerSendRecentPlayers",
+          "ClanGetClanInfo",
+          "ClanGetMembers",
+          "StopOverworldMusic",
+          "StopAmbientSound",
+          "LoginDoorClose",
+          "StopAmbientSound",
+          "StopAmbientSound",
+          "OnWebUILoad",
+        ].forEach((message, index) => {
+          this.info("Triggering performanceMode bypass.");
+          setTimeout(() => {
+            this.gameSocket.sendMessage({ [message]: {} });
+          }, 50 * index);
+        });
+      }, 3000);
     }
   }
 
@@ -50,18 +53,32 @@ class PerformanceMode extends ModuleBase {
   private togglePerformanceMode(enabled: boolean) {
     if (enabled) {
       if (existsSync(this.warInstallLoc + "\\_retail_\\webui\\GlueManagerAltered.js")) {
-        renameSync(
+        rename(
           this.warInstallLoc + "\\_retail_\\webui\\GlueManagerAltered.js",
-          this.warInstallLoc + "\\_retail_\\webui\\GlueManagerAltered.js.bak"
+          this.warInstallLoc + "\\_retail_\\webui\\GlueManagerAltered.js.bak",
+          (err) => {
+            if (err) {
+              this.error("Error enabling performance mode.", err);
+            } else {
+              this.info("Enabling performance mode");
+            }
+          }
         );
       }
     } else {
       if (
         existsSync(this.warInstallLoc + "\\_retail_\\webui\\GlueManagerAltered.js.bak")
       ) {
-        renameSync(
+        rename(
           this.warInstallLoc + "\\_retail_\\webui\\GlueManagerAltered.js.bak",
-          this.warInstallLoc + "\\_retail_\\webui\\GlueManagerAltered.js"
+          this.warInstallLoc + "\\_retail_\\webui\\GlueManagerAltered.js",
+          (err) => {
+            if (err) {
+              this.error("Error disabling performance mode.", err);
+            } else {
+              this.info("Disabling performance mode");
+            }
+          }
         );
       }
     }

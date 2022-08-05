@@ -35,7 +35,7 @@ class OBSSocket extends ModuleBase {
       if (this.settings.values.obs.enabled && this.settings.values.obs.textSource) {
         writeFileSync(
           join(app.getPath("documents"), "wc3mt.txt"),
-          this.lobby.exportTeamStructureString()
+          this.lobby.exportTeamStructureString() || ""
         );
       }
     }

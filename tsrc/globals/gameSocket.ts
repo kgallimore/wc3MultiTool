@@ -3,9 +3,7 @@ import { Global } from "../globalBase";
 import WebSocket from "ws";
 
 import type { MenuStates } from "./gameState";
-import { settings } from "./settings";
 
-import { warControl } from "./warControl";
 import type { GameClientLobbyPayload, Regions } from "wc3mt-lobby-container";
 
 export interface GameList {
@@ -39,7 +37,14 @@ export interface NativeGameSocketEvents {
     user: { battleTag: string; userRegion: Regions };
   };
   SetOverlayScreen?: { screen: "AUTHENTICATION_OVERLAY" | "NO_OVERLAY" };
+  GameVersion?: { gameVersion: string };
+  GameListClear?: {};
+  LoggedOut?: {};
+  HideModal?: {};
   // TODO: Fix these
+  BuildType?: { build: "retail" | string };
+  LocaleInfo?: { localeInfo: { fonts: any[]; locale: "enUS" | string } };
+  LocalizationValues?: { list: { KeyValues: any[] } };
   OnNetProviderInitialized?: any;
   OnChannelUpdate?: { gameChat: any };
   MultiplayerGameLeave?: any;
@@ -67,7 +72,7 @@ export interface CreateLobbyPayload {
   };
   privateGame?: boolean;
 }
-interface BaseMessage {
+export interface BaseMessage {
   sender: string;
   content: string;
 }
@@ -153,23 +158,15 @@ class GameSocket extends Global {
           "UpdateReadyState",
         ].includes(parsedData.messageType)
       ) {
+        if (parsedData.messageType === "MultiplayerGameLeave") {
+          this.sentMessages = [];
+        }
         this.emitEvent({ [parsedData.messageType]: parsedData.payload });
-      }
-      if (parsedData.messageType === "MultiplayerGameLeave") {
-        this.sentMessages = [];
       }
     });
     this.gameWebSocket.on("close", () => {
       this.sentMessages = [];
-      if (settings.values.client.antiCrash) {
-        setTimeout(async () => {
-          if (await warControl.checkProcess("BlizzardError.exe")) {
-            this.error("Crash detected: BlizzardError.exe is running, restarting.");
-            await warControl.forceQuitProcess("BlizzardError.exe");
-            warControl.openWarcraft();
-          }
-        }, 1000);
-      }
+      // TODO: Move this to a module
       this.emitEvent({ disconnected: true });
       this.warn("Game client connection closed.");
     });
@@ -181,6 +178,9 @@ class GameSocket extends Global {
   }
 
   sendChatMessage(content: string) {
+    if (this.gameWebSocket?.readyState !== 1) {
+      return;
+    }
     if (typeof content === "string" && content.length > 0) {
       let newChatSplit = content.match(/.{1,255}/g);
       if (!newChatSplit) {

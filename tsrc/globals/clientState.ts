@@ -3,6 +3,7 @@ import Store from "electron-store";
 
 import type { PickByValue } from "./../utility";
 import { v4 as publicIP } from "public-ip";
+import { lookup } from "fast-geoip";
 
 export interface ClientState {
   tableVersion: number;
@@ -11,6 +12,8 @@ export interface ClientState {
   currentStepProgress: number;
   vpnActive: "us" | "eu" | false;
   currentIP: string;
+  ipCountry: string;
+  ipIsEU: boolean;
 }
 
 class ClientStateSingle extends Global {
@@ -31,6 +34,8 @@ class ClientStateSingle extends Global {
       currentStepProgress: 0,
       vpnActive: false,
       currentIP: "",
+      ipCountry: "",
+      ipIsEU: false,
     };
     this.getPublicIP();
   }
@@ -43,14 +48,34 @@ class ClientStateSingle extends Global {
     throw new Error("Can not set values directly. Use updateClientState.");
   }
 
-  async getPublicIP(): Promise<{ current: string; old?: string | undefined }> {
-    let retVal: { current: string; old?: string };
+  async getPublicIP(): Promise<{
+    current: string;
+    country: string;
+    isEU: boolean;
+    old?: string;
+  }> {
+    let retVal: { current: string; country: string; isEU: boolean; old?: string };
     let ip = await publicIP();
-    retVal = { current: ip };
+    let oldVal: string = "";
     if (ip !== this._values.currentIP) {
-      retVal.old = this._values.currentIP;
+      oldVal = this._values.currentIP;
       this.updateClientState({ currentIP: ip });
+      let ipLookup = await lookup(ip);
+      if (ipLookup) {
+        this.updateClientState({
+          ipIsEU: ipLookup.eu === "1",
+          ipCountry: ipLookup.country,
+        });
+      } else {
+        this.error("IP lookup failed.");
+      }
     }
+    retVal = {
+      current: ip,
+      country: this._values.ipCountry,
+      isEU: this._values.ipIsEU,
+      old: oldVal,
+    };
     return retVal;
   }
 

@@ -1,6 +1,6 @@
 {
   "name": "wc3multitool",
-  "version": "1.0.0",
+  "version": "1.0.9",
   "description": "A multi-tool for Warcraft 3",
   "repository": {
     "type": "git",
@@ -63,6 +63,7 @@
     "nsis": {
       "installerIcon": "src/images/wc3_auto_balancer_v1.ico",
       "uninstallerIcon": "src/images/wc3_auto_balancer_v1.ico",
+      "artifactName": "WC3-Multi-Tool-Setup-${version}.${ext}",
       "uninstallDisplayName": "WC3 Multi-Tool",
       "include": "src/installer.nsh",
       "oneClick": false,
@@ -76,8 +77,7 @@
       {
         "provider": "generic",
         "url": "https://war.trenchguns.com/publish"
-      },
-      "github"
+      }
     ],
     "protocols": [
       {
@@ -127,8 +127,11 @@
     "@tsconfig/svelte": "^2.0.1",
     "@types/better-sqlite3": "^7.5.0",
     "@types/discord-rpc": "^4.0.3",
+    "@types/node": "^18.6.1",
+    "@types/node-fetch": "^2.6.2",
     "@types/request": "^2.48.8",
     "@types/sound-play": "^1.1.0",
+    "@types/validator": "^13.7.4",
     "@types/ws": "^8.5.3",
     "concurrently": "^6.5.1",
     "electron": "^19.0.9",
@@ -144,7 +147,7 @@
     "typescript": "^4.7.4"
   },
   "dependencies": {
-    "@discordjs/rest": "^0.2.0-canary.0",
+    "@discordjs/rest": "^1.0.1",
     "@nut-tree/nl-matcher": "^1.0.3-next.20220114002500",
     "@nut-tree/nut-js": "^2.1.1",
     "better-sqlite3": "^7.6.2",
@@ -152,21 +155,27 @@
     "cross-fetch": "^3.1.4",
     "discord-api-types": "^0.36.3",
     "discord-rpc": "^4.0.1",
-    "discord.js": "^13.9.0",
+    "discord.js": "^14.0.3",
     "electron-log": "^4.4.8",
     "electron-store": "^8.0.2",
     "electron-updater": "^5.0.5",
+    "fast-geoip": "^1.1.88",
     "firebase": "^9.9.1",
     "form-data": "^2.5.1",
     "https": "^1.0.0",
     "js-combinatorics": "^2.1.1",
     "languagedetect": "^2.0.0",
+    "mariadb": "^3.0.0",
+    "mysql2": "^2.3.3",
     "nanoid": "^3.3.4",
     "node-abi": "^3.22.0",
+    "node-window-manager": "^2.2.4",
     "obs-websocket-js": "^4.0.3",
     "public-ip": "^4.0.4",
+    "sequelize": "^6.21.3",
     "socket.io-client": "^2.5.0",
     "sound-play": "^1.1.0",
+    "sqlite3": "^5.0.10",
     "translate": "^1.4.1",
     "translate-google": "^1.5.0",
     "w3gjs": "^2.5.0",
