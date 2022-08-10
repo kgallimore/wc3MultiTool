@@ -104,10 +104,11 @@ Text Source
 
 1. Sign into the [Discord Developer page](https://discord.com/developers/applications)
 2. Create a new application
-3. Create a new bot
-4. Copy over the token into the app
-5. Set the name of the lobby announce channel, or the chat channel. They are both optional. You may use the exact name of the channel or the channel ID.
-6. Restart the app. ()
+3. Create a new bot.
+4. Under OAuth2 generate a new URL with the bot scope and the following permissions:
+![image](https://user-images.githubusercontent.com/72752967/183981096-902f4ae3-d0e4-4d59-9001-cd601f521b60.png)
+5. Copy over the token into the app
+6. Set the name or ID of each channel. They are all optional. If you wish to use a separate channel for one continuous lobby chat, uncheck "Use Threads For Chat". The admin channel will let participants use admin commands in it and show everyone what is executed. The admin role will let users use admin commands throughout the server, but the execution of commands will only be visible to the executor. The announce channel will show the current lobby (and potential lobby chat threads). If Use Threads is disabled then the lobby chat channel will be one continuous channel for lobby chat.
 
 ### Using the External Lobby
 
