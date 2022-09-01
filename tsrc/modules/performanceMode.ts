@@ -52,10 +52,21 @@ class PerformanceMode extends ModuleBase {
 
   private togglePerformanceMode(enabled: boolean) {
     if (enabled) {
-      if (existsSync(this.warInstallLoc + "\\_retail_\\webui\\GlueManagerAltered.js")) {
+      if (existsSync(this.warInstallLoc + "\\_retail_\\webui\\indexPerf.html")) {
         rename(
-          this.warInstallLoc + "\\_retail_\\webui\\GlueManagerAltered.js",
-          this.warInstallLoc + "\\_retail_\\webui\\GlueManagerAltered.js.bak",
+          this.warInstallLoc + "\\_retail_\\webui\\index.html",
+          this.warInstallLoc + "\\_retail_\\webui\\index.html.bak",
+          (err) => {
+            if (err) {
+              this.error("Error enabling performance mode.", err);
+            } else {
+              this.info("Enabling performance mode");
+            }
+          }
+        );
+        rename(
+          this.warInstallLoc + "\\_retail_\\webui\\indexPerf.html",
+          this.warInstallLoc + "\\_retail_\\webui\\index.html",
           (err) => {
             if (err) {
               this.error("Error enabling performance mode.", err);
@@ -66,12 +77,21 @@ class PerformanceMode extends ModuleBase {
         );
       }
     } else {
-      if (
-        existsSync(this.warInstallLoc + "\\_retail_\\webui\\GlueManagerAltered.js.bak")
-      ) {
+      if (existsSync(this.warInstallLoc + "\\_retail_\\webui\\index.html.bak")) {
         rename(
-          this.warInstallLoc + "\\_retail_\\webui\\GlueManagerAltered.js.bak",
-          this.warInstallLoc + "\\_retail_\\webui\\GlueManagerAltered.js",
+          this.warInstallLoc + "\\_retail_\\webui\\index.html",
+          this.warInstallLoc + "\\_retail_\\webui\\indexPerf.html",
+          (err) => {
+            if (err) {
+              this.error("Error enabling performance mode.", err);
+            } else {
+              this.info("Enabling performance mode");
+            }
+          }
+        );
+        rename(
+          this.warInstallLoc + "\\_retail_\\webui\\index.html.bak",
+          this.warInstallLoc + "\\_retail_\\webui\\index.html",
           (err) => {
             if (err) {
               this.error("Error disabling performance mode.", err);

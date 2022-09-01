@@ -74,9 +74,10 @@ module.exports = {
       if (capture) {
         files = new AttachmentBuilder(capture);
         await interaction.editReply({ content: "Success", files: [files] });
-      } else {
-        await interaction.editReply({ content: "Unknown error" });
+        return;
       }
+      await interaction.editReply({ content: "Unknown error" });
+      return;
     }
   },
 };
