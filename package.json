@@ -1,6 +1,6 @@
 {
   "name": "wc3multitool",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "A multi-tool for Warcraft 3",
   "repository": {
     "type": "git",
@@ -38,7 +38,7 @@
         "to": "."
       },
       {
-        "from": "./GlueManagerAltered.js",
+        "from": "./src/webuiPerf.html",
         "to": "."
       },
       {

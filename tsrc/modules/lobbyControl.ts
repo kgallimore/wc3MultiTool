@@ -802,12 +802,12 @@ export class LobbyControl extends Module {
   }
 
   autoBalance() {
-let data =this.exportDataStructure("Self export 5", true)
-if(!data){
-  this.error("Can not autobalance with empty teams");
-  return;
-}
-    let teams =  Object.entries(data).filter(
+    let data = this.exportDataStructure("Self export 5", true);
+    if (!data) {
+      this.error("Can not autobalance with empty teams");
+      return;
+    }
+    let teams = Object.entries(data).filter(
       // Filter out empty teams
       ([teamName, teamPlayers]) =>
         Object.values(teamPlayers).filter((player) => player.realPlayer).length > 0
@@ -1062,7 +1062,7 @@ if(!data){
 
   isLobbyReady() {
     let teams = this.exportDataStructure("Self export 4", true);
-    if(!teams){
+    if (!teams) {
       return false;
     }
     if (this.refreshing) {
@@ -1291,7 +1291,7 @@ if(!data){
 
   allPlayerTeamsContainPlayers(): boolean {
     let teams = this.exportDataStructure("Self export 3");
-    if(!teams){
+    if (!teams) {
       return false;
     }
     for (const team of Object.values(teams)) {
@@ -1304,7 +1304,7 @@ if(!data){
 
   exportDataStructureString(playerTeamsOnly: boolean = true): string | false {
     let data = this.exportDataStructure("Self export 2", playerTeamsOnly);
-    if(!data){
+    if (!data) {
       return false;
     }
     let exportString = "";
@@ -1329,7 +1329,10 @@ if(!data){
     return exportString;
   }
 
-  exportDataStructure(source: string, playerTeamsOnly: boolean = true): PlayerTeamsData | false {
+  exportDataStructure(
+    source: string,
+    playerTeamsOnly: boolean = true
+  ): PlayerTeamsData | false {
     let lobby = this.microLobby;
     if (!lobby) {
       this.warn("No lobby to export data from.", source);
@@ -1340,7 +1343,7 @@ if(!data){
 
   exportTeamStructureString(playerTeamsOnly: boolean = true): string | false {
     let data = this.exportDataStructure("Self export 1", playerTeamsOnly);
-    if(!data){
+    if (!data) {
       return false;
     }
     let exportString = "";
