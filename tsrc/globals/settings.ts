@@ -2,7 +2,7 @@ import { Global } from "../globalBase";
 
 import Store from "electron-store";
 
-import type { PickByValue } from "./../utility";
+import { PickByValue } from "./../utility";
 import type { ObsHotkeys } from "./../modules/obs";
 
 const store = new Store();
@@ -360,65 +360,82 @@ class AppSettingsContainer extends Global {
       Object.entries(entries).forEach(([key, value]) => {
         // @ts-expect-error Still need to figure out how to type this
         let targetCurrentValue = this._values[settingName]?.[key];
-        if (
-          targetCurrentValue !== undefined &&
-          (typeof targetCurrentValue === typeof value ||
-            ((key === "inGameHotkey" || key === "outOfGameHotkey") &&
-              (typeof value === "boolean" || typeof value === "object"))) &&
-          targetCurrentValue !== value
-        ) {
-          if (key === "mapPath" && typeof value === "string") {
-            value.replace(/\\/g, "/");
-            let splitName = (value as string).split("/");
-            let mapName = splitName[splitName.length - 1];
-            if (mapName) {
-              mapName = mapName.substring(0, mapName.length - 4);
-              this._values.autoHost.mapName = mapName;
-              if (!filteredUpdates.autoHost) {
-                filteredUpdates.autoHost = { mapName };
-              } else {
-                filteredUpdates.autoHost.mapName = mapName;
-              }
+        if (targetCurrentValue === undefined) {
+          this._generateError("Target key does not exist.", settingName, key, value);
+          return false;
+        }
+        if (targetCurrentValue === value) {
+          this._generateError("Target key is already value.", settingName, key, value);
+          return false;
+        }
+        if (key === "inGameHotkey" || key === "outOfGameHotkey") {
+          if (typeof value !== "boolean" && typeof value !== "object") {
+            this._generateError(
+              "Hotkeys must be a boolean or false",
+              settingName,
+              key,
+              value
+            );
+            return false;
+          }
+        } else if (typeof targetCurrentValue !== typeof value) {
+          if (typeof targetCurrentValue === "number" && typeof value === "string") {
+            if (parseInt(value).toString() !== value) {
+              this._generateError(
+                "New value needs to be a number",
+                settingName,
+                key,
+                value
+              );
+              return false;
+            } else {
+              value = parseInt(value);
             }
-          }
-          // @ts-expect-error
-          this._values[settingName][key] = value;
-
-          store.set(settingName + "." + key, value);
-          this.info(
-            settingName + " settings changed: " + key,
-            key.toLowerCase().includes("token") || key.toLowerCase().includes("password")
-              ? "*HIDDEN*"
-              : value
-          );
-          if (!filteredUpdates[settingName]) {
-            filteredUpdates[settingName] = {};
-          }
-          // @ts-expect-error Still need to figure out how to type this
-          filteredUpdates[settingName][key] = value;
-        } else if (targetCurrentValue !== value) {
-          let errorText: string = "Unknown issue";
-          if (targetCurrentValue === undefined) {
-            errorText = "Invalid setting";
-          } else if (typeof targetCurrentValue !== typeof value) {
-            errorText =
+          } else if (
+            typeof targetCurrentValue === "string" &&
+            typeof value === "number"
+          ) {
+            value = value.toString();
+          } else {
+            var errorText =
               "Invalid type. Target is " +
               typeof targetCurrentValue +
               ". Given was " +
               typeof value +
               ".";
+            this._generateError(errorText, settingName, key, value);
+            return false;
           }
-          this.warn(
-            "Invalid update:",
-            errorText,
-            settingName,
-            key,
-            key.toLowerCase().includes("token") || key.toLowerCase().includes("password")
-              ? "*HIDDEN*"
-              : value
-          );
-          return false;
         }
+        if (key === "mapPath" && typeof value === "string") {
+          value.replace(/\\/g, "/");
+          let splitName = (value as string).split("/");
+          let mapName = splitName[splitName.length - 1];
+          if (mapName) {
+            mapName = mapName.substring(0, mapName.length - 4);
+            this._values.autoHost.mapName = mapName;
+            if (!filteredUpdates.autoHost) {
+              filteredUpdates.autoHost = { mapName };
+            } else {
+              filteredUpdates.autoHost.mapName = mapName;
+            }
+          }
+        }
+        // @ts-expect-error
+        this._values[settingName][key] = value;
+
+        store.set(settingName + "." + key, value);
+        this.info(
+          settingName + " settings changed: " + key,
+          key.toLowerCase().includes("token") || key.toLowerCase().includes("password")
+            ? "*HIDDEN*"
+            : value
+        );
+        if (!filteredUpdates[settingName]) {
+          filteredUpdates[settingName] = {};
+        }
+        // @ts-expect-error Still need to figure out how to type this
+        filteredUpdates[settingName][key] = value;
       });
     });
     if (Object.keys(filteredUpdates).length > 0) {
@@ -426,6 +443,23 @@ class AppSettingsContainer extends Global {
       return true;
     }
     return false;
+  }
+
+  private _generateError(
+    errorText: string,
+    settingName: string,
+    key: string,
+    value: any
+  ) {
+    this.warn(
+      "Invalid update:",
+      errorText,
+      settingName,
+      key,
+      key.toLowerCase().includes("token") || key.toLowerCase().includes("password")
+        ? "*HIDDEN*"
+        : value
+    );
   }
 }
 

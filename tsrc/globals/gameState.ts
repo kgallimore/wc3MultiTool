@@ -14,6 +14,7 @@ export type MenuStates =
   | "SCORE_SCREEN"
   | "LOGIN_DOORS"
   | "CUSTOM_GAME_LOBBY"
+  | "DISABLED_SCREEN"
   | "";
 
 export type GameStateActions =
@@ -96,9 +97,10 @@ class GameStateContainer extends Global {
       });
     }
     if (events.SetGlueScreen) {
+      console.log("setGlueScreen", events.SetGlueScreen);
       if (
         this.values.menuState === "LOADING_SCREEN" &&
-        events.SetGlueScreen.screen === "SCORE_SCREEN"
+        events.SetGlueScreen.screen === "DISABLED_SCREEN"
       ) {
         this.info("Game has finished loading in.");
         this.updateGameState({ inGame: true });
