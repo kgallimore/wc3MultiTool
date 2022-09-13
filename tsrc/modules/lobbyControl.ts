@@ -4,7 +4,6 @@ import fetch from "cross-fetch";
 import {
   MicroLobby,
   PlayerData,
-  PlayerPayload,
   PlayerTeamsData,
   GameClientLobbyPayload,
   Regions,
@@ -12,12 +11,12 @@ import {
   TeamTypes,
   LobbyUpdates,
 } from "wc3mt-lobby-container";
+import { generateAutoBalance } from "./autoBalancer";
 import { ensureInt } from "../utility";
 import type { GameSocketEvents, AvailableHandicaps } from "./../globals/gameSocket";
 import { sleep } from "@nut-tree/nut-js";
 import type { EloSettings, SettingsUpdates } from "./../globals/settings";
 
-import { Combination, Permutation } from "js-combinatorics";
 import type { GameState } from "./../globals/gameState";
 
 import { Sequelize, QueryTypes } from "sequelize";
@@ -740,262 +739,86 @@ export class LobbyControl extends Module {
     }, delay * 1000 + 250);
   }
 
-  lobbyCombinations(
-    target: Array<string>,
-    playerData: {
-      [key: string]: PlayerData;
-    },
-    teamSize: number = 3
-  ) {
-    // @ts-expect-error This is a false error
-    let combos: Array<Array<string>> = new Permutation(target);
-    let bestCombo: Array<Array<string>> = [];
-    let smallestEloDiff = Number.POSITIVE_INFINITY;
-
-    let totalElo = Object.values(playerData).reduce(
-      (a, b) => (b.extra?.rating ? a + ensureInt(b.extra.rating) : a),
-      0
+  autoBalance() {
+    if (!this.microLobby?.statsAvailable) {
+      this.warn("Can not autobalance. Stats are not available.");
+      return false;
+    }
+    if (this.bestCombo.length !== 0) {
+      this.warn("Already balancing teams.");
+      return false;
+    }
+    this.info("Auto balancing teams");
+    var swaps = generateAutoBalance(
+      this.exportDataStructure("Self export 5", true),
+      this.microLobby.nonSpecPlayers,
+      this.settings.values.elo.excludeHostFromSwap
+        ? this.microLobby.lobbyStatic.playerHost
+        : false
     );
 
-    // First generate every permutation, then separate them into groups of the required team size
-    for (const combo of combos) {
-      let coupled: Array<Array<string>> = combo.reduce(
-        (resultArray: any[][], item: any, index: number) => {
-          const chunkIndex = Math.floor(index / teamSize);
-
-          if (!resultArray[chunkIndex]) {
-            resultArray[chunkIndex] = []; // start a new chunk
-          }
-
-          resultArray[chunkIndex].push(item);
-
-          return resultArray;
-        },
-        []
-      );
-      // Now that we have each team in a chunk, we can calculate the elo difference
-      let largestEloDifference = -1;
-      for (const combo of coupled) {
-        // Go through each possible team of the chunk and calculate the highest difference in elo to the target average(totalElo/numTeams)
-        const comboElo = combo.reduce(
-          (a: number, b: string) => a + (playerData[b].extra?.rating ?? 500),
-          0
-        );
-        const eloDiff = Math.abs(totalElo / (target.length / teamSize) - comboElo);
-        // If the difference is larger than the current largest difference, set it as the new largest
-        if (eloDiff > largestEloDifference) {
-          largestEloDifference = eloDiff;
-        }
-      }
-      // If the previously calculated difference is smaller than the current smallest difference, set it as the new smallest, and save the combo
-      if (largestEloDifference < smallestEloDiff) {
-        smallestEloDiff = largestEloDifference;
-        bestCombo = coupled;
-      }
-    }
-    return bestCombo;
-  }
-
-  intersect(a: Array<string>, b: Array<string>) {
-    var setB = new Set(b);
-    return [...new Set(a)].filter((x) => setB.has(x));
-  }
-
-  autoBalance() {
-    let data = this.exportDataStructure("Self export 5", true);
-    if (!data) {
-      this.error("Can not autobalance with empty teams");
+    if (swaps === true) {
+      this.emitLobbyUpdate({ lobbyBalanced: true });
+      return;
+    } else if (swaps.error) {
+      this.error(swaps.error);
       return;
     }
-    let teams = Object.entries(data).filter(
-      // Filter out empty teams
-      ([teamName, teamPlayers]) =>
-        Object.values(teamPlayers).filter((player) => player.realPlayer).length > 0
-    );
-    if (this.microLobby?.statsAvailable) {
-      let lobbyCopy = new MicroLobby({ fullData: this.microLobby.exportMin() });
-      this.info("Auto balancing teams");
-      if (this.bestCombo.length === 0) {
-        if (teams.length < 2) {
-          this.emitLobbyUpdate({ lobbyBalanced: true });
-          return;
-        } else if (teams.length === 2) {
-          let leastSwapTeam = "Team ?";
-          let swaps: Array<Array<string>> = [];
-          let players = Object.entries(lobbyCopy.getAllPlayerData()).filter(
-            (x) => x[1].extra && lobbyCopy.nonSpecPlayers.includes(x[0])
+    if (swaps.twoTeams) {
+      this.bestCombo = swaps.twoTeams.bestCombo;
+      if (swaps.twoTeams.team1Swaps.length === 0) {
+        this.gameSocket.sendChatMessage("Teams are already balanced.");
+        this.emitLobbyUpdate({ lobbyBalanced: true });
+      } else if (this.microLobby) {
+        let lobbyCopy = new MicroLobby({ fullData: this.microLobby.exportMin() });
+        if (!lobbyCopy.lobbyStatic.isHost) {
+          this.gameSocket.sendChatMessage(
+            swaps.twoTeams.leastSwapTeam + " should be: " + this.bestCombo.join(", ")
           );
-          let totalElo = players.reduce(
-            (a, b) => (b[1].extra?.rating ? a + ensureInt(b[1].extra.rating) : a),
-            0
-          );
-          let smallestEloDiff = Number.POSITIVE_INFINITY;
-          let bestCombo: Array<string> = [];
-          // @ts-expect-error This is a false error
-          const combos: Array<Array<string>> = new Combination(
-            players.map((player) => player[0]),
-            Math.floor(players.length / 2)
-          );
-          for (const combo of combos) {
-            const comboElo = combo.reduce(
-              (a, b) =>
-                a + ensureInt(lobbyCopy.getAllPlayerData()[b].extra?.rating ?? 500),
-              0
-            );
-            const eloDiff = Math.abs(totalElo / 2 - comboElo);
-            if (eloDiff < smallestEloDiff) {
-              smallestEloDiff = eloDiff;
-              bestCombo = combo;
-            }
-          }
-          this.bestCombo = bestCombo;
-          let swapsFromTeam1: Array<string> = [];
-          let swapsFromTeam2: Array<string> = [];
-          const bestComboInTeam1 = this.intersect(
-            this.bestCombo,
-            teams[0][1].filter((player) => player.realPlayer).map((player) => player.name)
-          );
-          const bestComboInTeam2 = this.intersect(
-            this.bestCombo,
-            teams[1][1].filter((player) => player.realPlayer).map((player) => player.name)
-          );
-          // If not excludeHostFromSwap and team1 has more best combo people, or excludeHostFromSwap and the best combo includes the host keep all best combo players in team 1.
-          if (
-            (!this.settings.values.elo.excludeHostFromSwap &&
-              bestComboInTeam1.length >= bestComboInTeam2.length) ||
-            (this.settings.values.elo.excludeHostFromSwap &&
-              this.bestCombo.includes(lobbyCopy.lobbyStatic?.playerHost || ""))
-          ) {
-            // Go through team 1 and grab everyone who is not in the best combo
-            leastSwapTeam = teams[0][0];
-            teams[0][1].forEach((user) => {
-              if (
-                user.realPlayer &&
-                !(this.bestCombo as Array<string>).includes(user.name)
-              ) {
-                swapsFromTeam1.push(user.name);
-              }
-            });
-            // Go through team 2 and grab everyone who is in the best combo
-            bestComboInTeam2.forEach(function (user) {
-              swapsFromTeam2.push(user);
-            });
-          } else {
-            leastSwapTeam = teams[1][0];
-            teams[1][1].forEach((user) => {
-              if (
-                user.realPlayer &&
-                !(this.bestCombo as Array<string>).includes(user.name)
-              ) {
-                swapsFromTeam2.push(user.name);
-              }
-            });
-            bestComboInTeam1.forEach(function (user) {
-              swapsFromTeam1.push(user);
-            });
-          }
-          swaps = [swapsFromTeam1, swapsFromTeam2];
-          if (swapsFromTeam1.length === 0) {
-            this.gameSocket.sendChatMessage("Teams are already balanced.");
-            this.emitLobbyUpdate({ lobbyBalanced: true });
-          } else {
-            if (!lobbyCopy.lobbyStatic.isHost) {
-              this.gameSocket.sendChatMessage(
-                leastSwapTeam + " should be: " + this.bestCombo.join(", ")
-              );
-            } else {
-              for (let i = 0; i < swaps[0].length; i++) {
-                if (!this.isLobbyReady()) {
-                  this.info("Lobby no longer ready.");
-                  break;
-                }
-                this.clientState.updateClientState({
-                  currentStep: "Swapping " + swaps[0][i] + " and " + swaps[1][i],
-                  currentStepProgress: 100,
-                });
-                this.swapPlayers({
-                  players: [swaps[0][i], swaps[1][i]],
-                  forBalance: true,
-                });
-              }
-            }
-          }
         } else {
-          // TODO: There will be an issue if the teams are already balanced.
-          this.bestCombo = this.lobbyCombinations(
-            lobbyCopy.nonSpecPlayers,
-            this.microLobby.getAllPlayerData(),
-            // Just grab the size of the first team
-            teams[0][1].filter((player) => player.realPlayer).length
-          );
-          if (this.microLobby.lobbyStatic?.isHost) {
-            let lobbyCopy = new MicroLobby(
-              { fullData: this.microLobby.exportMin() },
-              false
-            );
-            let playerTeams = Object.entries(lobbyCopy.teamListLookup)
-              .filter(([teamNumber, teamData]) => teamData.type === "playerTeams")
-              .map((data) => data[0]);
-            for (let i = 0; i < this.bestCombo.length; i++) {
-              // For each Team
-              let currentTeam: Array<PlayerPayload>;
-              for (let x = 0; x < this.bestCombo[i].length; x++) {
-                currentTeam = Object.values(lobbyCopy.slots).filter(
-                  (player) => ensureInt(player.team) === ensureInt(playerTeams[i])
-                );
-                // For each player in the team
-                let targetPlayer = this.bestCombo[i][x];
-                // If the team does not include the target player, check through the team for an incorrect player and swap them
-                if (
-                  currentTeam.find((player) => player.name === targetPlayer) === undefined
-                ) {
-                  for (let currentPlayer of currentTeam) {
-                    if (!this.bestCombo[i].includes(currentPlayer.name)) {
-                      this.clientState.updateClientState({
-                        currentStep:
-                          "Swapping " + currentPlayer.name + " and " + targetPlayer,
-                        currentStepProgress: 100,
-                      });
-                      this.swapPlayers({
-                        players: [currentPlayer.name, targetPlayer],
-                        forBalance: true,
-                      });
-                      // Swap the data of the two players
-                      let targetPlayerOldSlot = lobbyCopy.playerToSlot(targetPlayer);
-                      let targetPlayerOldData = lobbyCopy.slots[targetPlayerOldSlot];
-                      let currentPlayerSlot = currentPlayer.slot;
-                      // Only swapping the team number is really required since the slot number information is doubled as the key for the slot, but still swapped just in case.
-                      // Set the slot info for the current player to the info that it is being swapped to
-                      currentPlayer.team = targetPlayerOldData.team;
-                      currentPlayer.slot = targetPlayerOldData.slot;
-                      // Set the slot info for the target player to the info that it is being swapped to
-                      targetPlayerOldData.team = ensureInt(playerTeams[i]);
-                      targetPlayerOldData.slot = currentPlayerSlot;
-                      // Set the slots to their new data.
-                      lobbyCopy.slots[currentPlayer.slot] = targetPlayerOldData;
-                      lobbyCopy.slots[targetPlayerOldSlot] = currentPlayer;
-                      break;
-                    }
-                  }
-                }
-              }
+          for (let i = 0; i < swaps.twoTeams.team1Swaps.length; i++) {
+            if (!this.isLobbyReady()) {
+              this.info("Lobby no longer ready.");
+              break;
             }
-          } else {
-            let playerTeamNames = Object.values(this.microLobby.teamListLookup).filter(
-              (team) => team.type === "playerTeams"
-            );
-            for (let i = 0; i < playerTeamNames.length; i++) {
-              this.gameSocket.sendChatMessage(
-                playerTeamNames[i] + " should be " + this.bestCombo[i].join(", ")
-              );
-            }
+            this.clientState.updateClientState({
+              currentStep:
+                "Swapping " +
+                swaps.twoTeams.team1Swaps[i] +
+                " and " +
+                swaps.twoTeams.team2Swaps[i],
+              currentStepProgress: 100,
+            });
+            this.swapPlayers({
+              players: [swaps.twoTeams.team1Swaps[i], swaps.twoTeams.team2Swaps[i]],
+              forBalance: true,
+            });
           }
         }
-      } else {
-        this.warn("Already balancing teams.");
       }
-    } else {
-      this.warn("Can not autobalance. Stats are not available.");
+    } else if (swaps.moreTeams) {
+      this.bestCombo = swaps.moreTeams.bestCombo;
+      if (this.microLobby.lobbyStatic?.isHost) {
+        swaps.moreTeams.swaps.forEach((swap) => {
+          this.clientState.updateClientState({
+            currentStep: "Swapping " + swap[0] + " and " + swap[1],
+            currentStepProgress: 100,
+          });
+          this.swapPlayers({
+            players: swap,
+            forBalance: true,
+          });
+        });
+      } else {
+        let playerTeamNames = Object.values(this.microLobby.teamListLookup).filter(
+          (team) => team.type === "playerTeams"
+        );
+        for (let i = 0; i < playerTeamNames.length; i++) {
+          this.gameSocket.sendChatMessage(
+            playerTeamNames[i] + " should be " + swaps.moreTeams.bestCombo[i].join(", ")
+          );
+        }
+      }
     }
   }
 

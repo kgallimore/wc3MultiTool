@@ -1,76 +1,168 @@
-require = require("esm")(module);
-var { Combination, Permutation } = require("js-combinatorics");
-let playerData: { [key: string]: { elo: number; games: number } } = {
-  Trenchguns: { elo: 600, games: 10 },
-  Trenchwarfare: { elo: 550, games: 10 },
-  Trenchwarfare2: { elo: 530, games: 10 },
-  Trenchwarfare3: { elo: 500, games: 10 },
-  Trenchwarfare4: { elo: 475, games: 10 },
-  Trenchwarfare5: { elo: 450, games: 10 },
-};
-let totalElo = 500 + 500 + 540 + 560 + 480 + 555;
-let teamList = {
-  playerTeams: {
-    data: {
-      team1: {
-        players: ["Trenchguns", "Trenchwarfare"],
-        number: "1",
-        slots: ["Trenchguns", "Trenchwarfare"],
-        totalSlots: 2,
-        defaultOpenSlots: 1,
-      },
-      team2: {
-        players: ["Trenchwarfare2", "Trenchwarfare3"],
-        number: "2",
-        slots: ["Trenchwarfare2", "Trenchwarfare3"],
-        totalSlots: 2,
-        defaultOpenSlots: 1,
-      },
-      team4: {
-        players: ["Trenchwarfare4", "Trenchwarfare5"],
-        number: "4",
-        slots: ["Trenchwarfare4", "Trenchwarfare5"],
-        totalSlots: 2,
-        defaultOpenSlots: 1,
+import { generateAutoBalance } from "./modules/autoBalancer";
+import { PlayerTeamsData, PlayerData } from "wc3mt-lobby-container";
+var playerTeamsData: PlayerTeamsData = {
+  team1: [
+    {
+      name: "suken",
+      slotStatus: 1,
+      slot: 0,
+      realPlayer: true,
+      data: {
+        joinedAt: Date.now(),
+        cleared: true,
+        extra: { rating: 2158, played: 10, wins: 10, losses: 0, rank: 1, lastChange: 10 },
       },
     },
-  },
+    {
+      name: "tod",
+      slotStatus: 1,
+      slot: 1,
+      realPlayer: true,
+      data: {
+        joinedAt: Date.now(),
+        cleared: true,
+        extra: { rating: 1467, played: 10, wins: 10, losses: 0, rank: 1, lastChange: 10 },
+      },
+    },
+    {
+      name: "farbheit",
+      slotStatus: 1,
+      slot: 2,
+      realPlayer: true,
+      data: {
+        joinedAt: Date.now(),
+        cleared: true,
+        extra: { rating: 1196, played: 10, wins: 10, losses: 0, rank: 1, lastChange: 10 },
+      },
+    },
+    {
+      name: "reprobate",
+      slotStatus: 1,
+      slot: 3,
+      realPlayer: true,
+      data: {
+        joinedAt: Date.now(),
+        cleared: true,
+        extra: { rating: 1172, played: 10, wins: 10, losses: 0, rank: 1, lastChange: 10 },
+      },
+    },
+    {
+      name: "megaboss",
+      slotStatus: 1,
+      slot: 4,
+      realPlayer: true,
+      data: {
+        joinedAt: Date.now(),
+        cleared: true,
+        extra: { rating: 1030, played: 10, wins: 10, losses: 0, rank: 1, lastChange: 10 },
+      },
+    },
+  ],
+  team2: [
+    {
+      name: "public",
+      slotStatus: 1,
+      slot: 5,
+      realPlayer: true,
+      data: {
+        joinedAt: Date.now(),
+        cleared: true,
+        extra: { rating: 1569, played: 10, wins: 10, losses: 0, rank: 1, lastChange: 10 },
+      },
+    },
+    {
+      name: "pinok",
+      slotStatus: 1,
+      slot: 6,
+      realPlayer: true,
+      data: {
+        joinedAt: Date.now(),
+        cleared: true,
+        extra: { rating: 1445, played: 10, wins: 10, losses: 0, rank: 1, lastChange: 10 },
+      },
+    },
+    {
+      name: "shadowstorm",
+      slotStatus: 1,
+      slot: 7,
+      realPlayer: true,
+      data: {
+        joinedAt: Date.now(),
+        cleared: true,
+        extra: { rating: 1349, played: 10, wins: 10, losses: 0, rank: 1, lastChange: 10 },
+      },
+    },
+    {
+      name: "reformed",
+      slotStatus: 1,
+      slot: 8,
+      realPlayer: true,
+      data: {
+        joinedAt: Date.now(),
+        cleared: true,
+        extra: { rating: 1121, played: 10, wins: 10, losses: 0, rank: 1, lastChange: 10 },
+      },
+    },
+    {
+      name: "fran",
+      slotStatus: 1,
+      slot: 9,
+      realPlayer: true,
+      data: {
+        joinedAt: Date.now(),
+        cleared: true,
+        extra: { rating: 1000, played: 10, wins: 10, losses: 0, rank: 1, lastChange: 10 },
+      },
+    },
+  ],
 };
-console.log(combinations(Object.keys(playerData)));
-
-function combinations(target: Array<any>, teamSize: number = 3) {
-  let combos = new Permutation(target);
-  let bestCombo = [];
-  let smallestEloDiff = Number.POSITIVE_INFINITY;
-  // First generate every permutation, then separate them into groups of the required team size
-  for (const combo of combos) {
-    let coupled = combo.reduce((resultArray: any[][], item: any, index: number) => {
-      const chunkIndex = Math.floor(index / teamSize);
-
-      if (!resultArray[chunkIndex]) {
-        resultArray[chunkIndex] = []; // start a new chunk
-      }
-
-      resultArray[chunkIndex].push(item);
-
-      return resultArray;
-    }, []);
-    // Now that we have each team in a chunk, we can calculate the elo difference
-    let largestEloDifference = -1;
-    for (const combo of coupled) {
-      // Go through each possible team of the chunk and calculate the highest difference in elo to the target average(totalElo/numTeams)
-      const comboElo = combo.reduce((a: number, b: string) => a + playerData[b].elo, 0);
-      const eloDiff = Math.abs(totalElo / (target.length / teamSize) - comboElo);
-      // If the difference is larger than the current largest difference, set it as the new largest
-      if (eloDiff > largestEloDifference) {
-        largestEloDifference = eloDiff;
-      }
-    }
-    // If the previously calculated difference is smaller than the current smallest difference, set it as the new smallest, and save the combo
-    if (largestEloDifference < smallestEloDiff) {
-      smallestEloDiff = largestEloDifference;
-      bestCombo = coupled;
-    }
+var nonSpecPlayers = (
+  [] as {
+    name: string;
+    slotStatus: 0 | 1 | 2;
+    slot: number;
+    realPlayer: boolean;
+    data: PlayerData;
+  }[]
+)
+  .concat(...Object.values(playerTeamsData))
+  .map((player) => player.name);
+var combinedPlayers = (
+  [] as {
+    name: string;
+    slotStatus: 0 | 1 | 2;
+    slot: number;
+    realPlayer: boolean;
+    data: PlayerData;
+  }[]
+).concat(...Object.values(playerTeamsData));
+var playerData: {
+  [key: string]: PlayerData;
+} = {};
+combinedPlayers.forEach((player) => {
+  playerData[player.name] = player.data;
+});
+var autoBalance = generateAutoBalance(playerTeamsData, nonSpecPlayers, false);
+if (autoBalance == true) {
+  console.log("Already balanced");
+} else {
+  if (autoBalance.twoTeams) {
+    var bestComboElo = autoBalance.twoTeams.bestCombo.reduce(
+      (prev, current) => prev + (playerData[current].extra?.rating ?? 0),
+      0
+    );
+    var totalElo = Object.values(playerData).reduce(
+      (prev, current) => prev + (current.extra?.rating ?? 0),
+      0
+    );
+    console.log(autoBalance.twoTeams.bestCombo);
+    console.log(
+      "Total Elo: ",
+      totalElo,
+      "BestComboElo: ",
+      bestComboElo,
+      "Difference: ",
+      totalElo - bestComboElo
+    );
   }
-  return bestCombo;
 }
