@@ -73,7 +73,7 @@ export function generateAutoBalance(
   data: PlayerTeamsData | false,
   nonSpecPlayers: Array<string>,
   excludeHostFromSwap: string | false,
-  fullData?: MicroLobbyData
+  fullData: MicroLobbyData | false
 ):
   | {
       error?: string;

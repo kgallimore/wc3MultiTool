@@ -7,7 +7,7 @@ import { EmbedBuilder, InteractionType } from "discord.js";
 import { Routes } from "discord-api-types/v10";
 import { REST } from "@discordjs/rest";
 import type { mmdResults } from "./replayHandler";
-import type { PlayerData, PlayerTeamsData } from "wc3mt-lobby-container";
+import type { PlayerTeamsData } from "wc3mt-lobby-container";
 import type { LobbyUpdatesExtended } from "./lobbyControl";
 import { DeColorName } from "../utility";
 import { app } from "electron";
@@ -318,8 +318,11 @@ class DiscordBot extends ModuleBase {
     }
   }
 
-  async handleLobbyMessage(processedChat: GameSocketEvents["processedChat"]) {
-    if (!processedChat) {
+  async handleLobbyMessage(
+    processedChat: GameSocketEvents["processedChat"],
+    callCount = 0
+  ) {
+    if (!processedChat || callCount > 50) {
       return;
     }
     const toSend =
@@ -342,7 +345,7 @@ class DiscordBot extends ModuleBase {
         } else {
           this.info("Waiting for new embed");
           setTimeout(() => {
-            this.handleLobbyMessage(processedChat);
+            this.handleLobbyMessage(processedChat, callCount + 1);
           }, 100);
           return;
         }

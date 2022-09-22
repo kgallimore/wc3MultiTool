@@ -1,6 +1,6 @@
 {
   "name": "wc3multitool",
-  "version": "1.0.11",
+  "version": "1.0.12-alpha",
   "description": "A multi-tool for Warcraft 3",
   "repository": {
     "type": "git",
@@ -31,10 +31,6 @@
       },
       {
         "from": "./src/webui.js",
-        "to": "."
-      },
-      {
-        "from": "./focusWar.js",
         "to": "."
       },
       {
@@ -177,7 +173,7 @@
     "node-window-manager": "^2.2.4",
     "obs-websocket-js": "^4.0.3",
     "public-ip": "^4.0.4",
-    "sequelize": "^6.21.4",
+    "sequelize": "^6.23.0",
     "socket.io-client": "^2.5.0",
     "sound-play": "^1.1.0",
     "sqlite3": "^5.0.11",

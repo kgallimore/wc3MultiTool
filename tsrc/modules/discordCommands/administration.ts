@@ -193,6 +193,7 @@ module.exports = {
       );
     } else {
       await interaction.respond([]);
+      return;
     }
   },
 };

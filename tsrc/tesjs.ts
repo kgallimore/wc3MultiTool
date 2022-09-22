@@ -142,7 +142,7 @@ var playerData: {
 combinedPlayers.forEach((player) => {
   playerData[player.name] = player.data;
 });
-var autoBalance = generateAutoBalance(playerTeamsData, nonSpecPlayers, false);
+var autoBalance = generateAutoBalance(playerTeamsData, nonSpecPlayers, false, false);
 if (autoBalance == true) {
   console.log("Already balanced");
 } else {
