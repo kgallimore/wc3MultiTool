@@ -9,6 +9,7 @@ import Store from "electron-store";
 import type { GameSocketEvents, AvailableHandicaps } from "./../globals/gameSocket";
 import { isInt, ensureInt } from "./../utility";
 import type { AutoHostSettings } from "./../globals/settings";
+
 const store = new Store();
 
 export type FetchWhiteBanListSortOptions =
@@ -17,6 +18,33 @@ export type FetchWhiteBanListSortOptions =
   | "admin"
   | "region"
   | "reason";
+
+export type AdminRoles = "baswapper" | "swapper" | "moderator" | "admin";
+export type AdminCommands =
+  | "st"
+  | "sp"
+  | "start"
+  | "closeall"
+  | "a"
+  | "closeall"
+  | "hold"
+  | "mute"
+  | "unmute"
+  | "swap"
+  | "handi"
+  | "close"
+  | "open"
+  | "openall"
+  | "kick"
+  | "ban"
+  | "unban"
+  | "white"
+  | "unwhite"
+  | "perm"
+  | "unperm"
+  | "autohost"
+  | "autostart"
+  | "balance";
 
 export interface FetchListOptions {
   type: "whiteList" | "banList";
@@ -75,92 +103,195 @@ class Administration extends ModuleBase {
   protected onGameSocketEvent(events: GameSocketEvents): void {
     if (events.processedChat) {
       let sender = events.processedChat.sender;
-      if (events.processedChat.content.match(/^\?sp$/i)) {
+      if (events.processedChat.content.match(/^\?/)) {
+        var command = events.processedChat.content.replace(/^\?/, "");
+        if (command.match(/^(help)|(commands)/i)) {
+          console.log("yes");
+          if (this.lobby.microLobby?.lobbyStatic.isHost) {
+            if (this.lobby.microLobby?.statsAvailable) {
+              this.gameSocket.sendChatMessage(
+                "?stats <?player>: Return back your stats, or target player stats"
+              );
+            }
+            if (
+              ["rapidHost", "smartHost"].includes(this.settings.values.autoHost.type) &&
+              this.settings.values.autoHost.voteStart
+            ) {
+              this.gameSocket.sendChatMessage(
+                "?voteStart: Starts or accepts a vote to start"
+              );
+            }
+            if (this.checkRole(sender, "moderator")) {
+              this.gameSocket.sendChatMessage("?a: Aborts game start");
+              this.gameSocket.sendChatMessage(
+                "?ban <name|slotNumber> <?reason>: Bans a player forever"
+              );
+              this.gameSocket.sendChatMessage(
+                "?close<?all> <name|slotNumber>: Closes all / a slot/player"
+              );
+              this.gameSocket.sendChatMessage(
+                "?handi <name|slotNumber> <50|60|70|80|100>: Sets slot/player handicap"
+              );
+              this.gameSocket.sendChatMessage("?hold <name>: Holds a slot");
+              this.gameSocket.sendChatMessage(
+                "?kick <name|slotNumber> <?reason>: Kicks a slot/player"
+              );
+              this.gameSocket.sendChatMessage(
+                "?<un>mute <player>: Mutes/un-mutes a player"
+              );
+              this.gameSocket.sendChatMessage(
+                "?open<?all> <name|slotNumber> <?reason>: Opens all / a slot/player"
+              );
+              this.gameSocket.sendChatMessage("?unban <name>: Un-bans a player");
+              this.gameSocket.sendChatMessage("?white <name>: Whitelists a player");
+              this.gameSocket.sendChatMessage("?unwhite <name>: Un-whitelists a player");
+              this.gameSocket.sendChatMessage("?start: Starts game");
+              this.gameSocket.sendChatMessage(
+                "?swap <name|slotNumber> <name|slotNumber>: Swaps players"
+              );
+              this.gameSocket.sendChatMessage(
+                "?sp: Shuffles players completely randomly"
+              );
+              this.gameSocket.sendChatMessage(
+                "?st: Shuffles players randomly between teams"
+              );
+            }
+            if (this.checkRole(sender, "admin")) {
+              this.gameSocket.sendChatMessage(
+                "?perm <name> <?admin|mod|swapper>: Promotes a player to a role (mod by default)"
+              );
+              this.gameSocket.sendChatMessage("?unperm <name>: Demotes player to normal");
+              this.gameSocket.sendChatMessage(
+                "?autohost <?off|rapid|lobby|smart>: Gets/?Sets autohost type"
+              );
+            }
+            this.gameSocket.sendChatMessage(
+              "?help: Shows commands with <required arg> <?optional arg>"
+            );
+          }
+        } else {
+          var content = command.split(" ");
+          var role = this.getRole(sender);
+          if (role) {
+            let runCom = this.runCommand(
+              content[0] as AdminCommands,
+              role,
+              sender,
+              content.slice(1)
+            );
+            if (runCom) {
+              this.gameSocket.sendChatMessage(runCom);
+            }
+          }
+        }
+      } else {
+        this.gameSocket.emitEvent({ nonAdminChat: events.processedChat });
+      }
+    }
+  }
+
+  protected runCommand(
+    command: AdminCommands,
+    role: AdminRoles,
+    user: string,
+    args?: string[]
+  ): string | false {
+    var retString = "";
+    switch (command) {
+      case "sp":
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          this.checkRole(sender, "moderator")
+          this.roleEqualOrHigher(role, "moderator")
         ) {
           this.lobby.shufflePlayers();
         }
-      } else if (events.processedChat.content.match(/^\?st$/i)) {
+        break;
+      case "st":
         if (
           this.lobby.microLobby?.lobbyStatic?.isHost &&
-          this.checkRole(sender, "moderator")
+          this.roleEqualOrHigher(role, "moderator")
         ) {
           this.lobby.shufflePlayers(false);
         }
-      } else if (events.processedChat.content.match(/^\?start$/i)) {
+        break;
+      case "start":
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          this.checkRole(sender, "moderator")
+          this.roleEqualOrHigher(role, "moderator")
         ) {
           this.lobby.startGame();
         }
-      } else if (events.processedChat.content.match(/^\?a$/i)) {
+        break;
+      case "a":
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          this.checkRole(sender, "moderator")
+          this.roleEqualOrHigher(role, "moderator")
         ) {
           this.gameSocket.cancelStart();
         }
-      } else if (events.processedChat.content.match(/^\?closeall$/i)) {
+        break;
+      case "closeall":
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          this.checkRole(sender, "moderator")
+          this.roleEqualOrHigher(role, "moderator")
         ) {
           this.gameSocket.sendChatMessage("!closeall");
         }
-      } else if (events.processedChat.content.match(/^\?hold$/i)) {
+        break;
+      case "hold":
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          this.checkRole(sender, "moderator")
+          this.roleEqualOrHigher(role, "moderator")
         ) {
-          let targetPlayer = events.processedChat.content.split(" ")[1];
+          let targetPlayer = args?.[0];
           if (targetPlayer) {
             this.gameSocket.sendChatMessage("!hold " + targetPlayer);
           } else {
-            this.gameSocket.sendChatMessage("Player target required.");
+            retString = "Player target required.";
           }
         }
-      } else if (events.processedChat.content.match(/^\?mute$/i)) {
-        if (this.checkRole(sender, "moderator")) {
-          let targetPlayer = events.processedChat.content.split(" ")[1];
+        break;
+      case "mute":
+        if (this.roleEqualOrHigher(role, "moderator")) {
+          let targetPlayer = args?.[0];
           if (targetPlayer) {
             this.gameSocket.sendChatMessage("!mute " + targetPlayer);
-            this.info(sender + " muted " + targetPlayer);
+            this.info(user + " muted " + targetPlayer);
           } else {
-            this.gameSocket.sendChatMessage("Player target required.");
+            retString = "Player target required.";
           }
         }
-      } else if (events.processedChat.content.match(/^\?unmute$/i)) {
-        if (this.checkRole(sender, "moderator")) {
-          let targetPlayer = events.processedChat.content.split(" ")[1];
+        break;
+      case "unmute":
+        if (this.roleEqualOrHigher(role, "moderator")) {
+          let targetPlayer = args?.[0];
           if (targetPlayer) {
             this.gameSocket.sendChatMessage("!unmute " + targetPlayer);
-            this.info(sender + " unmuted " + targetPlayer);
+            this.info(user + " unmuted " + targetPlayer);
           } else {
-            this.gameSocket.sendChatMessage("Player target required.");
+            retString = "Player target required.";
           }
         }
-      } else if (events.processedChat.content.match(/^\?openall$/i)) {
+        break;
+      case "openall":
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          this.checkRole(sender, "moderator")
+          this.roleEqualOrHigher(role, "moderator")
         ) {
           this.gameSocket.sendChatMessage("!openall");
         }
-      } else if (events.processedChat.content.match(/^\?swap/i)) {
+        break;
+      case "swap":
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          this.checkRole(sender, "baswapper")
+          this.roleEqualOrHigher(role, "baswapper")
         ) {
-          let [command, ...args] = events.processedChat.content.split(" ");
-          if (args.length === 2) {
+          if (args && args.length === 2) {
             let playerData = this.lobby.microLobby?.getAllPlayerData();
             let tenMinutesAgo = Date.now() - 10 * 60 * 1000;
             if (isInt(args[1], 24, 1) && isInt(args[0], 24, 1)) {
               if (
-                this.checkRole(sender, "swapper") ||
+                this.roleEqualOrHigher(role, "swapper") ||
                 (playerData[this.lobby.microLobby?.slots[parseInt(args[0]) - 1].name]
                   .joinedAt > tenMinutesAgo &&
                   playerData[this.lobby.microLobby?.slots[parseInt(args[1]) - 1].name]
@@ -173,16 +304,15 @@ class Administration extends ModuleBase {
                   ],
                 });
               } else {
-                this.gameSocket.sendChatMessage(
-                  "You can only swap players who joined within the last 10 minutes."
-                );
+                retString =
+                  "You can only swap players who joined within the last 10 minutes.";
               }
             } else if (
               this.lobby.microLobby?.searchPlayer(args[1]).length === 1 &&
               this.lobby.microLobby?.searchPlayer(args[0]).length === 1
             ) {
               if (
-                this.checkRole(sender, "swapper") ||
+                this.roleEqualOrHigher(role, "swapper") ||
                 (playerData[this.lobby.microLobby?.searchPlayer(args[1])[0]].joinedAt >
                   tenMinutesAgo &&
                   playerData[this.lobby.microLobby?.searchPlayer(args[0])[0]].joinedAt >
@@ -190,30 +320,26 @@ class Administration extends ModuleBase {
               ) {
                 this.lobby.swapPlayers({ players: [args[0], args[1]] });
               } else {
-                this.gameSocket.sendChatMessage(
-                  "You can only swap players who joined within the last 10 minutes."
-                );
+                retString =
+                  "You can only swap players who joined within the last 10 minutes.";
               }
             } else {
-              this.gameSocket.sendChatMessage(
-                "All swap players not found, or too many matches."
-              );
+              retString = "All swap players not found, or too many matches.";
             }
           } else {
-            this.gameSocket.sendChatMessage("Invalid swap arguments");
+            retString = "Invalid swap arguments";
           }
         }
-      } else if (events.processedChat.content.match(/^\?handi/i)) {
+        break;
+      case "handi":
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          this.checkRole(sender, "moderator")
+          this.roleEqualOrHigher(role, "moderator")
         ) {
-          if (events.processedChat.content.split(" ").length === 3) {
-            var target = events.processedChat.content.split(" ")[1];
+          if (args?.length === 2) {
+            var target = args[0];
             // TODO check handicaps
-            var handicap = parseInt(
-              events.processedChat.content.split(" ")[2]
-            ) as AvailableHandicaps;
+            var handicap = parseInt(args[1]) as AvailableHandicaps;
             if (isInt(target, 24, 1)) {
               if (handicap) {
                 this.lobby.setHandicapSlot(parseInt(target) - 1, handicap);
@@ -221,19 +347,20 @@ class Administration extends ModuleBase {
                 this.lobby.setPlayerHandicap(target, handicap);
               }
             } else {
-              this.gameSocket.sendChatMessage("Invalid handicap");
+              retString = "Invalid handicap";
             }
           } else {
-            this.gameSocket.sendChatMessage("Invalid number of arguments");
+            retString = "Invalid number of arguments";
           }
         }
-      } else if (events.processedChat.content.match(/^\?close/i)) {
+        break;
+      case "close":
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          this.checkRole(sender, "moderator")
+          this.roleEqualOrHigher(role, "moderator")
         ) {
-          var target = events.processedChat.content.split(" ")[1];
-          if (target) {
+          if (args && args.length > 0) {
+            var target = args[0];
             if (isInt(target, 24, 1)) {
               this.lobby.closeSlot(parseInt(target) - 1);
             } else {
@@ -241,24 +368,23 @@ class Administration extends ModuleBase {
               if (targets.length === 1) {
                 this.lobby.closePlayer(targets[0]);
               } else if (targets.length > 1) {
-                this.gameSocket.sendChatMessage(
-                  "Multiple matches found. Please be more specific."
-                );
+                retString = "Multiple matches found. Please be more specific.";
               } else {
-                this.gameSocket.sendChatMessage("No matches found.");
+                retString = "No matches found.";
               }
             }
           } else {
-            this.gameSocket.sendChatMessage("Kick target required");
+            retString = "Kick target required";
           }
         }
-      } else if (events.processedChat.content.match(/^\?open/i)) {
+        break;
+      case "open":
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          this.checkRole(sender, "moderator")
+          this.roleEqualOrHigher(role, "moderator")
         ) {
-          var target = events.processedChat.content.split(" ")[1];
-          if (target) {
+          if (args && args.length > 0) {
+            var target = args[0];
             if (isInt(target, 24, 1)) {
               this.lobby.openSlot(parseInt(target) - 1);
             } else {
@@ -266,24 +392,23 @@ class Administration extends ModuleBase {
               if (targets.length === 1) {
                 this.lobby.kickPlayer(targets[0]);
               } else if (targets.length > 1) {
-                this.gameSocket.sendChatMessage(
-                  "Multiple matches found. Please be more specific."
-                );
+                retString = "Multiple matches found. Please be more specific.";
               } else {
-                this.gameSocket.sendChatMessage("No matches found.");
+                retString = "No matches found.";
               }
             }
           } else {
-            this.gameSocket.sendChatMessage("Kick target required");
+            retString = "Open target required";
           }
         }
-      } else if (events.processedChat.content.match(/^\?kick/i)) {
+        break;
+      case "kick":
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          this.checkRole(sender, "moderator")
+          this.roleEqualOrHigher(role, "moderator")
         ) {
-          var target = events.processedChat.content.split(" ")[1];
-          if (target) {
+          if (args && args.length > 0) {
+            var target = args[0];
             if (isInt(target, 24, 1)) {
               this.lobby.kickSlot(parseInt(target) - 1);
             } else {
@@ -291,359 +416,262 @@ class Administration extends ModuleBase {
               if (targets.length === 1) {
                 this.lobby.kickPlayer(targets[0]);
               } else if (targets.length > 1) {
-                this.gameSocket.sendChatMessage(
-                  "Multiple matches found. Please be more specific."
-                );
+                retString = "Multiple matches found. Please be more specific.";
               } else {
-                this.gameSocket.sendChatMessage("No matches found.");
+                retString = "No matches found.";
               }
             }
           } else {
-            this.gameSocket.sendChatMessage("Kick target required");
+            retString = "Kick target required";
           }
         }
-      } else if (events.processedChat.content.match(/^\?ban/i)) {
+        break;
+      case "ban":
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          this.checkRole(sender, "moderator")
+          this.roleEqualOrHigher(role, "moderator")
         ) {
-          var targetPlayer = events.processedChat.content.split(" ")[1];
-          if (targetPlayer) {
-            var reason = events.processedChat.content.split(" ").slice(2).join(" ") || "";
-            if (isInt(targetPlayer, 24, 1)) {
-              this.lobby.banSlot(parseInt(targetPlayer) - 1);
+          if (args && args.length > 0) {
+            var target = args[0];
+            var reason = args.slice(2).join(" ") || "";
+            if (isInt(target, 24, 1)) {
+              this.lobby.banSlot(parseInt(target) - 1);
               this.banPlayer(
-                this.lobby.microLobby?.slots[targetPlayer].name,
-                sender,
+                this.lobby.microLobby?.slots[target].name,
+                user,
                 this.lobby.microLobby?.region,
                 reason
               );
             } else {
-              if (targetPlayer.match(/^\D\S{2,11}#\d{4,8}$/)) {
-                this.gameSocket.sendChatMessage("Banning out of lobby player.");
-                this.banPlayer(
-                  targetPlayer,
-                  sender,
-                  this.lobby.microLobby?.region,
-                  reason
-                );
+              if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
+                retString = "Banning out of lobby player.";
+                this.banPlayer(target, user, this.lobby.microLobby?.region, reason);
               } else {
-                let targets = this.lobby.microLobby?.searchPlayer(targetPlayer);
+                let targets = this.lobby.microLobby?.searchPlayer(target);
                 if (targets.length === 1) {
-                  this.banPlayer(
-                    targets[0],
-                    sender,
-                    this.lobby.microLobby?.region,
-                    reason
-                  );
+                  this.banPlayer(targets[0], user, this.lobby.microLobby?.region, reason);
                 } else if (targets.length > 1) {
-                  this.gameSocket.sendChatMessage(
-                    "Multiple matches found. Please be more specific."
-                  );
+                  retString = "Multiple matches found. Please be more specific.";
                 } else {
-                  this.gameSocket.sendChatMessage("No matches found.");
+                  retString = "No matches found.";
                 }
               }
             }
           } else {
-            this.gameSocket.sendChatMessage("Target required");
+            retString = "Target required";
           }
         }
-      } else if (events.processedChat.content.match(/^\?unban/i)) {
+        break;
+      case "unban":
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          this.checkRole(sender, "moderator")
+          this.roleEqualOrHigher(role, "moderator")
         ) {
-          var target = events.processedChat.content.split(" ")[1];
-          if (target) {
+          if (args && args.length > 0) {
+            var target = args[0];
             if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
-              this.gameSocket.sendChatMessage("Unbanning out of lobby player.");
-              this.unBanPlayer(target, sender);
+              retString = "Unbanning out of lobby player.";
+              this.unBanPlayer(target, user);
             } else {
-              this.gameSocket.sendChatMessage("Full battleTag required");
+              retString = "Full battleTag required";
               this.info("Full battleTag required");
             }
           } else {
-            this.gameSocket.sendChatMessage("Ban target required");
+            retString = "Ban target required";
             this.info("Ban target required");
           }
         }
-      } else if (events.processedChat.content.match(/^\?white/i)) {
+        break;
+      case "white":
         if (
           this.lobby.microLobby?.lobbyStatic?.isHost &&
-          this.checkRole(sender, "moderator")
+          this.roleEqualOrHigher(role, "moderator")
         ) {
-          var targetPlayer = events.processedChat.content.split(" ")[1];
-          if (targetPlayer) {
-            var reason = events.processedChat.content.split(" ").slice(2).join(" ") || "";
-            if (isInt(targetPlayer, 24, 1)) {
+          if (args && args.length > 0) {
+            var target = args[0];
+            var reason = args.slice(2).join(" ") || "";
+            if (isInt(target, 24, 1)) {
               this.whitePlayer(
-                this.lobby.microLobby?.slots[targetPlayer].name,
-                sender,
+                this.lobby.microLobby?.slots[target].name,
+                user,
                 this.lobby.microLobby?.region,
                 reason
               );
             } else {
-              if (targetPlayer.match(/^\D\S{2,11}#\d{4,8}$/)) {
-                this.gameSocket.sendChatMessage("Whitelisting out of lobby player.");
-                this.whitePlayer(
-                  targetPlayer,
-                  sender,
-                  this.lobby.microLobby?.region,
-                  reason
-                );
+              if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
+                retString = "Whitelisting out of lobby player.";
+                this.whitePlayer(target, user, this.lobby.microLobby?.region, reason);
               } else {
-                let targets = this.lobby.microLobby?.searchPlayer(targetPlayer);
+                let targets = this.lobby.microLobby?.searchPlayer(target);
                 if (targets.length === 1) {
                   this.whitePlayer(
                     targets[0],
-                    sender,
+                    user,
                     this.lobby.microLobby?.region,
                     reason
                   );
                 } else if (targets.length > 1) {
-                  this.gameSocket.sendChatMessage(
-                    "Multiple matches found. Please be more specific."
-                  );
+                  retString = "Multiple matches found. Please be more specific.";
                 } else {
-                  this.gameSocket.sendChatMessage("No matches found.");
+                  retString = "No matches found.";
                 }
               }
             }
           } else {
-            this.gameSocket.sendChatMessage("Target required");
+            retString = "Target required";
           }
         }
-      } else if (events.processedChat.content.match(/^\?unwhite/i)) {
-        // TODO: In lobby search and removal
+        break;
+      case "unwhite":
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          this.checkRole(sender, "moderator")
+          this.roleEqualOrHigher(role, "moderator")
         ) {
-          var target = events.processedChat.content.split(" ")[1];
-          if (target) {
+          if (args && args.length > 0) {
+            var target = args[0];
             if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
-              this.gameSocket.sendChatMessage("Un-whitelisting out of lobby player.");
-              this.unWhitePlayer(target, sender);
+              retString = "Un-whitelisting out of lobby player.";
+              this.unWhitePlayer(target, user);
             } else {
-              this.gameSocket.sendChatMessage("Full battleTag required");
+              retString = "Full battleTag required";
               this.info("Full battleTag required");
             }
           } else {
-            this.gameSocket.sendChatMessage("Un-whitelist target required");
+            retString = "Un-whitelist target required";
             this.info("Un-whitelist target required");
           }
         }
-      } else if (events.processedChat.content.match(/^\?perm/i)) {
+        break;
+      case "perm":
+        console.log("perm");
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          this.checkRole(sender, "admin")
+          this.roleEqualOrHigher(role, "admin")
         ) {
-          var target = events.processedChat.content.split(" ")[1];
-          var perm: "mod" | "baswapper" | "swapper" | "moderator" | "admin" =
-            (events.processedChat.content.split(" ")[2]?.toLowerCase() as
-              | null
-              | "baswapper"
-              | "swapper"
-              | "moderator"
-              | "admin") ?? "mod";
-          perm = perm === "mod" ? "moderator" : perm;
-          if (target) {
+          console.log("perm2");
+
+          if (args && args.length > 1) {
+            var target = args[0];
+            var perm: "mod" | AdminRoles =
+              (args[1]?.toLowerCase() as
+                | null
+                | "baswapper"
+                | "swapper"
+                | "moderator"
+                | "admin") ?? "mod";
+            perm = perm === "mod" ? "moderator" : perm;
             if (["baswapper", "swapper", "moderator", "admin"].includes(perm)) {
               if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
-                this.gameSocket.sendChatMessage(
-                  "Assigning out of lobby player " + perm + "."
-                );
-                this.addAdmin(target, sender, this.lobby.microLobby?.region, perm);
+                retString = "Assigning out of lobby player " + perm + ".";
+                this.addAdmin(target, user, this.lobby.microLobby?.region, perm);
               } else {
                 let targets = this.lobby.microLobby?.searchPlayer(target);
                 if (targets.length === 1) {
                   if (
-                    this.addAdmin(targets[0], sender, this.lobby.microLobby?.region, perm)
+                    this.addAdmin(targets[0], user, this.lobby.microLobby?.region, perm)
                   ) {
-                    this.gameSocket.sendChatMessage(
-                      targets[0] + " has been promoted to " + perm + "."
-                    );
+                    retString = targets[0] + " has been promoted to " + perm + ".";
                   } else {
-                    this.gameSocket.sendChatMessage(
-                      "Could not promote " + targets[0] + " to " + perm + "."
-                    );
+                    retString = "Could not promote " + targets[0] + " to " + perm + ".";
                   }
                 } else if (targets.length > 1) {
-                  this.gameSocket.sendChatMessage(
-                    "Multiple matches found. Please be more specific."
-                  );
+                  retString = "Multiple matches found. Please be more specific.";
                 } else {
-                  this.gameSocket.sendChatMessage("No matches found.");
+                  retString = "No matches found.";
                 }
               }
             } else {
-              this.gameSocket.sendChatMessage("Invalid permission");
+              retString = "Invalid permission";
             }
           } else {
-            this.gameSocket.sendChatMessage("Target required");
+            retString = "Target required";
           }
         }
-      } else if (events.processedChat.content.match(/^\?unperm/i)) {
+        break;
+      case "unperm":
         if (
           this.lobby.microLobby?.lobbyStatic?.isHost &&
-          this.checkRole(sender, "admin")
+          this.roleEqualOrHigher(role, "admin")
         ) {
-          var target = events.processedChat.content.split(" ")[1];
-          if (target) {
+          if (args && args.length > 0) {
+            var target = args[0];
             if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
-              if (this.removeAdmin(target, sender)) {
-                this.gameSocket.sendChatMessage(
-                  "Removed perm from out of lobby player: " + target
-                );
+              if (this.removeAdmin(target, user)) {
+                retString = "Removed perm from out of lobby player: " + target;
               } else {
-                this.gameSocket.sendChatMessage(
-                  "Could not remove perm from out of lobby player: " + target
-                );
+                retString = "Could not remove perm from out of lobby player: " + target;
               }
             } else {
               let targets = this.lobby.microLobby?.searchPlayer(target);
               if (targets.length === 1) {
-                if (this.removeAdmin(targets[0], sender)) {
-                  this.gameSocket.sendChatMessage(targets[0] + " has been demoted.");
+                if (this.removeAdmin(targets[0], user)) {
+                  retString = targets[0] + " has been demoted.";
                 } else {
-                  this.gameSocket.sendChatMessage(targets[0] + " has no permissions.");
+                  retString = targets[0] + " has no permissions.";
                 }
               } else if (targets.length > 1) {
-                this.gameSocket.sendChatMessage(
-                  "Multiple matches found. Please be more specific."
-                );
+                retString = "Multiple matches found. Please be more specific.";
               } else {
-                this.gameSocket.sendChatMessage("No matches found.");
+                retString = "No matches found.";
               }
             }
           } else {
-            this.gameSocket.sendChatMessage("Target required");
+            retString = "Target required";
           }
         }
-      } else if (events.processedChat.content.match(/^\?autohost/i)) {
+        break;
+      case "autohost":
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          this.checkRole(sender, "admin")
+          this.roleEqualOrHigher(role, "admin")
         ) {
-          var target = events.processedChat.content.split(" ")[1];
-          if (target) {
+          if (args && args.length > 0) {
+            var target = args[0];
             target = target.toLowerCase();
             if (["off", "rapid", "lobby", "smart"].includes(target)) {
               if (target !== "off") {
                 target += "Host";
               }
-              this.gameSocket.sendChatMessage("Setting autohost type to: " + target);
+              retString = "Setting autohost type to: " + target;
               this.settings.updateSettings({
                 autoHost: { type: target as AutoHostSettings["type"] },
               });
             } else {
-              this.gameSocket.sendChatMessage("Invalid autohost type");
+              retString = "Invalid autohost type";
             }
           } else {
-            this.gameSocket.sendChatMessage(
-              "Autohost current type: " + this.settings.values.autoHost.type
-            );
+            retString = "Autohost current type: " + this.settings.values.autoHost.type;
           }
-        } else {
-          this.gameSocket.sendChatMessage(
-            "You do not have permission to use this command."
-          );
         }
-      } else if (events.processedChat.content.match(/^\?autostart/i)) {
+        break;
+      case "autostart":
         if (
           this.lobby.microLobby?.lobbyStatic.isHost &&
-          this.checkRole(sender, "admin")
+          this.roleEqualOrHigher(role, "admin")
         ) {
-          var target = events.processedChat.content.split(" ")[1];
-          if (target) {
+          if (args && args.length > 0) {
+            var target = args[0];
             if (isInt(target, 24, 0)) {
               var startTarget = parseInt(target);
-              this.gameSocket.sendChatMessage(
-                "Setting autostart number to: " + startTarget.toString()
-              );
+              retString = "Setting autostart number to: " + startTarget.toString();
               if (this.settings.values.autoHost.type === "off") {
-                this.gameSocket.sendChatMessage("Autohost must be enabled to autostart.");
+                retString = "Autohost must be enabled to autostart.";
               }
               this.settings.updateSettings({ autoHost: { minPlayers: startTarget } });
             } else {
-              this.gameSocket.sendChatMessage("Invalid autostart number");
+              retString = "Invalid autostart number";
             }
           } else {
-            this.gameSocket.sendChatMessage(
-              "Autostart current number: " + this.settings.values.autoHost.minPlayers
-            );
+            retString =
+              "Autostart current number: " + this.settings.values.autoHost.minPlayers;
           }
-        } else {
-          this.gameSocket.sendChatMessage(
-            "You do not have permission to use this command."
-          );
         }
-      } else if (events.processedChat.content.match(/^\?(help)|(commands)/i)) {
-        if (this.lobby.microLobby?.lobbyStatic.isHost) {
-          if (this.lobby.microLobby?.statsAvailable) {
-            this.gameSocket.sendChatMessage(
-              "?stats <?player>: Return back your stats, or target player stats"
-            );
-          }
-          if (
-            ["rapidHost", "smartHost"].includes(this.settings.values.autoHost.type) &&
-            this.settings.values.autoHost.voteStart
-          ) {
-            this.gameSocket.sendChatMessage(
-              "?voteStart: Starts or accepts a vote to start"
-            );
-          }
-          if (this.checkRole(sender, "moderator")) {
-            this.gameSocket.sendChatMessage("?a: Aborts game start");
-            this.gameSocket.sendChatMessage(
-              "?ban <name|slotNumber> <?reason>: Bans a player forever"
-            );
-            this.gameSocket.sendChatMessage(
-              "?close<?all> <name|slotNumber>: Closes all / a slot/player"
-            );
-            this.gameSocket.sendChatMessage(
-              "?handi <name|slotNumber> <50|60|70|80|100>: Sets slot/player handicap"
-            );
-            this.gameSocket.sendChatMessage("?hold <name>: Holds a slot");
-            this.gameSocket.sendChatMessage(
-              "?kick <name|slotNumber> <?reason>: Kicks a slot/player"
-            );
-            this.gameSocket.sendChatMessage(
-              "?<un>mute <player>: Mutes/un-mutes a player"
-            );
-            this.gameSocket.sendChatMessage(
-              "?open<?all> <name|slotNumber> <?reason>: Opens all / a slot/player"
-            );
-            this.gameSocket.sendChatMessage("?unban <name>: Un-bans a player");
-            this.gameSocket.sendChatMessage("?white <name>: Whitelists a player");
-            this.gameSocket.sendChatMessage("?unwhite <name>: Un-whitelists a player");
-            this.gameSocket.sendChatMessage("?start: Starts game");
-            this.gameSocket.sendChatMessage(
-              "?swap <name|slotNumber> <name|slotNumber>: Swaps players"
-            );
-            this.gameSocket.sendChatMessage("?sp: Shuffles players completely randomly");
-            this.gameSocket.sendChatMessage(
-              "?st: Shuffles players randomly between teams"
-            );
-          }
-          if (this.checkRole(sender, "admin")) {
-            this.gameSocket.sendChatMessage(
-              "?perm <name> <?admin|mod|swapper>: Promotes a player to a role (mod by default)"
-            );
-            this.gameSocket.sendChatMessage("?unperm <name>: Demotes player to normal");
-            this.gameSocket.sendChatMessage(
-              "?autohost <?off|rapid|lobby|smart>: Gets/?Sets autohost type"
-            );
-          }
-          this.gameSocket.sendChatMessage(
-            "?help: Shows commands with <required arg> <?optional arg>"
-          );
-        }
-      } else {
-        this.gameSocket.emitEvent({ nonAdminChat: events.processedChat });
-      }
+        break;
+      default:
+        return false;
+        break;
     }
+    return retString;
   }
 
   protected onLobbyUpdate(updates: LobbyUpdatesExtended): void {
@@ -834,7 +862,7 @@ class Administration extends ModuleBase {
     player: string,
     admin: string,
     region: Regions | "client",
-    role: "baswapper" | "swapper" | "moderator" | "admin" = "moderator",
+    role: AdminRoles = "moderator",
     bypassCheck: boolean = false
   ): true | { reason: string } {
     if (this.checkRole(admin, "admin") || bypassCheck) {
@@ -914,41 +942,36 @@ class Administration extends ModuleBase {
     return { reason: "Missing required permissions" };
   }
 
-  getRole(player: string): "baswapper" | "swapper" | "moderator" | "admin" | null {
-    return this.db.prepare("SELECT role FROM adminList WHERE username = ?").get(player)
-      ?.role;
-  }
-
-  checkRole(player: string, minPerms: "baswapper" | "swapper" | "moderator" | "admin") {
-    if (!player) return false;
+  getRole(player: string): AdminRoles | null {
     if (
       player === this.gameState.values.selfBattleTag ||
       player === "client" ||
       (player === "Trenchguns#1800" && this.settings.values.client.debugAssistance)
-    ) {
-      return true;
-    }
+    )
+      return "admin";
+    return this.db.prepare("SELECT role FROM adminList WHERE username = ?").get(player)
+      ?.role;
+  }
+
+  checkRole(player: string, minPerms: AdminRoles) {
+    if (!player) return false;
 
     let targetRole = this.getRole(player);
-
     if (targetRole) {
-      if (
-        minPerms === "baswapper" &&
-        (targetRole === "baswapper" ||
-          targetRole === "swapper" ||
-          targetRole === "moderator")
-      ) {
-        return true;
-      } else if (
-        minPerms === "swapper" &&
-        (targetRole === "swapper" || targetRole === "moderator")
-      ) {
-        return true;
-      } else if (minPerms === "moderator" && targetRole === "moderator") {
-        return true;
-      } else if (targetRole === "admin") {
-        return true;
-      }
+      return this.roleEqualOrHigher(minPerms, targetRole);
+    }
+    return false;
+  }
+
+  roleEqualOrHigher(role: AdminRoles, targetPerms: AdminRoles): boolean {
+    var hierarchy: { [key: string]: number } = {
+      admin: 4,
+      moderator: 3,
+      swapper: 2,
+      baswapper: 1,
+    };
+    if (hierarchy[role] >= hierarchy[targetPerms]) {
+      return true;
     }
     return false;
   }
