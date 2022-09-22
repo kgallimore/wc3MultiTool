@@ -16,6 +16,8 @@ import { GameSocketEvents } from "../globals/gameSocket";
 import { readdir } from "fs";
 import { join } from "path";
 
+import { AdminCommands, administration } from "./administration";
+
 export type ChatChannelMatch = "chat" | "announce" | "admin" | "";
 
 class DiscordBot extends ModuleBase {
@@ -225,10 +227,43 @@ class DiscordBot extends ModuleBase {
             !this.settings.values.discord.useThreads)) &&
         !msg.author.bot
       ) {
+        if (msg.content.startsWith("?")) {
+          this.info("Running command", msg.author.username, msg.content);
+          var runCom = administration.runCommand(
+            msg.content.slice(1).split(" ")[0] as AdminCommands,
+            msg.member?.roles.cache.get(this.settings.values.discord.adminRole) ||
+              msg.member?.permissions.has("Administrator")
+              ? "admin"
+              : null,
+            msg.author.username,
+            msg.content.split(" ").slice(1)
+          );
+          if (runCom) {
+            msg.reply(runCom);
+          }
+        }
         if (this.settings.values.discord.bidirectionalChat) {
           this.gameSocket.sendChatMessage(
             "(DC)" + msg.author.username + ": " + msg.content
           );
+        }
+      } else if (
+        msg.content.startsWith("?") &&
+        msg.content.includes(this.settings.values.discord.customName)
+      ) {
+        this.info("Running bot specific command", msg.author.username, msg.content);
+        var runCom = administration.runCommand(
+          msg.content.slice(1).split(" ")[0] as AdminCommands,
+          msg.member?.roles.cache.get(this.settings.values.discord.adminRole) ||
+            msg.member?.permissions.has("Administrator") ||
+            msg.channel == this.adminChannel
+            ? "admin"
+            : null,
+          msg.author.username,
+          msg.content.split(" ").slice(1)
+        );
+        if (runCom) {
+          msg.reply(runCom);
         }
       }
     });

@@ -2,7 +2,7 @@ import { Global } from "../globalBase";
 
 import Store from "electron-store";
 
-import { PickByValue } from "./../utility";
+import type { PickByValue } from "./../utility";
 import type { ObsHotkeys } from "./../modules/obs";
 
 const store = new Store();

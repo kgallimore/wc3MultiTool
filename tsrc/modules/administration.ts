@@ -190,12 +190,13 @@ class Administration extends ModuleBase {
     }
   }
 
-  protected runCommand(
+  public runCommand(
     command: AdminCommands,
-    role: AdminRoles,
+    role: AdminRoles | null,
     user: string,
     args?: string[]
   ): string | false {
+    this.info("Running command: " + command, role, user, args);
     var retString = "";
     switch (command) {
       case "sp":
@@ -963,7 +964,8 @@ class Administration extends ModuleBase {
     return false;
   }
 
-  roleEqualOrHigher(role: AdminRoles, targetPerms: AdminRoles): boolean {
+  roleEqualOrHigher(role: AdminRoles | null, targetPerms: AdminRoles): boolean {
+    if (!role) return false;
     var hierarchy: { [key: string]: number } = {
       admin: 4,
       moderator: 3,
