@@ -754,7 +754,8 @@ export class LobbyControl extends Module {
       this.microLobby.nonSpecPlayers,
       this.settings.values.elo.excludeHostFromSwap
         ? this.microLobby.lobbyStatic.playerHost
-        : false
+        : false,
+      this.microLobby.exportMin()
     );
 
     if (swaps === true) {
@@ -996,13 +997,15 @@ export class LobbyControl extends Module {
     if (this.microLobby?.lobbyStatic.isHost) {
       if (data.slots && data.slots.length === 2) {
         if (
-          this.microLobby.slots[data.slots[0]].playerRegion &&
-          this.microLobby.slots[data.slots[1]].playerRegion
+          this.microLobby.slots[data.slots[0] - 1].playerRegion &&
+          this.microLobby.slots[data.slots[1] - 1].playerRegion
         ) {
           data.players = [
-            this.microLobby.slots[data.slots[0]].name,
-            this.microLobby.slots[data.slots[1]].name,
+            this.microLobby.slots[data.slots[0] - 1].name,
+            this.microLobby.slots[data.slots[1] - 1].name,
           ];
+        } else {
+          this.warn("Tried to swap a non-player and player.");
         }
       }
       if (data.players && data.players.length === 2) {
