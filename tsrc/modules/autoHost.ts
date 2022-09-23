@@ -29,7 +29,11 @@ class AutoHost extends ModuleBase {
   wc3mtTargetFile = `${app.getPath("documents")}\\Warcraft III\\CustomMapData\\wc3mt.txt`;
   gameNumber = 0;
   voteTimer: NodeJS.Timeout | null = null;
-  creatingGame: boolean = false;
+  creatingGame: { status: boolean; targetName: string; tryCount: number } = {
+    status: false,
+    targetName: "",
+    tryCount: 0,
+  };
   private lastAnnounceTime: number = 0;
 
   constructor() {
@@ -43,7 +47,6 @@ class AutoHost extends ModuleBase {
 
   protected onLobbyUpdate(updates: LobbyUpdatesExtended): void {
     // TODO: this works w/o Autohost on. Move to elo module?
-    console.log(updates);
     if (
       updates.playerData?.extraData &&
       this.settings.values.elo.type !== "off" &&
@@ -56,6 +59,26 @@ class AutoHost extends ModuleBase {
       this.gameSocket.sendChatMessage(
         updates.playerData.name + " " + statsString || "None available"
       );
+    }
+    if (updates.newLobby) {
+      if (this.lobby.microLobby?.lobbyStatic.lobbyName && this.creatingGame.targetName) {
+        if (
+          this.lobby.microLobby.lobbyStatic.lobbyName === this.creatingGame.targetName
+        ) {
+          this.info("Game successfully created: " + this.creatingGame.targetName);
+          this.gameNumber += 1;
+        } else if (
+          this.lobby.microLobby.lobbyStatic.lobbyName.includes(
+            this.settings.values.autoHost.gameName
+          )
+        ) {
+          this.info(
+            "Game created with incorrect increment: " +
+              this.lobby.microLobby.lobbyStatic.lobbyName
+          );
+        }
+        this.resetCreatingGame();
+      }
     }
 
     if (
@@ -136,7 +159,11 @@ class AutoHost extends ModuleBase {
   }
 
   protected onGameSocketEvent(events: GameSocketEvents): void {
-    if (events.OnNetProviderInitialized && this.settings.values.client.performanceMode) {
+    if (
+      (events.OnNetProviderInitialized ||
+        events.OnChannelJoin?.channel?.channelType == 0) &&
+      this.settings.values.client.performanceMode
+    ) {
       setTimeout(this.autoHostGame.bind(this), 1000);
     }
     if (events.SetOverlayScreen?.screen) {
@@ -199,6 +226,19 @@ class AutoHost extends ModuleBase {
               );
             }
           }
+        }
+      }
+    }
+    if (events.MultiplayerGameCreateResult && this.creatingGame.status) {
+      if (events.MultiplayerGameCreateResult.details.success == false) {
+        this.warn("Failed to create game. Attempt: " + this.creatingGame.tryCount);
+        if (this.creatingGame.tryCount < 50) {
+          this.creatingGame.status = false;
+          this.creatingGame.tryCount += 1;
+          setTimeout(() => this.createGame(), 100);
+        } else {
+          this.resetCreatingGame();
+          this.error("Failed to create game.");
         }
       }
     }
@@ -277,7 +317,7 @@ class AutoHost extends ModuleBase {
   }
 
   async autoHostGame(override: boolean = false) {
-    if (this.settings.values.autoHost.type === "off" || this.creatingGame) {
+    if (this.settings.values.autoHost.type === "off" || this.creatingGame.status) {
       return false;
     }
     if (this.settings.values.client.commAddress || override) {
@@ -426,109 +466,103 @@ class AutoHost extends ModuleBase {
     }
   }
 
+  resetCreatingGame() {
+    this.creatingGame = { status: false, targetName: "", tryCount: 0 };
+  }
+
   async createGame(
     customGameData: CreateLobbyPayload | false = false,
-    callCount: number = 0,
     lobbyName: string = ""
   ): Promise<boolean> {
-    if (this.creatingGame === true && callCount === 0) {
+    var hey = 1;
+    console.log("hey" + hey++);
+    if (this.creatingGame.status === true) {
       return false;
     }
-    this.creatingGame = true;
+    console.log("hey" + hey++);
+
     if (!this.gameState.values.connected) {
       this.warn("Tried to create game when no connection exists.");
-      this.creatingGame = false;
+      this.resetCreatingGame();
       return false;
     }
+    console.log("hey" + hey++);
+
     if (this.gameState.values.inGame) {
       this.info("Cancelling lobby creation: Already in game.");
-      this.creatingGame = false;
+      this.resetCreatingGame();
       return false;
     }
+    console.log("hey" + hey++);
+
     if (this.lobby.microLobby?.lobbyStatic.lobbyName) {
-      if (this.lobby.microLobby.lobbyStatic.lobbyName === lobbyName) {
-        this.info("Game successfully created: " + lobbyName);
-        this.creatingGame = false;
-        return true;
-      }
-      if (
-        this.lobby.microLobby.lobbyStatic.lobbyName.includes(
-          this.settings.values.autoHost.gameName
-        )
-      ) {
-        this.info(
-          "Game created with incorrect increment: " +
-            this.lobby.microLobby.lobbyStatic.lobbyName
-        );
-        this.creatingGame = false;
-        return true;
-      }
-    }
-    if (
-      ["CUSTOM_GAME_LOBBY", "LOADING_SCREEN", "GAME_LOBBY"].includes(
-        this.gameState.values.menuState
-      )
-    ) {
       this.info("Cancelling lobby creation: Already in lobby.");
-      this.creatingGame = false;
+      this.resetCreatingGame();
       return false;
     }
+    console.log("hey" + hey++);
+
+    this.creatingGame.status = true;
     this.gameState.updateGameState({ action: "creatingLobby" });
-    if ((callCount + 5) % 10 === 0) {
+    console.log("hey" + hey++);
+
+    if ((this.creatingGame.tryCount + 5) % 10 === 0) {
       if (this.settings.values.autoHost.increment) {
-        if (callCount > 45) {
-          this.creatingGame = false;
+        if (this.creatingGame.tryCount > 45) {
+          this.resetCreatingGame();
           return false;
         }
         this.gameNumber += 1;
         this.warn("Failed to create game. Incrementing game name");
       } else {
         this.warn("Failed to create game. Stopping attempts.");
-        this.creatingGame = false;
+        this.resetCreatingGame();
         return false;
       }
     }
-    if (callCount % 10 === 0) {
-      lobbyName =
-        lobbyName ||
-        this.settings.values.autoHost.gameName +
-          (this.settings.values.autoHost.increment ? ` #${this.gameNumber}` : "");
-      const payloadData: CreateLobbyPayload = customGameData || {
-        filename: this.settings.values.autoHost.mapPath.replace(/\\/g, "/"),
-        gameSpeed: 2,
-        gameName: lobbyName,
-        mapSettings: {
-          flagLockTeams: this.settings.values.autoHost.advancedMapOptions
-            ? this.settings.values.autoHost.flagLockTeams
-            : true,
-          flagPlaceTeamsTogether: this.settings.values.autoHost.advancedMapOptions
-            ? this.settings.values.autoHost.flagPlaceTeamsTogether
-            : true,
-          flagFullSharedUnitControl: this.settings.values.autoHost.advancedMapOptions
-            ? this.settings.values.autoHost.flagFullSharedUnitControl
-            : false,
-          flagRandomRaces: this.settings.values.autoHost.advancedMapOptions
-            ? this.settings.values.autoHost.flagRandomRaces
-            : false,
-          flagRandomHero: this.settings.values.autoHost.advancedMapOptions
-            ? this.settings.values.autoHost.flagRandomHero
-            : false,
-          settingObservers: parseInt(this.settings.values.autoHost.observers) as
-            | 0
-            | 1
-            | 2
-            | 3,
-          settingVisibility: this.settings.values.autoHost.advancedMapOptions
-            ? (parseInt(this.settings.values.autoHost.settingVisibility) as 0 | 1 | 2 | 3)
-            : 0,
-        },
-        privateGame: this.settings.values.autoHost.private,
-      };
-      this.info("Sending autoHost payload", JSON.stringify(payloadData));
-      this.gameSocket.sendMessage({ CreateLobby: payloadData });
-    }
-    await sleep(1000);
-    return await this.createGame(false, callCount + 1, lobbyName);
+    console.log("hey" + hey++);
+
+    lobbyName =
+      lobbyName ||
+      this.settings.values.autoHost.gameName +
+        (this.settings.values.autoHost.increment ? ` #${this.gameNumber}` : "");
+    const payloadData: CreateLobbyPayload = customGameData || {
+      filename: this.settings.values.autoHost.mapPath.replace(/\\/g, "/"),
+      gameSpeed: 2,
+      gameName: lobbyName,
+      mapSettings: {
+        flagLockTeams: this.settings.values.autoHost.advancedMapOptions
+          ? this.settings.values.autoHost.flagLockTeams
+          : true,
+        flagPlaceTeamsTogether: this.settings.values.autoHost.advancedMapOptions
+          ? this.settings.values.autoHost.flagPlaceTeamsTogether
+          : true,
+        flagFullSharedUnitControl: this.settings.values.autoHost.advancedMapOptions
+          ? this.settings.values.autoHost.flagFullSharedUnitControl
+          : false,
+        flagRandomRaces: this.settings.values.autoHost.advancedMapOptions
+          ? this.settings.values.autoHost.flagRandomRaces
+          : false,
+        flagRandomHero: this.settings.values.autoHost.advancedMapOptions
+          ? this.settings.values.autoHost.flagRandomHero
+          : false,
+        settingObservers: parseInt(this.settings.values.autoHost.observers) as
+          | 0
+          | 1
+          | 2
+          | 3,
+        settingVisibility: this.settings.values.autoHost.advancedMapOptions
+          ? (parseInt(this.settings.values.autoHost.settingVisibility) as 0 | 1 | 2 | 3)
+          : 0,
+      },
+      privateGame: this.settings.values.autoHost.private,
+    };
+    this.creatingGame.targetName = lobbyName;
+    this.info("Sending autoHost payload", JSON.stringify(payloadData));
+    this.gameSocket.sendMessage({ CreateLobby: payloadData });
+    console.log("hey" + hey++);
+
+    return true;
   }
 
   cancelVote() {

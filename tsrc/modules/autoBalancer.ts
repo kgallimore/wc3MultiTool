@@ -13,7 +13,7 @@ function lobbyCombinations(
   playerData: {
     [key: string]: PlayerData;
   },
-  teamSize: number = 3
+  teamSize: number
 ) {
   // @ts-expect-error This is a false error
   let combos: Array<Array<string>> = new Permutation(target);
@@ -82,6 +82,7 @@ export function generateAutoBalance(
         team1Swaps: Array<string>;
         team2Swaps: Array<string>;
         leastSwapTeam: string;
+        eloDiff: number;
       };
       moreTeams?: { swaps: Array<[string, string]>; bestCombo: Array<Array<string>> };
     }
@@ -183,13 +184,14 @@ export function generateAutoBalance(
         team1Swaps: swapsFromTeam1,
         team2Swaps: swapsFromTeam2,
         leastSwapTeam,
+        eloDiff: smallestEloDiff,
       },
     };
   } else {
     if (!fullData) {
       return { error: "Full microLobby data is needed" };
     }
-    // TODO: There will be an issue if the teams are already balanced.
+    // TODO: There may be an issue if the teams are already balanced.
     let buildSwaps: Array<[string, string]> = [];
     var bestCombo = lobbyCombinations(
       nonSpecPlayers,

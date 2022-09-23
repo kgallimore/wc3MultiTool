@@ -6,6 +6,8 @@ import type { MenuStates } from "./gameState";
 
 import type { GameClientLobbyPayload, Regions } from "wc3mt-lobby-container";
 
+import type { OnChannelJoinChannel } from "./util/gameSocketTypes";
+
 export interface GameList {
   games: Array<{ name: string; id: number; mapFile: string }>;
 }
@@ -48,7 +50,8 @@ export interface NativeGameSocketEvents {
   OnNetProviderInitialized?: any;
   OnChannelUpdate?: { gameChat: any };
   MultiplayerGameLeave?: any;
-  MultiplayerGameCreateResult?: any;
+  MultiplayerGameCreateResult?: { details: { success: false } };
+  OnChannelJoin?: { channel: OnChannelJoinChannel };
 }
 export interface GameSocketEvents extends NativeGameSocketEvents {
   connected?: true;
@@ -158,6 +161,13 @@ class GameSocket extends Global {
           "UpdateReadyState",
         ].includes(parsedData.messageType)
       ) {
+        /*console.log(
+          ["GameLobbySetup", "GameList", "GameListUpdate", "GameListRemove"].includes(
+            parsedData.messageType
+          )
+            ? parsedData.messageType
+            : JSON.stringify(parsedData)
+        );*/
         if (parsedData.messageType === "MultiplayerGameLeave") {
           this.sentMessages = [];
         }

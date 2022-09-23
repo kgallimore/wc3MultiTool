@@ -106,7 +106,6 @@ class Administration extends ModuleBase {
       if (events.processedChat.content.match(/^\?/)) {
         var command = events.processedChat.content.replace(/^\?/, "");
         if (command.match(/^(help)|(commands)/i)) {
-          console.log("yes");
           if (this.lobby.microLobby?.lobbyStatic.isHost) {
             if (this.lobby.microLobby?.statsAvailable) {
               this.gameSocket.sendChatMessage(
@@ -667,6 +666,9 @@ class Administration extends ModuleBase {
               "Autostart current number: " + this.settings.values.autoHost.minPlayers;
           }
         }
+        break;
+      case "balance":
+        this.lobby.autoBalance();
         break;
       default:
         return false;

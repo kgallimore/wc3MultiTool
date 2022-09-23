@@ -73,6 +73,8 @@ export class LobbyControl extends Module {
   microLobby: MicroLobby | null = null;
   eloName: string = "";
   fetchingStats: Array<string> = [];
+  leftGame: boolean = false;
+
   private isTargetMap: boolean = false;
 
   private startTimer: NodeJS.Timeout | null = null;
@@ -126,22 +128,23 @@ export class LobbyControl extends Module {
         this.gameState.values.menuState !== "LOADING_SCREEN")
     ) {
       this.clear();
+      this.leftGame = true;
     }
-    if (events.nonAdminChat) {
-      if (events.nonAdminChat.content.match(/^\?stats/)) {
+    if (events.ChatMessage) {
+      if (events.ChatMessage.message.content.match(/^\?stats/)) {
         if (
           this.microLobby?.lobbyStatic?.isHost &&
           this.settings.values.elo.type !== "off" &&
           this.microLobby?.statsAvailable
         ) {
           let data: false | PlayerData;
-          let playerTarget = events.nonAdminChat.content.split(" ")[1];
+          let playerTarget = events.ChatMessage.message.content.split(" ")[1];
           if (playerTarget) {
             let targets = this.microLobby?.searchPlayer(playerTarget);
             if (targets.length === 1) {
               // Set the sender to a the target player. Could use a empty string and ?? instead
-              events.nonAdminChat.sender = targets[0];
-              data = this.getPlayerData(events.nonAdminChat.sender);
+              events.ChatMessage.message.sender = targets[0];
+              data = this.getPlayerData(events.ChatMessage.message.sender);
             } else if (targets.length > 1) {
               this.gameSocket.sendChatMessage(
                 "Multiple players found. Please be more specific."
@@ -152,7 +155,7 @@ export class LobbyControl extends Module {
               return;
             }
           } else {
-            data = this.getPlayerData(events.nonAdminChat.sender);
+            data = this.getPlayerData(events.ChatMessage.message.sender);
           }
           if (data) {
             if (!data.extra || data.extra?.rating === -1) {
@@ -163,7 +166,7 @@ export class LobbyControl extends Module {
                 this.settings.values.elo.hideElo
               );
               this.gameSocket.sendChatMessage(
-                events.nonAdminChat.sender + " " + statsString || "None available"
+                events.ChatMessage.message.sender + " " + statsString || "None available"
               );
             }
           } else {
@@ -267,7 +270,7 @@ export class LobbyControl extends Module {
         }
         this.staleTimer = setInterval(() => {
           this.staleLobby();
-        }, 1000 * 60 * 15);
+        }, 1000 * 1 * 15);
         if (!metExpectedSwap) {
           this.bestCombo = [];
           if (this.isLobbyReady()) {
@@ -332,7 +335,6 @@ export class LobbyControl extends Module {
         }
         if (target) {
           this.info("Found spec slot to move to: " + target[0]);
-          console.log("Moving to spec", target[0], selfSlot);
           this.gameSocket.sendMessage({
             SetTeam: {
               slot: selfSlot,
@@ -444,8 +446,10 @@ export class LobbyControl extends Module {
               jsonData = { body: [] };
             }
             let elo = 500;
-            if (this.eloName === "Footmen Vs Grunts") {
+            if (this.eloName === "Footmen%20Vs%20Grunts") {
               elo = 1000;
+            } else if (this.eloName === "Reforged%20Footmen%20Frenzy") {
+              elo = 1500;
             }
             if (jsonData.body.length > 0) {
               let { name, ...desiredData } = jsonData.body[0];
@@ -686,7 +690,6 @@ export class LobbyControl extends Module {
   }
 
   clearPlayer(name: string, fetchStats = false) {
-    console.log("Clearing player " + name);
     if (this.microLobby?.allPlayers.includes(name)) {
       if (
         this.microLobby.ingestUpdate({ playerData: { name, data: { cleared: true } } })
@@ -771,8 +774,8 @@ export class LobbyControl extends Module {
         this.gameSocket.sendChatMessage("Teams are already balanced.");
         this.emitLobbyUpdate({ lobbyBalanced: true });
       } else if (this.microLobby) {
-        let lobbyCopy = new MicroLobby({ fullData: this.microLobby.exportMin() });
-        if (!lobbyCopy.lobbyStatic.isHost) {
+        this.info("Autobalance target: ", swaps.twoTeams);
+        if (!this.microLobby.lobbyStatic.isHost) {
           this.gameSocket.sendChatMessage(
             swaps.twoTeams.leastSwapTeam + " should be: " + this.bestCombo.join(", ")
           );
@@ -798,6 +801,7 @@ export class LobbyControl extends Module {
         }
       }
     } else if (swaps.moreTeams) {
+      this.info("Autobalance target: ", swaps.moreTeams);
       this.bestCombo = swaps.moreTeams.bestCombo;
       if (this.microLobby.lobbyStatic?.isHost) {
         swaps.moreTeams.swaps.forEach((swap) => {
@@ -1208,14 +1212,16 @@ export class LobbyControl extends Module {
       this.gameState.values.inGame ||
       ["GAME_LOBBY", "CUSTOM_GAME_LOBBY"].includes(this.gameState.values.menuState)
     ) {
+      this.leftGame = false;
       this.gameSocket.sendMessage({ LeaveGame: {} });
       if (this.microLobby?.lobbyStatic?.lobbyName) {
-        let oldLobbyName = this.microLobby?.lobbyStatic.lobbyName;
         await sleep(3000);
-        if (this.microLobby?.lobbyStatic.lobbyName === oldLobbyName) {
+        if (!this.leftGame) {
           this.info("Lobby did not leave, trying again");
           await this.warControl.exitGame();
           this.warControl.openWarcraft();
+        } else {
+          this.leftGame = false;
         }
       }
     } else {

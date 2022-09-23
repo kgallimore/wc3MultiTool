@@ -112,7 +112,11 @@ class GameStateContainer extends Global {
     if (events.UpdateScoreInfo) {
       this.updateGameState({ inGame: false, menuState: "SCORE_SCREEN" });
     }
-    if (events.GameList || events.GameListClear) {
+    if (
+      (events.GameList?.games && events.GameList.games.length > 0) ||
+      events.GameListClear
+    ) {
+      console.log("Custom Lobbies");
       this.updateGameState({ menuState: "CUSTOM_LOBBIES" });
     }
   }

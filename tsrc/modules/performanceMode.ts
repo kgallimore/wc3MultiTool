@@ -35,7 +35,7 @@ class PerformanceMode extends ModuleBase {
           "StopAmbientSound",
           "OnWebUILoad",
         ].forEach((message, index) => {
-          this.info("Triggering performanceMode bypass.");
+          this.info("Triggering performanceMode bypass: " + message);
           setTimeout(() => {
             this.gameSocket.sendMessage({ [message]: {} });
           }, 50 * index);
