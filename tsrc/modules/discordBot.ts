@@ -626,7 +626,7 @@ class DiscordBot extends ModuleBase {
   }
 
   async sendMessage(
-    message: string | Discord.MessagePayload | Discord.MessageOptions,
+    message: string | Discord.MessagePayload | Discord.MessageCreateOptions,
     channel: ChatChannelMatch | "thread" = "chat"
   ) {
     if (channel === "chat" && this.chatChannel) {

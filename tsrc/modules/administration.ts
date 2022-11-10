@@ -1,8 +1,7 @@
 import { ModuleBase } from "../moduleBase";
-
+import { Sequelize, DataTypes } from "sequelize";
 import type { Regions, SlotNumbers } from "wc3mt-lobby-container";
 import type { LobbyUpdatesExtended } from "./lobbyControl";
-import sqlite3 from "better-sqlite3";
 import { app } from "electron";
 
 import Store from "electron-store";
@@ -46,6 +45,37 @@ export type AdminCommands =
   | "autostart"
   | "balance";
 
+const whiteBanList = {
+  id: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    autoIncrement: true,
+    primaryKey: true,
+  },
+  username: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  admin: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  region: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  reason: {
+    type: DataTypes.STRING,
+  },
+  removal_date: {
+    type: DataTypes.DATE,
+  },
+  add_date: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW,
+    allowNull: false,
+  },
+};
 export interface FetchListOptions {
   type: "whiteList" | "banList";
   page?: number;
@@ -55,49 +85,79 @@ export interface FetchListOptions {
 }
 
 class Administration extends ModuleBase {
-  db = new sqlite3(app.getPath("userData") + "/wc3mt.db");
+  db = new Sequelize({
+    dialect: "sqlite",
+    storage: app.getPath("userData") + "/wc3mt.db",
+  });
+  banList = this.db.define("banList", whiteBanList, {
+    freezeTableName: true,
+  });
+  whiteList = this.db.define("whiteList", whiteBanList, {
+    freezeTableName: true,
+  });
+  adminList = this.db.define(
+    "adminList",
+    {
+      id: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        autoIncrement: true,
+        primaryKey: true,
+      },
+      username: {
+        type: DataTypes.STRING,
+        allowNull: false,
+      },
+      admin: {
+        type: DataTypes.STRING,
+        allowNull: false,
+      },
+      region: {
+        type: DataTypes.STRING,
+        allowNull: false,
+      },
+      role: {
+        type: DataTypes.STRING,
+        allowNull: false,
+      },
+    },
+    { freezeTableName: true }
+  );
 
   constructor() {
     super("Administration", { listeners: ["gameSocketEvent", "lobbyUpdate"] });
-    this.db.exec(
-      "CREATE TABLE IF NOT EXISTS banList(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, add_date DATETIME default current_timestamp NOT NULL, admin TEXT NOT NULL, region TEXT NOT NULL, reason TEXT, removal_date DATETIME)"
-    );
-    this.db.exec(
-      "CREATE TABLE IF NOT EXISTS whiteList(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, add_date DATETIME default current_timestamp NOT NULL, admin TEXT NOT NULL, region TEXT NOT NULL, reason TEXT, removal_date DATETIME)"
-    );
-    this.db.exec(
-      "CREATE TABLE IF NOT EXISTS lobbyEvents(id INTEGER PRIMARY KEY AUTOINCREMENT, event TEXT NOT NULL, time DATETIME default current_timestamp NOT NULL, data TEXT, username TEXT)"
-    );
-    this.db.exec(
-      "CREATE TABLE IF NOT EXISTS adminList(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, add_date DATETIME default current_timestamp NOT NULL, admin TEXT NOT NULL, region TEXT NOT NULL, role TEXT NOT NULL)"
-    );
-    if (this.clientState.values.tableVersion < 1) {
-      this.info("Updating tables");
-      try {
-        this.db.exec("ALTER TABLE banList rename to banListBackup");
-        this.db.exec(
-          "CREATE TABLE IF NOT EXISTS banList(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, add_date DATETIME default current_timestamp NOT NULL, admin TEXT NOT NULL, region TEXT NOT NULL, reason TEXT, removal_date DATETIME)"
-        );
-        this.db.exec("INSERT INTO banList SELECT * FROM banListBackup;");
-      } catch (e) {
-        this.info("Already at table version 1");
-      }
-      store.set("tableVersion", 1);
-      this.clientState.updateClientState({ tableVersion: 1 });
-    }
-    if (this.clientState.values.tableVersion < 2) {
-      this.info("Updating tables");
-      try {
-        this.db.exec("ALTER TABLE whiteList RENAME COLUMN white_date TO add_date");
-        this.db.exec("ALTER TABLE whiteList RENAME COLUMN unwhite_date TO removal_date");
-        this.db.exec("ALTER TABLE banList RENAME COLUMN ban_date TO add_date");
-        this.db.exec("ALTER TABLE banList RENAME COLUMN unban_date TO removal_date");
-      } catch (e) {
-        this.error("Already at table version 2");
-      }
-      store.set("tableVersion", 2);
-      this.clientState.updateClientState({ tableVersion: 2 });
-    }
+
+    this.db.sync({ force: true });
+    // this.db.exec(
+    //   "CREATE TABLE IF NOT EXISTS lobbyEvents(id INTEGER PRIMARY KEY AUTOINCREMENT, event TEXT NOT NULL, time DATETIME default current_timestamp NOT NULL, data TEXT, username TEXT)"
+    // );
+    // if (this.clientState.values.tableVersion < 1) {
+    //   this.info("Updating tables");
+    //   try {
+    //     this.db.exec("ALTER TABLE banList rename to banListBackup");
+    //     this.db.exec(
+    //       "CREATE TABLE IF NOT EXISTS banList(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, add_date DATETIME default current_timestamp NOT NULL, admin TEXT NOT NULL, region TEXT NOT NULL, reason TEXT, removal_date DATETIME)"
+    //     );
+    //     this.db.exec("INSERT INTO banList SELECT * FROM banListBackup;");
+    //   } catch (e) {
+    //     this.info("Already at table version 1");
+    //   }
+    //   store.set("tableVersion", 1);
+    //   this.clientState.updateClientState({ tableVersion: 1 });
+    // }
+    // if (this.clientState.values.tableVersion < 2) {
+    //   this.info("Updating tables");
+    //   try {
+    //     this.db.exec("ALTER TABLE whiteList RENAME COLUMN white_date TO add_date");
+    //     this.db.exec("ALTER TABLE whiteList RENAME COLUMN unwhite_date TO removal_date");
+    //     this.db.exec("ALTER TABLE banList RENAME COLUMN ban_date TO add_date");
+    //     this.db.exec("ALTER TABLE banList RENAME COLUMN unban_date TO removal_date");
+    //   } catch (e) {
+    //     this.error("Already at table version 2");
+    //   }
+    //   store.set("tableVersion", 2);
+    //   this.clientState.updateClientState({ tableVersion: 2 });
+    // }
   }
 
   protected onGameSocketEvent(events: GameSocketEvents): void {
@@ -751,6 +811,7 @@ class Administration extends ModuleBase {
           );
           return { reason: "Can not ban an admin without removing permissions first." };
         }
+        this.banList.create({ username: player, admin, region, reason });
         this.db
           .prepare(
             "INSERT INTO banList (username, admin, region, reason) VALUES (?, ?, ?, ?)"

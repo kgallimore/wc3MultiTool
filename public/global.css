@@ -2,9 +2,13 @@ html, body {
 	position: relative;
 	width: 100%;
 	height: 100%;
+	background: transparent;
+	color: transparent;
 }
 
-body {
+main {
+	background-image: url("keepitmoving/background/background-pattern-block.png");
+	background-repeat: repeat;
 	color: #333;
 	margin: 0;
 	padding: 8px;
@@ -12,52 +16,84 @@ body {
 	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
 }
 
-a {
-	color: rgb(0,100,200);
-	text-decoration: none;
+.coture {
+	color: #FED32A;
+	font-family: url("fonts/couture-bld.otf")
 }
 
-a:hover {
-	text-decoration: underline;
+.connection-status.offline {
+	background-image: url("keepitmoving/buttons/Offline-Calm.png");
+}
+.connection-status.online {
+	background-image: url("keepitmoving/buttons/Online-Calm.png")
+}
+.connection-status {
+	width: 343px;
+	height: 106px;
+	background-repeat: no-repeat;
+	background-size: auto;
+}
+.top-bar{
+	background-image: url("keepitmoving/background/block-TOP.png")
+}
+.bottom-bar{
+	background-image: url("keepitmoving/background/block-BOTTOM.png")
+}
+.left-bar{
+	background-image: url("keepitmoving/background/block-LEFT.png")
+}
+.right-bar{
+	background-image: url("keepitmoving/background/block-RIGHT.png")
+}
+.top-left-corner{
+	background-image: url("keepitmoving/background/border-LeftTop.png")
+}
+.top-right-corner{
+	background-image: url("keepitmoving/background/border-RightTop.png")
+}
+.bottom-right-corner{
+	background-image: url("keepitmoving/background/border-RightBottom.png")
+}
+.bottom-left-corner{
+	background-image: url("keepitmoving/background/border-LeftBottom.png")
+}
+.corner{
+	background-repeat: no-repeat;
+	z-index: 9999;
+	height: 297px;
+	width:400px;
+}
+.image-border {
+	pointer-events: none;
+	position: fixed;
+	z-index: 9998;
+}
+.launch-button{
+	background-repeat: no-repeat;
+	background-image: url("keepitmoving/buttons/Launch-Calm.png");
+	width:260px;
+	height:85px;
+
+}
+.launch-button:active{
+	color:beige;
+	background-image: url("keepitmoving/buttons/Launch-Pushed.png")
 }
 
-a:visited {
-	color: rgb(0,80,160);
-}
-
-label {
-	display: block;
-}
-
-input, button, select, textarea {
-	font-family: inherit;
-	font-size: inherit;
-	-webkit-padding: 0.4em 0;
-	padding: 0.4em;
-	margin: 0 0 0.5em 0;
-	box-sizing: border-box;
-	border: 1px solid #ccc;
-	border-radius: 2px;
-}
-
-input:disabled {
-	color: #ccc;
-}
-
-button {
-	color: #333;
-	background-color: #f4f4f4;
-	outline: none;
-}
-
-button:disabled {
-	color: #999;
-}
-
-button:not(:disabled):active {
-	background-color: #ddd;
-}
-
-button:focus {
-	border-color: #666;
-}
+::-webkit-scrollbar {
+	width: 52px;
+	max-height: 671px;
+  }
+  
+  /* Track */
+  ::-webkit-scrollbar-track {
+	background: no-repeat url("keepitmoving/scrollbar/Scroll_base.png");
+	background-size: 52px cover;
+  }
+  
+  /* Handle */
+  ::-webkit-scrollbar-thumb {
+	background: no-repeat url("keepitmoving/scrollbar/Scroller.png");
+	background-position: center;
+  }
+  

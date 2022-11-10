@@ -239,10 +239,12 @@ if (!gotLock) {
 
   const createWindow = () => {
     win = new BrowserWindow({
-      width: 600,
+      transparent: true,
+      width: 800,
       height: 800,
       title: "WC3 MultiTool v" + app.getVersion(),
       show: false,
+      frame: false,
       icon: join(__dirname, "images/wc3_auto_balancer_v2.png"),
       webPreferences: {
         preload: join(__dirname, "preload.js"),
