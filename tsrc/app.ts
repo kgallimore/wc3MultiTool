@@ -240,10 +240,11 @@ if (!gotLock) {
   const createWindow = () => {
     win = new BrowserWindow({
       transparent: true,
-      width: 800,
-      height: 800,
+      width: 1100,
+      height: 900,
       title: "WC3 MultiTool v" + app.getVersion(),
       show: false,
+      resizable: false,
       frame: false,
       icon: join(__dirname, "images/wc3_auto_balancer_v2.png"),
       webPreferences: {

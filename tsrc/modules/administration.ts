@@ -812,11 +812,11 @@ class Administration extends ModuleBase {
           return { reason: "Can not ban an admin without removing permissions first." };
         }
         this.banList.create({ username: player, admin, region, reason });
-        this.db
-          .prepare(
-            "INSERT INTO banList (username, admin, region, reason) VALUES (?, ?, ?, ?)"
-          )
-          .run(player, admin, region, reason);
+        // this.db
+        //   .prepare(
+        //     "INSERT INTO banList (username, admin, region, reason) VALUES (?, ?, ?, ?)"
+        //   )
+        //   .run(player, admin, region, reason);
         this.info("Banned " + player + " by " + admin + (reason ? " for " + reason : ""));
         this.sendWindow({
           legacy: {
@@ -851,11 +851,11 @@ class Administration extends ModuleBase {
   ): true | { reason: string } {
     if (this.checkRole(admin, "moderator") || bypassCheck) {
       if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
-        this.db
-          .prepare(
-            "INSERT INTO whiteList (username, admin, region, reason) VALUES (?, ?, ?, ?)"
-          )
-          .run(player, admin, region, reason);
+        // this.db
+        //   .prepare(
+        //     "INSERT INTO whiteList (username, admin, region, reason) VALUES (?, ?, ?, ?)"
+        //   )
+        //   .run(player, admin, region, reason);
         this.info(
           "Whitelisted " + player + " by " + admin + (reason ? " for " + reason : "")
         );
@@ -887,11 +887,11 @@ class Administration extends ModuleBase {
   }
 
   unWhitePlayer(player: string, admin: string) {
-    this.db
-      .prepare(
-        "UPDATE whiteList SET removal_date = DateTime('now') WHERE username = ? AND removal_date IS NULL"
-      )
-      .run(player);
+    // this.db
+    //   .prepare(
+    //     "UPDATE whiteList SET removal_date = DateTime('now') WHERE username = ? AND removal_date IS NULL"
+    //   )
+    //   .run(player);
     this.info("Un-whitelisted " + player + " by " + admin);
     this.sendWindow({
       legacy: {
@@ -903,11 +903,11 @@ class Administration extends ModuleBase {
 
   unBanPlayer(player: string, admin: string): boolean {
     try {
-      this.db
-        .prepare(
-          "UPDATE banList SET removal_date = DateTime('now') WHERE username = ? AND removal_date IS NULL"
-        )
-        .run(player);
+      // this.db
+      //   .prepare(
+      //     "UPDATE banList SET removal_date = DateTime('now') WHERE username = ? AND removal_date IS NULL"
+      //   )
+      //   .run(player);
       this.info("Unbanned " + player + " by " + admin);
       this.sendWindow({
         legacy: {
@@ -933,9 +933,9 @@ class Administration extends ModuleBase {
       if (["baswapper", "swapper", "moderator", "admin"].includes(role)) {
         if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
           if (this.checkRole(player, "moderator")) {
-            this.db
-              .prepare("UPDATE adminList SET role = ?, admin = ?WHERE username = ?")
-              .run(role, admin, player);
+            // this.db
+            //   .prepare("UPDATE adminList SET role = ?, admin = ?WHERE username = ?")
+            //   .run(role, admin, player);
             this.info("Updated " + player + " to " + role + " by " + admin);
             this.sendWindow({
               legacy: {
@@ -947,11 +947,11 @@ class Administration extends ModuleBase {
             });
             return true;
           } else {
-            this.db
-              .prepare(
-                "INSERT INTO adminList (username, admin, region, role) VALUES (?, ?, ?, ?)"
-              )
-              .run(player, admin, region, role);
+            // this.db
+            //   .prepare(
+            //     "INSERT INTO adminList (username, admin, region, role) VALUES (?, ?, ?, ?)"
+            //   )
+            //   .run(player, admin, region, role);
             this.info("Added " + player + " to " + role + " by " + admin);
             this.sendWindow({
               legacy: {
@@ -985,7 +985,7 @@ class Administration extends ModuleBase {
     if (this.checkRole(admin, "admin") || bypassCheck) {
       if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
         if (this.checkRole(player, "baswapper")) {
-          this.db.prepare("DELETE FROM adminList WHERE username = ?").run(player);
+          // this.db.prepare("DELETE FROM adminList WHERE username = ?").run(player);
           this.info("Removed permissions from " + player);
           this.sendWindow({
             legacy: {

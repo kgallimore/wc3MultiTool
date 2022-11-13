@@ -1,0 +1,179 @@
+/* Write your global styles here, in PostCSS syntax */
+
+@tailwind base;
+
+@font-face {
+  font-family: "Coture";
+  src: url("fonts/couture-bld.otf");
+}
+@font-face {
+  font-family: "FRIZQT";
+  src: url("fonts/FRIZQT.otf");
+}
+html,
+body {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  color: transparent;
+}
+
+main {
+  background-image: url("../keepitmoving/background/background-pattern-block.png");
+  background-repeat: repeat;
+  color: #333;
+  margin: 0;
+  padding: 8px;
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu,
+    Cantarell, "Helvetica Neue", sans-serif;
+}
+@layer components {
+  .coture {
+    color: #fed32a;
+    font-family: "Coture";
+  }
+
+  .friz {
+    font-family: "FRIZQT";
+    color: #f4f4f4;
+  }
+
+  .connection-status.offline {
+    background-image: url("../keepitmoving/buttons/Offline-Calm.png");
+  }
+  .connection-status.online {
+    background-image: url("../keepitmoving/buttons/Online-Calm.png");
+  }
+  .connection-status {
+    width: 343px;
+    height: 106px;
+    background-repeat: no-repeat;
+    background-size: auto;
+  }
+  .top-bar {
+    background-image: url("../keepitmoving/background/block-TOP.png");
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-app-region: drag;
+  }
+  .bottom-bar {
+    background-image: url("../keepitmoving/background/block-BOTTOM.png");
+  }
+  .left-bar {
+    background-image: url("../keepitmoving/background/block-LEFT.png");
+  }
+  .right-bar {
+    background-image: url("../keepitmoving/background/block-RIGHT.png");
+  }
+  .top-left-corner {
+    background-image: url("../keepitmoving/background/border-LeftTop.png");
+  }
+  .top-right-corner {
+    background-image: url("../keepitmoving/background/border-RightTop.png");
+  }
+  .bottom-right-corner {
+    background-image: url("../keepitmoving/background/border-RightBottom.png");
+  }
+  .bottom-left-corner {
+    background-image: url("../keepitmoving/background/border-LeftBottom.png");
+  }
+
+  .top-wood {
+    background-image: url("../keepitmoving/background/background_wooden_block.png");
+    background-repeat: no-repeat;
+  }
+
+  .corner {
+    background-repeat: no-repeat;
+    z-index: 9999;
+    height: 297px;
+    width: 400px;
+  }
+  .image-border {
+    pointer-events: none;
+    position: fixed;
+    z-index: 9998;
+  }
+  .launch-button {
+    background-repeat: no-repeat;
+    background-image: url("../keepitmoving/buttons/Launch-Calm.png");
+    width: 260px;
+    height: 85px;
+  }
+  .launch-button:active {
+    color: beige;
+    background-image: url("../keepitmoving/buttons/Launch-Pushed.png");
+  }
+  .generic-btn {
+    background-image: url("../keepitmoving/buttons/Generic-Inactive.png");
+    font-family: "Coture";
+    color: #fed32a;
+    height: 64px;
+    width: 197px;
+    padding-top: 10px;
+    padding-bottom: 18px;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .generic-btn:active {
+    background-image: url("../keepitmoving/buttons/Generic-Pressed.png");
+    color: #ad911d;
+    padding-top: 15px;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 52px;
+}
+
+/* Track */
+::-webkit-scrollbar-track {
+  max-height: 671px;
+  margin-top: 25px;
+  margin-bottom: 25px;
+  background: no-repeat url("../keepitmoving/scrollbar/Scroll_base.png") center;
+  background-size: 52px cover;
+}
+
+/* Handle */
+::-webkit-scrollbar-thumb {
+  height: 225px;
+  background: no-repeat url("../keepitmoving/scrollbar/Scroller.png");
+  background-size: 28px cover;
+  background-position: center;
+}
+
+.close-button {
+  background-image: url("../keepitmoving/page1/03.SYSTEM_close_idle.png");
+}
+.close-button:active {
+  background-image: url("../keepitmoving/page1/03.SYSTEM_close_pressed.png");
+}
+.min-button {
+  background-image: url("../keepitmoving/page1/03.SYSTEM_collapse_idle.png");
+}
+.min-button:active {
+  background-image: url("../keepitmoving/page1/03.SYSTEM_collapse_pressed.png");
+}
+.max-button {
+  background-image: url("../keepitmoving/page1/03.SYSTEM_expand_idle.png");
+}
+.max-button:active {
+  background-image: url("../keepitmoving/page1/03.SYSTEM_expand_pressed.png");
+}
+
+.menu-button,
+.menu-button:hover,
+.menu-button:active {
+  background-color: transparent;
+  border: none;
+  width: 53px;
+  height: 53px;
+  z-index: 10000;
+}
+
+@tailwind components;
+
+@tailwind utilities;

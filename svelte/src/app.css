@@ -1,3 +1,103 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+html,
+body {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  color: transparent;
+}
+
+#app {
+  position: fixed;
+  height: calc(100% - 78px);
+  background-image: url("keepitmoving/background/background-pattern-block.png?url");
+  background-repeat: repeat;
+  color: #333;
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu,
+    Cantarell, "Helvetica Neue", sans-serif;
+}
+
+.coture {
+  color: #fed32a;
+  font-family: url("fonts/couture-bld.otf");
+}
+
+.connection-status.offline {
+  background-image: url("keepitmoving/buttons/Offline-Calm.png?url");
+}
+.connection-status.online {
+  background-image: url("keepitmoving/buttons/Online-Calm.png?url");
+}
+.connection-status {
+  width: 343px;
+  height: 106px;
+  background-repeat: no-repeat;
+  background-size: auto;
+}
+.top-bar {
+  background-image: url("keepitmoving/background/block-TOP.png?url");
+}
+.bottom-bar {
+  background-image: url("keepitmoving/background/block-BOTTOM.png?url");
+}
+.left-bar {
+  background-image: url("keepitmoving/background/block-LEFT.png?url");
+}
+.right-bar {
+  background-image: url("keepitmoving/background/block-RIGHT.png?url");
+}
+.top-left-corner {
+  background-image: url("keepitmoving/background/border-LeftTop.png?url");
+}
+.top-right-corner {
+  background-image: url("keepitmoving/background/border-RightTop.png?url");
+}
+.bottom-right-corner {
+  background-image: url("keepitmoving/background/border-RightBottom.png?url");
+}
+.bottom-left-corner {
+  background-image: url("keepitmoving/background/border-LeftBottom.png?url");
+}
+.corner {
+  background-repeat: no-repeat;
+  z-index: 9999;
+  height: 297px;
+  width: 400px;
+}
+.image-border {
+  pointer-events: none;
+  position: fixed;
+  z-index: 9998;
+}
+.launch-button {
+  background-repeat: no-repeat;
+  background-image: url("keepitmoving/buttons/Launch-Calm.png?url");
+  width: 260px;
+  height: 85px;
+}
+.launch-button:active {
+  color: beige;
+  background-image: url("keepitmoving/buttons/Launch-Pushed.png?url");
+}
+
+::-webkit-scrollbar {
+  width: 52px;
+  max-height: 671px;
+}
+
+/* Track */
+::-webkit-scrollbar-track {
+  background: no-repeat url("keepitmoving/scrollbar/Scroll_base.png?url");
+  background-size: 52px cover;
+}
+
+/* Handle */
+::-webkit-scrollbar-thumb {
+  background: no-repeat url("keepitmoving/scrollbar/Scroller.png?url");
+  background-position: center;
+}
