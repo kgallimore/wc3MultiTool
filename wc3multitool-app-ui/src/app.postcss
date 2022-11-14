@@ -107,7 +107,6 @@ main {
     background-image: url("../keepitmoving/buttons/Launch-Pushed.png");
   }
   .generic-btn {
-    background-image: url("../keepitmoving/buttons/Generic-Inactive.png");
     font-family: "Coture";
     color: #fed32a;
     height: 64px;
@@ -117,8 +116,14 @@ main {
     padding-left: 12px;
     padding-right: 12px;
   }
-  .generic-btn:active {
+  .generic-btn-blue {
+    background-image: url("../keepitmoving/buttons/Generic-Inactive.png");
+  }
+  .generic-btn-blue:active,
+  .generic-btn-blue-active {
     background-image: url("../keepitmoving/buttons/Generic-Pressed.png");
+  }
+  .generic-btn:active {
     color: #ad911d;
     padding-top: 15px;
   }
@@ -134,14 +139,15 @@ main {
   margin-top: 25px;
   margin-bottom: 25px;
   background: no-repeat url("../keepitmoving/scrollbar/Scroll_base.png") center;
-  background-size: 52px cover;
+  background-size: cover;
 }
 
 /* Handle */
 ::-webkit-scrollbar-thumb {
+  max-height: 671px;
   height: 225px;
   background: no-repeat url("../keepitmoving/scrollbar/Scroller.png");
-  background-size: 28px cover;
+  background-size: cover;
   background-position: center;
 }
 
