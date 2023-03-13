@@ -176,7 +176,7 @@
     "sequelize": "^6.23.0",
     "socket.io-client": "^2.5.0",
     "sound-play": "^1.1.0",
-    "sqlite3": "^5.0.11",
+    "sqlite3": "^5.1.5",
     "translate": "^1.4.1",
     "translate-google": "^1.5.0",
     "w3gjs": "^2.5.0",
