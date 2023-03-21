@@ -173,7 +173,7 @@
     "node-window-manager": "^2.2.4",
     "obs-websocket-js": "^4.0.3",
     "public-ip": "^4.0.4",
-    "sequelize": "^6.23.0",
+    "sequelize": "^6.29.0",
     "socket.io-client": "^2.5.0",
     "sound-play": "^1.1.0",
     "sqlite3": "^5.1.5",
