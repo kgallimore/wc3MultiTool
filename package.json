@@ -135,7 +135,7 @@
     "@types/validator": "^13.7.6",
     "@types/ws": "^8.5.3",
     "concurrently": "^6.5.1",
-    "electron": "^19.0.15",
+    "electron": "^19.1.8",
     "electron-builder": "^23.3.3",
     "electron-reload": "^2.0.0-alpha.1",
     "rollup": "^2.79.0",
