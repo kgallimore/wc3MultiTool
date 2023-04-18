@@ -1,13 +1,17 @@
 import { ModuleBase } from "../moduleBase";
-import { Sequelize, DataTypes } from "sequelize";
+import { fn } from "sequelize";
+
 import type { Regions, SlotNumbers } from "wc3mt-lobby-container";
 import type { LobbyUpdatesExtended } from "./lobbyControl";
-import { app } from "electron";
 
 import Store from "electron-store";
 import type { GameSocketEvents, AvailableHandicaps } from "./../globals/gameSocket";
 import { isInt, ensureInt } from "./../utility";
 import type { AutoHostSettings } from "./../globals/settings";
+
+import { BanList } from "../Models/BanList";
+import { WhiteList } from "../Models/WhiteList";
+import { AdminList } from "../Models/AdminList";
 
 const store = new Store();
 
@@ -45,37 +49,6 @@ export type AdminCommands =
   | "autostart"
   | "balance";
 
-const whiteBanList = {
-  id: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    autoIncrement: true,
-    primaryKey: true,
-  },
-  username: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-  admin: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-  region: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-  reason: {
-    type: DataTypes.STRING,
-  },
-  removal_date: {
-    type: DataTypes.DATE,
-  },
-  add_date: {
-    type: DataTypes.DATE,
-    defaultValue: DataTypes.NOW,
-    allowNull: false,
-  },
-};
 export interface FetchListOptions {
   type: "whiteList" | "banList";
   page?: number;
@@ -85,49 +58,51 @@ export interface FetchListOptions {
 }
 
 class Administration extends ModuleBase {
-  db = new Sequelize({
-    dialect: "sqlite",
-    storage: app.getPath("userData") + "/wc3mt.db",
-  });
-  banList = this.db.define("banList", whiteBanList, {
-    freezeTableName: true,
-  });
-  whiteList = this.db.define("whiteList", whiteBanList, {
-    freezeTableName: true,
-  });
-  adminList = this.db.define(
-    "adminList",
-    {
-      id: {
-        type: DataTypes.INTEGER,
-        allowNull: false,
-        autoIncrement: true,
-        primaryKey: true,
-      },
-      username: {
-        type: DataTypes.STRING,
-        allowNull: false,
-      },
-      admin: {
-        type: DataTypes.STRING,
-        allowNull: false,
-      },
-      region: {
-        type: DataTypes.STRING,
-        allowNull: false,
-      },
-      role: {
-        type: DataTypes.STRING,
-        allowNull: false,
-      },
-    },
-    { freezeTableName: true }
-  );
+  // db = new Sequelize({
+  //   dialect: "sqlite",
+  //   storage: app.getPath("userData") + "/wc3mt.db",
+  //   models: [__dirname + "../models"],
+  // });
+
+  // banList = this.db.define("banList", whiteBanList, {
+  //   freezeTableName: true,
+  // });
+  // whiteList = this.db.define("whiteList", whiteBanList, {
+  //   freezeTableName: true,
+  // });
+  // adminList = this.db.define(
+  //   "adminList",
+  //   {
+  //     id: {
+  //       type: DataTypes.INTEGER,
+  //       allowNull: false,
+  //       autoIncrement: true,
+  //       primaryKey: true,
+  //     },
+  //     username: {
+  //       type: DataTypes.STRING,
+  //       allowNull: false,
+  //     },
+  //     admin: {
+  //       type: DataTypes.STRING,
+  //       allowNull: false,
+  //     },
+  //     region: {
+  //       type: DataTypes.STRING,
+  //       allowNull: false,
+  //     },
+  //     role: {
+  //       type: DataTypes.STRING,
+  //       allowNull: false,
+  //     },
+  //   },
+  //   { freezeTableName: true }
+  // );
 
   constructor() {
     super("Administration", { listeners: ["gameSocketEvent", "lobbyUpdate"] });
 
-    this.db.sync({ force: true });
+    // this.db.sync({ force: true });
     // this.db.exec(
     //   "CREATE TABLE IF NOT EXISTS lobbyEvents(id INTEGER PRIMARY KEY AUTOINCREMENT, event TEXT NOT NULL, time DATETIME default current_timestamp NOT NULL, data TEXT, username TEXT)"
     // );
@@ -160,7 +135,7 @@ class Administration extends ModuleBase {
     // }
   }
 
-  protected onGameSocketEvent(events: GameSocketEvents): void {
+  protected async onGameSocketEvent(events: GameSocketEvents): Promise<void> {
     if (events.processedChat) {
       let sender = events.processedChat.sender;
       if (events.processedChat.content.match(/^\?/)) {
@@ -180,7 +155,7 @@ class Administration extends ModuleBase {
                 "?voteStart: Starts or accepts a vote to start"
               );
             }
-            if (this.checkRole(sender, "moderator")) {
+            if (await this.checkRole(sender, "moderator")) {
               this.gameSocket.sendChatMessage("?a: Aborts game start");
               this.gameSocket.sendChatMessage(
                 "?ban <name|slotNumber> <?reason>: Bans a player forever"
@@ -215,7 +190,7 @@ class Administration extends ModuleBase {
                 "?st: Shuffles players randomly between teams"
               );
             }
-            if (this.checkRole(sender, "admin")) {
+            if (await this.checkRole(sender, "admin")) {
               this.gameSocket.sendChatMessage(
                 "?perm <name> <?admin|mod|swapper>: Promotes a player to a role (mod by default)"
               );
@@ -230,9 +205,9 @@ class Administration extends ModuleBase {
           }
         } else {
           var content = command.split(" ");
-          var role = this.getRole(sender);
+          const role = await this.getRole(sender);
           if (role) {
-            let runCom = this.runCommand(
+            let runCom = await this.runCommand(
               content[0] as AdminCommands,
               role,
               sender,
@@ -249,12 +224,12 @@ class Administration extends ModuleBase {
     }
   }
 
-  public runCommand(
+  public async runCommand(
     command: AdminCommands,
     role: AdminRoles | null,
     user: string,
     args?: string[]
-  ): string | false {
+  ): Promise<string | false> {
     this.info("Running command: " + command, role, user, args);
     var retString = "";
     switch (command) {
@@ -628,7 +603,12 @@ class Administration extends ModuleBase {
                 let targets = this.lobby.microLobby?.searchPlayer(target);
                 if (targets.length === 1) {
                   if (
-                    this.addAdmin(targets[0], user, this.lobby.microLobby?.region, perm)
+                    await this.addAdmin(
+                      targets[0],
+                      user,
+                      this.lobby.microLobby?.region,
+                      perm
+                    )
                   ) {
                     retString = targets[0] + " has been promoted to " + perm + ".";
                   } else {
@@ -656,7 +636,7 @@ class Administration extends ModuleBase {
           if (args && args.length > 0) {
             var target = args[0];
             if (target.match(/^\D\S{2,11}#\d{4,8}$/)) {
-              if (this.removeAdmin(target, user)) {
+              if (await this.removeAdmin(target, user)) {
                 retString = "Removed perm from out of lobby player: " + target;
               } else {
                 retString = "Could not remove perm from out of lobby player: " + target;
@@ -664,7 +644,7 @@ class Administration extends ModuleBase {
             } else {
               let targets = this.lobby.microLobby?.searchPlayer(target);
               if (targets.length === 1) {
-                if (this.removeAdmin(targets[0], user)) {
+                if (await this.removeAdmin(targets[0], user)) {
                   retString = targets[0] + " has been demoted.";
                 } else {
                   retString = targets[0] + " has no permissions.";
@@ -754,9 +734,9 @@ class Administration extends ModuleBase {
     }
   }
 
-  clearPlayer(data: { name: string; slot: number; [key: string]: any }) {
+  async clearPlayer(data: { name: string; slot: number; [key: string]: any }) {
     this.verbose("Checking if player is clear: " + data.name);
-    let isClear = this.checkPlayer(data.name);
+    let isClear = await this.checkPlayer(data.name);
     if (!isClear.type) {
       this.lobby.clearPlayer(data.name, true);
     } else {
@@ -783,8 +763,10 @@ class Administration extends ModuleBase {
     }
   }
 
-  checkPlayer(name: string): { type: "black" | "white" | false; reason?: string } {
-    let row = this.isBanned(name);
+  async checkPlayer(
+    name: string
+  ): Promise<{ type: "black" | "white" | false; reason?: string | undefined }> {
+    let row = await this.isBanned(name);
     if (row) {
       return { type: "black", reason: row.reason };
     }
@@ -796,27 +778,22 @@ class Administration extends ModuleBase {
     return { type: false };
   }
 
-  banPlayer(
+  async banPlayer(
     player: string,
     admin: string,
     region: Regions | "client",
     reason = "",
     bypassCheck: boolean = false
-  ): true | { reason: string } {
-    if (this.checkRole(admin, "moderator") || bypassCheck) {
+  ): Promise<true | { reason: string }> {
+    if ((await this.checkRole(admin, "moderator")) || bypassCheck) {
       if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
-        if (this.checkRole(player, "admin")) {
+        if (await this.checkRole(player, "admin")) {
           this.warn(
             "Can not ban an admin (" + player + ") without removing permissions first."
           );
           return { reason: "Can not ban an admin without removing permissions first." };
         }
-        this.banList.create({ username: player, admin, region, reason });
-        // this.db
-        //   .prepare(
-        //     "INSERT INTO banList (username, admin, region, reason) VALUES (?, ?, ?, ?)"
-        //   )
-        //   .run(player, admin, region, reason);
+        BanList.create({ username: player, admin, region, reason });
         this.info("Banned " + player + " by " + admin + (reason ? " for " + reason : ""));
         this.sendWindow({
           legacy: {
@@ -842,20 +819,16 @@ class Administration extends ModuleBase {
     return { reason: "Missing required permissions." };
   }
 
-  whitePlayer(
+  async whitePlayer(
     player: string,
     admin: string,
     region: Regions | "client",
     reason = "",
     bypassCheck: boolean = false
-  ): true | { reason: string } {
-    if (this.checkRole(admin, "moderator") || bypassCheck) {
+  ): Promise<true | { reason: string }> {
+    if ((await this.checkRole(admin, "moderator")) || bypassCheck) {
       if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
-        // this.db
-        //   .prepare(
-        //     "INSERT INTO whiteList (username, admin, region, reason) VALUES (?, ?, ?, ?)"
-        //   )
-        //   .run(player, admin, region, reason);
+        WhiteList.create({ username: player, admin, region, reason });
         this.info(
           "Whitelisted " + player + " by " + admin + (reason ? " for " + reason : "")
         );
@@ -887,81 +860,91 @@ class Administration extends ModuleBase {
   }
 
   unWhitePlayer(player: string, admin: string) {
-    // this.db
-    //   .prepare(
-    //     "UPDATE whiteList SET removal_date = DateTime('now') WHERE username = ? AND removal_date IS NULL"
-    //   )
-    //   .run(player);
-    this.info("Un-whitelisted " + player + " by " + admin);
-    this.sendWindow({
-      legacy: {
-        messageType: "action",
-        data: { value: "Un-whitelisted " + player + " by " + admin },
-      },
-    });
-  }
-
-  unBanPlayer(player: string, admin: string): boolean {
-    try {
-      // this.db
-      //   .prepare(
-      //     "UPDATE banList SET removal_date = DateTime('now') WHERE username = ? AND removal_date IS NULL"
-      //   )
-      //   .run(player);
-      this.info("Unbanned " + player + " by " + admin);
-      this.sendWindow({
-        legacy: {
-          messageType: "action",
-          data: { value: "Unbanned " + player + " by " + admin },
-        },
+    WhiteList.update(
+      { removal_date: fn("NOW") },
+      { where: { username: player, removal_date: null } }
+    )
+      .then(() => {
+        this.info("Un-whitelisted " + player + " by " + admin);
+        this.sendWindow({
+          legacy: {
+            messageType: "action",
+            data: { value: "Un-whitelisted " + player + " by " + admin },
+          },
+        });
+      })
+      .catch((err) => {
+        this.error("Failed to un-whitelist " + player + " by " + admin, err);
       });
-      return true;
-    } catch (e) {
-      this.error("Failed to unban " + player + " by " + admin, e);
-      return false;
-    }
   }
 
-  addAdmin(
+  unBanPlayer(player: string, admin: string) {
+    BanList.update(
+      { removal_date: fn("NOW") },
+      { where: { username: player, removal_date: null } }
+    )
+      .then(() => {
+        this.info("Unbanned " + player + " by " + admin);
+        this.sendWindow({
+          legacy: {
+            messageType: "action",
+            data: { value: "Unbanned " + player + " by " + admin },
+          },
+        });
+      })
+      .catch((err) => {
+        this.error("Failed to unban " + player + " by " + admin, err);
+      });
+  }
+
+  async addAdmin(
     player: string,
     admin: string,
     region: Regions | "client",
     role: AdminRoles = "moderator",
     bypassCheck: boolean = false
-  ): true | { reason: string } {
-    if (this.checkRole(admin, "admin") || bypassCheck) {
+  ): Promise<{ reason: string } | undefined> {
+    if ((await this.checkRole(admin, "admin")) || bypassCheck) {
       if (["baswapper", "swapper", "moderator", "admin"].includes(role)) {
         if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
-          if (this.checkRole(player, "moderator")) {
-            // this.db
-            //   .prepare("UPDATE adminList SET role = ?, admin = ?WHERE username = ?")
-            //   .run(role, admin, player);
-            this.info("Updated " + player + " to " + role + " by " + admin);
-            this.sendWindow({
-              legacy: {
-                messageType: "action",
-                data: {
-                  value: "Updated " + player + " to " + role + " by " + admin,
-                },
-              },
-            });
-            return true;
+          if (await this.checkRole(player, "moderator")) {
+            AdminList.update({ role, admin, region }, { where: { username: player } })
+              .then(() => {
+                this.info("Updated " + player + " to " + role + " by " + admin);
+                this.sendWindow({
+                  legacy: {
+                    messageType: "action",
+                    data: {
+                      value: "Updated " + player + " to " + role + " by " + admin,
+                    },
+                  },
+                });
+              })
+              .catch((err) => {
+                this.error(
+                  "Failed to update " + player + " to " + role + " by " + admin,
+                  err
+                );
+              });
           } else {
-            // this.db
-            //   .prepare(
-            //     "INSERT INTO adminList (username, admin, region, role) VALUES (?, ?, ?, ?)"
-            //   )
-            //   .run(player, admin, region, role);
-            this.info("Added " + player + " to " + role + " by " + admin);
-            this.sendWindow({
-              legacy: {
-                messageType: "action",
-                data: {
-                  value: "Added " + player + " to " + role + " by " + admin,
-                },
-              },
-            });
-            return true;
+            AdminList.create({ username: player, admin, region, role })
+              .then(() => {
+                this.info("Added " + player + " to " + role + " by " + admin);
+                this.sendWindow({
+                  legacy: {
+                    messageType: "action",
+                    data: {
+                      value: "Added " + player + " to " + role + " by " + admin,
+                    },
+                  },
+                });
+              })
+              .catch((err) => {
+                this.error(
+                  "Failed to add " + player + " to " + role + " by " + admin,
+                  err
+                );
+              });
           }
         } else {
           this.info("Failed to add admin, invalid battleTag: " + player);
@@ -977,22 +960,27 @@ class Administration extends ModuleBase {
     }
   }
 
-  removeAdmin(
+  async removeAdmin(
     player: string,
     admin: string,
     bypassCheck: boolean = false
-  ): true | { reason: string } {
-    if (this.checkRole(admin, "admin") || bypassCheck) {
+  ): Promise<{ reason: string } | undefined> {
+    if ((await this.checkRole(admin, "admin")) || bypassCheck) {
       if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
-        if (this.checkRole(player, "baswapper")) {
-          // this.db.prepare("DELETE FROM adminList WHERE username = ?").run(player);
-          this.info("Removed permissions from " + player);
-          this.sendWindow({
-            legacy: {
-              messageType: "action",
-              data: { value: "Removed permissions from " + player },
-            },
-          });
+        if (await this.checkRole(player, "baswapper")) {
+          AdminList.destroy({ where: { username: player } })
+            .then(() => {
+              this.info("Removed permissions from " + player);
+              this.sendWindow({
+                legacy: {
+                  messageType: "action",
+                  data: { value: "Removed permissions from " + player },
+                },
+              });
+            })
+            .catch((err) => {
+              this.error("Failed to remove permissions from " + player, err);
+            });
         } else {
           this.info(player + " is not a moderator");
           return { reason: "Target has no roles." };
@@ -1001,26 +989,25 @@ class Administration extends ModuleBase {
         this.error("Failed to remove admin, invalid battleTag: " + player);
         return { reason: "Invalid battleTag" };
       }
-      return true;
     }
     return { reason: "Missing required permissions" };
   }
 
-  getRole(player: string): AdminRoles | null {
+  async getRole(player: string): Promise<AdminRoles | null> {
     if (
       player === this.gameState.values.selfBattleTag ||
       player === "client" ||
       (player === "Trenchguns#1800" && this.settings.values.client.debugAssistance)
     )
       return "admin";
-    return this.db.prepare("SELECT role FROM adminList WHERE username = ?").get(player)
-      ?.role;
+    const row = await AdminList.findOne({ where: { username: player } });
+    return row?.role ?? null;
   }
 
-  checkRole(player: string, minPerms: AdminRoles) {
+  async checkRole(player: string, minPerms: AdminRoles) {
     if (!player) return false;
 
-    let targetRole = this.getRole(player);
+    let targetRole = await this.getRole(player);
     if (targetRole) {
       return this.roleEqualOrHigher(minPerms, targetRole);
     }
@@ -1041,21 +1028,21 @@ class Administration extends ModuleBase {
     return false;
   }
 
-  isWhiteListed(player: string): boolean {
-    const row = this.db
-      .prepare("SELECT * FROM whiteList WHERE username = ? AND removal_date IS NULL")
-      .get(player);
+  async isWhiteListed(player: string): Promise<boolean> {
+    const row = await WhiteList.findOne({
+      where: { username: player, removal_date: null },
+    });
     return !!row;
   }
 
-  isBanned(player: string): { reason: string } | null {
-    const row = this.db
-      .prepare("SELECT * FROM banList WHERE username = ? AND removal_date IS NULL")
-      .get(player);
+  async isBanned(player: string): Promise<{ reason: string } | null> {
+    const row = await BanList.findOne({
+      where: { username: player, removal_date: null },
+    });
     return row;
   }
 
-  fetchList(options: FetchListOptions) {
+  async fetchList(options: FetchListOptions) {
     let prep = this.db.prepare(
       `SELECT * FROM ${options.type} ${
         options.activeOnly ? "WHERE removal_date IS NULL" : ""
