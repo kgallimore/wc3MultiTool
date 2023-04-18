@@ -1,4 +1,4 @@
-<script type="ts">
+<script lang="ts">
   export let number: string = "1";
   export let checked: boolean = false;
 </script>

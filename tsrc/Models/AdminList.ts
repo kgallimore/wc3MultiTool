@@ -3,7 +3,7 @@ import { AdminRoles } from "../modules/administration";
 import type { Regions } from "wc3mt-lobby-container";
 
 @Table({ tableName: "adminList", freezeTableName: true })
-export class AdminList extends Model<AdminList> {
+export class AdminList extends Model {
   @Column({ primaryKey: true })
   id: number;
 

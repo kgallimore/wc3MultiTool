@@ -1,9 +1,9 @@
-<script type="ts">
+<script lang="ts">
   import type { BanWhiteList, WindowSend } from "../../../tsrc/utility";
   import type { FetchWhiteBanListSortOptions } from "../../../tsrc/modules/administration";
   export let type: "banList" | "whiteList";
   export let list: {
-    data: Array<BanWhiteList>;
+    data: BanWhiteList;
     page: number;
   };
   export let toMain: (args: WindowSend) => void;

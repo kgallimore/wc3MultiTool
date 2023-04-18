@@ -1,8 +1,8 @@
-import { Table, Model, Column } from "sequelize-typescript";
+import { Table, Model, Column, DataType } from "sequelize-typescript";
 import type { Regions } from "wc3mt-lobby-container";
 
 @Table({ tableName: "whiteList", freezeTableName: true })
-export class WhiteList extends Model<WhiteList> {
+export class WhiteList extends Model {
   @Column({ primaryKey: true })
   id: number;
 
@@ -18,9 +18,9 @@ export class WhiteList extends Model<WhiteList> {
   @Column
   reason: string;
 
-  @Column({ allowNull: true })
+  @Column({ allowNull: true, type: DataType.DATE })
   removal_date: Date | null;
 
-  @Column
+  @Column({ type: DataType.DATE })
   add_date: Date;
 }

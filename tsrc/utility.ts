@@ -7,6 +7,8 @@ import type { ClientState } from "./globals/clientState";
 import type { SettingsUpdates } from "./globals/settings";
 
 import type { FetchListOptions } from "./modules/administration";
+import { BanList } from "./models/BanList";
+import { WhiteList } from "./models/WhiteList";
 
 export interface WindowReceive {
   globalUpdate?: {
@@ -36,13 +38,13 @@ export interface WindowReceive {
       fetched?: {
         type: "banList" | "whiteList";
         page: number;
-        list?: Array<BanWhiteList>;
+        list?: BanList[] | WhiteList[] | undefined;
       };
     };
   };
 }
 
-export interface BanWhiteList {
+export interface BanWhiteSingle {
   id: number;
   username: string;
   admin: string;
@@ -51,6 +53,8 @@ export interface BanWhiteList {
   add_date: string;
   removal_date: string;
 }
+
+export type BanWhiteList = BanList[] | WhiteList[] | undefined;
 
 export interface ClientCommands {
   action:
@@ -271,8 +275,8 @@ export function isValidUrl(target: string) {
 
 export function isInt(
   string: string,
-  max: number | boolean = false,
-  min: number | boolean = false
+  max: number | false = false,
+  min: number | false = false
 ): boolean {
   var isInt = /^-?\d+$/.test(string);
   if (isInt) {

@@ -1,4 +1,4 @@
-<script type="ts">
+<script lang="ts">
   import { onMount } from "svelte";
   export let key: string;
   export let checked: boolean = false;

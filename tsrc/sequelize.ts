@@ -1,4 +1,5 @@
 import { Sequelize } from "sequelize-typescript";
+import { app } from "electron";
 
 export const seq = new Sequelize({
   dialect: "sqlite",

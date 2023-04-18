@@ -9,9 +9,9 @@ import type { GameSocketEvents, AvailableHandicaps } from "./../globals/gameSock
 import { isInt, ensureInt } from "./../utility";
 import type { AutoHostSettings } from "./../globals/settings";
 
-import { BanList } from "../Models/BanList";
-import { WhiteList } from "../Models/WhiteList";
-import { AdminList } from "../Models/AdminList";
+import { BanList } from "../models/BanList";
+import { WhiteList } from "../models/WhiteList";
+import { AdminList } from "../models/AdminList";
 
 const store = new Store();
 
@@ -793,6 +793,7 @@ class Administration extends ModuleBase {
           );
           return { reason: "Can not ban an admin without removing permissions first." };
         }
+        const newBan = new BanList({ username: player, admin, region, reason });
         BanList.create({ username: player, admin, region, reason });
         this.info("Banned " + player + " by " + admin + (reason ? " for " + reason : ""));
         this.sendWindow({
@@ -859,42 +860,45 @@ class Administration extends ModuleBase {
     return { reason: "Missing required permissions" };
   }
 
-  unWhitePlayer(player: string, admin: string) {
-    WhiteList.update(
-      { removal_date: fn("NOW") },
-      { where: { username: player, removal_date: null } }
-    )
-      .then(() => {
-        this.info("Un-whitelisted " + player + " by " + admin);
-        this.sendWindow({
-          legacy: {
-            messageType: "action",
-            data: { value: "Un-whitelisted " + player + " by " + admin },
-          },
-        });
-      })
-      .catch((err) => {
-        this.error("Failed to un-whitelist " + player + " by " + admin, err);
+  async unWhitePlayer(player: string, admin: string): Promise<true | { reason: string }> {
+    try {
+      await WhiteList.update(
+        { removal_date: fn("NOW") },
+        { where: { username: player, removal_date: null } }
+      );
+      this.info("Un-whitelisted " + player + " by " + admin);
+      this.sendWindow({
+        legacy: {
+          messageType: "action",
+          data: { value: "Un-whitelisted " + player + " by " + admin },
+        },
       });
+      return true;
+    } catch (err) {
+      this.error("Failed to un-whitelist " + player + " by " + admin, err);
+      return { reason: "Failed to un-whitelist " + player + " by " + admin };
+    }
   }
 
-  unBanPlayer(player: string, admin: string) {
-    BanList.update(
-      { removal_date: fn("NOW") },
-      { where: { username: player, removal_date: null } }
-    )
-      .then(() => {
-        this.info("Unbanned " + player + " by " + admin);
-        this.sendWindow({
-          legacy: {
-            messageType: "action",
-            data: { value: "Unbanned " + player + " by " + admin },
-          },
-        });
-      })
-      .catch((err) => {
-        this.error("Failed to unban " + player + " by " + admin, err);
+  async unBanPlayer(player: string, admin: string): Promise<true | { reason: string }> {
+    try {
+      await BanList.update(
+        { removal_date: fn("NOW") },
+        { where: { username: player, removal_date: null } }
+      );
+
+      this.info("Unbanned " + player + " by " + admin);
+      this.sendWindow({
+        legacy: {
+          messageType: "action",
+          data: { value: "Unbanned " + player + " by " + admin },
+        },
       });
+      return true;
+    } catch (err) {
+      this.error("Failed to unban " + player + " by " + admin, err);
+      return { reason: "Failed to unban " + player + " by " + admin };
+    }
   }
 
   async addAdmin(
@@ -1042,18 +1046,23 @@ class Administration extends ModuleBase {
     return row;
   }
 
-  async fetchList(options: FetchListOptions) {
-    let prep = this.db.prepare(
-      `SELECT * FROM ${options.type} ${
-        options.activeOnly ? "WHERE removal_date IS NULL" : ""
-      } ORDER BY ${options.sort ?? "id"} ${options.sortOrder ?? "ASC"} ${
-        options.page !== undefined ? "LIMIT 10 OFFSET ?" : ""
-      }`
-    );
-    if (options.page !== undefined) {
-      return prep.all(options.page * 10);
-    } else {
-      return prep.all();
+  async fetchList(
+    options: FetchListOptions
+  ): Promise<WhiteList[] | BanList[] | undefined> {
+    if (options.type === "whiteList") {
+      return await WhiteList.findAll({
+        where: { removal_date: null },
+        order: [["id", "ASC"]],
+        limit: 10,
+        offset: options.page !== undefined ? options.page * 10 : 0,
+      });
+    } else if (options.type === "banList") {
+      return await WhiteList.findAll({
+        where: { removal_date: null },
+        order: [["id", "ASC"]],
+        limit: 10,
+        offset: options.page !== undefined ? options.page * 10 : 0,
+      });
     }
   }
 }

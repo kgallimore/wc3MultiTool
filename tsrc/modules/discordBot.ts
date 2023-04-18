@@ -3,7 +3,7 @@ import { ModuleBase } from "../moduleBase";
 import type { SettingsUpdates } from "../globals/settings";
 
 import Discord, { Collection } from "discord.js";
-import { EmbedBuilder, InteractionType } from "discord.js";
+import { EmbedBuilder, InteractionType, IntentsBitField } from "discord.js";
 import { Routes } from "discord-api-types/v10";
 import { REST } from "@discordjs/rest";
 import type { mmdResults } from "./replayHandler";
@@ -164,9 +164,9 @@ class DiscordBot extends ModuleBase {
     }
     this.client = new Discord.Client({
       intents: [
-        Discord.GatewayIntentBits.GuildMessages,
-        Discord.GatewayIntentBits.MessageContent,
-        Discord.GatewayIntentBits.Guilds,
+        IntentsBitField.Flags.GuildMessages,
+        IntentsBitField.Flags.MessageContent,
+        IntentsBitField.Flags.Guilds,
       ],
     });
     this.client.on("ready", () => {
@@ -229,7 +229,7 @@ class DiscordBot extends ModuleBase {
       ) {
         if (msg.content.startsWith("?")) {
           this.info("Running command", msg.author.username, msg.content);
-          var runCom = administration.runCommand(
+          var runCom = await administration.runCommand(
             msg.content.slice(1).split(" ")[0] as AdminCommands,
             msg.member?.roles.cache.get(this.settings.values.discord.adminRole) ||
               msg.member?.permissions.has("Administrator")
@@ -252,7 +252,7 @@ class DiscordBot extends ModuleBase {
         msg.content.includes(this.settings.values.discord.customName)
       ) {
         this.info("Running bot specific command", msg.author.username, msg.content);
-        var runCom = administration.runCommand(
+        var runCom = await administration.runCommand(
           msg.content.slice(1).split(" ")[0] as AdminCommands,
           msg.member?.roles.cache.get(this.settings.values.discord.adminRole) ||
             msg.member?.permissions.has("Administrator") ||

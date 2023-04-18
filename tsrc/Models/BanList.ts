@@ -1,8 +1,9 @@
-import { Table, Model, Column } from "sequelize-typescript";
+import { Table, Model, Column, AutoIncrement, DataType } from "sequelize-typescript";
 import type { Regions } from "wc3mt-lobby-container";
 
 @Table({ tableName: "banList", freezeTableName: true })
-export class BanList extends Model<BanList> {
+export class BanList extends Model {
+  @AutoIncrement
   @Column({ primaryKey: true })
   id: number;
 
@@ -18,9 +19,9 @@ export class BanList extends Model<BanList> {
   @Column
   reason: string;
 
-  @Column({ allowNull: true })
+  @Column({ allowNull: true, type: DataType.DATE })
   removal_date: Date | null;
 
-  @Column
+  @Column({ type: DataType.DATE })
   add_date: Date;
 }

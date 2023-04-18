@@ -172,11 +172,11 @@
   let banReason = "";
   let lastAction = "";
   let banList: {
-    data: Array<BanWhiteList>;
+    data: BanWhiteList;
     page: number;
   } = { data: [], page: 0 };
   let whiteList: {
-    data: Array<BanWhiteList>;
+    data: BanWhiteList;
     page: number;
   } = { data: [], page: 0 };
   $: region = getTargetRegion(
@@ -2020,37 +2020,6 @@
             {updateStatus}
           </span>
         </div>
-        <!--<div class="d-flex justify-content-center pt-1">
-      <details>
-        <summary>Known issues (click to expand)</summary>
-        <ul>
-          <li>Generally unstable performance mode</li>
-          <li>
-            Intrusive check may fail due to an issue with WC3 not updating chat info
-          </li>
-          <li>Can get stuck on loading screen if WC gets stuck loading</li>
-          <li>Updating discord options can require a program restart</li>
-          <li>Anti crash may fail</li>
-        </ul>
-      </details>
-    </div>
-    <div class="d-flex justify-content-center pt-1">
-      <details>
-        <summary>Updates this version (click to expand)</summary>
-        <strong>New:</strong>
-        <ul>
-          <li>Sort white and ban list</li>
-          <li>Export and import white and ban list</li>
-          <li>Remove whitelisted and banned players from within list</li>
-          <li>Discord rich presence integration</li>
-          <li>Join others through Discord</li>
-        </ul>
-        <strong>Fixes:</strong>
-        <ul>
-          <li>N/A</li>
-        </ul>
-      </details>
-    </div>-->
         <div class="d-flex justify-content-center pt-1">
           <button
             type="button"
@@ -2134,6 +2103,7 @@
           <div class="row justify-content-center p-2">
             <div class="col d-flex justify-content-center">
               <div class="btn-group btn-group-sm">
+                <!-- svelte-ignore a11y-click-events-have-key-events -->
                 <submit
                   class="btn btn-danger"
                   type="submit"
@@ -2149,6 +2119,7 @@
                 >
                   Ban
                 </submit>
+                <!-- svelte-ignore a11y-click-events-have-key-events -->
                 <submit
                   class="btn btn-success"
                   type="submit"
@@ -2162,6 +2133,7 @@
                 </submit>
               </div>
               <div class="btn-group btn-group-sm">
+                <!-- svelte-ignore a11y-click-events-have-key-events -->
                 <submit
                   class="btn btn-success"
                   type="submit"
@@ -2177,6 +2149,7 @@
                 >
                   WhiteList
                 </submit>
+                <!-- svelte-ignore a11y-click-events-have-key-events -->
                 <submit
                   class="btn btn-danger"
                   type="submit"
@@ -2189,6 +2162,7 @@
                   UnWhiteList
                 </submit>
               </div>
+              <!-- svelte-ignore a11y-click-events-have-key-events -->
               <div class="btn-group btn-group-sm">
                 <submit
                   class="btn btn-primary"
@@ -2201,6 +2175,7 @@
                 >
                   Mod
                 </submit>
+                <!-- svelte-ignore a11y-click-events-have-key-events -->
                 <submit
                   class="btn btn-warning"
                   type="submit"
@@ -2212,6 +2187,7 @@
                 >
                   Admin
                 </submit>
+                <!-- svelte-ignore a11y-click-events-have-key-events -->
                 <submit
                   class="btn btn-danger"
                   type="submit"

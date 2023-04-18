@@ -1,4 +1,4 @@
-<script type="ts">
+<script lang="ts">
   import type { SettingsKeys } from "./../../../tsrc/globals/settings";
   export let key: SettingsKeys;
   export let value: string;
