@@ -1,0 +1,14 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: ["./src/**/*.{html,js,svelte,ts}"],
+  theme: {
+    extend: {
+      colors: {
+        "wc3-yellow": "#fed32a",
+        "active-text": "#ccc8b8",
+        "inactive-text": "#333",
+      },
+    },
+  },
+  plugins: [],
+};

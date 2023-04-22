@@ -9,15 +9,12 @@
   "main": "src/app.js",
   "scripts": {
     "compile": "tsc -w",
-    "build": "tsc && npm run svelte-build",
-    "start": "concurrently \"npm:compile\" \"npm:svelte-dev\" \"electron-forge start\"",
+    "build": "tsc",
+    "start": "concurrently \"npm:compile\"  \"electron-forge start\"",
     "publish": "electron-builder --publish always",
     "pack": "electron-builder --dir",
     "dist": "npm run build && electron-builder",
     "rebuild": "electron-rebuild",
-    "svelte-build": "rollup -c",
-    "svelte-dev": "rollup -c -w",
-    "svelte-start": "sirv public",
     "postinstall": "electron-builder install-app-deps"
   },
   "build": {
@@ -123,12 +120,6 @@
     "@discordjs/rest": "^1.7.0",
     "@electron-forge/cli": "^6.0.1",
     "@nut-tree/nut-js": "^3.1.1",
-    "@rollup/plugin-commonjs": "^21.1.0",
-    "@rollup/plugin-json": "^4.1.0",
-    "@rollup/plugin-node-resolve": "^13.3.0",
-    "@rollup/plugin-terser": "^0.4.1",
-    "@rollup/plugin-typescript": "^8.5.0",
-    "@tsconfig/svelte": "^2.0.1",
     "@types/better-sqlite3": "^7.6.2",
     "@types/discord-rpc": "^4.0.3",
     "@types/estree": "^1.0.0",
@@ -164,16 +155,10 @@
     "node-window-manager": "^2.2.4",
     "obs-websocket-js": "^5.0.2",
     "public-ip": "^4.0.4",
-    "rollup": "^2.79.1",
-    "rollup-plugin-css-only": "^3.1.0",
-    "rollup-plugin-livereload": "^2.0.5",
-    "rollup-plugin-svelte": "^7.1.0",
     "sequelize": "^6.31.0",
     "socket.io-client": "^4.6.1",
     "sound-play": "^1.1.0",
     "sqlite3": "^5.1.6",
-    "svelte": "^3.58.0",
-    "svelte-preprocess": "^5.0.3",
     "translate": "^2.0.2",
     "translate-google": "^1.5.0",
     "typescript": "^5.0.4",
@@ -183,10 +168,6 @@
   },
   "dependencies": {
     "@nut-tree/nl-matcher": "^2.2.0",
-    "autoprefixer": "^10.4.13",
-    "postcss": "^8.4.18",
-    "postcss-load-config": "^4.0.1",
-    "postcss-loader": "^7.0.1",
     "tailwindcss": "^3.2.3"
   }
 }
