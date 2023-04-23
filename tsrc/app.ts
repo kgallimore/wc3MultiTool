@@ -524,12 +524,10 @@ if (!gotLock) {
           if (args.exportImport.type === "banList") {
             let path = app.getPath("documents") + "\\bans.json";
             writeFileSync(path, JSON.stringify(list));
-            console.log(path);
             shell.showItemInFolder(path);
           } else if (args.exportImport.type === "whiteList") {
             let path = app.getPath("documents") + "\\whiteList.json";
             writeFileSync(path, JSON.stringify(list));
-            console.log(path);
             shell.showItemInFolder(path);
           }
         }

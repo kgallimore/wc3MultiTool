@@ -24,6 +24,19 @@
     display: block;
     background-size: 50%;
   }
+
+  input[type="text"],
+  input[type="number"],
+  input[type="password"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="url"] {
+    background: url("assets/keepitmoving/inputs/text-field.png") no-repeat;
+    width: 623px;
+    height: 60px;
+    padding-left: 20px;
+    font-size: 20px;
+  }
 }
 
 @font-face {

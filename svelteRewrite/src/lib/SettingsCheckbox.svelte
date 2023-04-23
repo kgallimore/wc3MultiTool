@@ -13,14 +13,18 @@
     use:tooltip={checked}
     title={tooltipContent}
   >
-    <input type="checkbox" id={key} bind:checked on:change />
-    <label for={key} />
-    {frontFacingName}
+    <label class="cursor-pointer flex">
+      <input type="checkbox" id={key} bind:checked on:change />
+      <label class="cursor-pointer" for={key} />
+      {frontFacingName}
+    </label>
   </span>
 {:else}
   <span class="flex" class:text-inactive-text={!checked}>
-    <input type="checkbox" id={key} bind:checked on:change />
-    <label for={key} />
-    {frontFacingName}
+    <label class="cursor-pointer flex">
+      <input type="checkbox" id={key} bind:checked on:change />
+      <label class="cursor-pointer" for={key} />
+      {frontFacingName}
+    </label>
   </span>
 {/if}

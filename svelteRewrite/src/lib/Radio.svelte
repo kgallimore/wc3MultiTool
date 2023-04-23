@@ -10,14 +10,17 @@
 </script>
 
 <div class="flex">
-  <input
-    type="checkbox"
-    on:change
-    name={group + value}
-    {value}
-    id={group + value}
-    checked={groupValue === value}
-  />
-  <label class="float-left" for={group + value} />
-  {display}
+  <label class="cursor-pointer">
+    <input
+      type="checkbox"
+      on:change
+      name={group + value}
+      {value}
+      id={group + value}
+      checked={groupValue === value}
+      disabled={groupValue === value}
+    />
+    <label class="float-left cursor-pointer" for={group + value} />
+    {display}
+  </label>
 </div>

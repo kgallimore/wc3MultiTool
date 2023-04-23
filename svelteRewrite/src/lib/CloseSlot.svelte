@@ -4,15 +4,17 @@
 </script>
 
 <span class="flex" class:text-active-text={checked}>
-  <input
-    on:change
-    bind:checked
-    type="checkbox"
-    id="closeSlot{number}"
-    data-key="closeSlots"
-    data-slot={parseInt(number) - 1}
-    data-setting="autoHost"
-  />
-  <label for="closeSlot{number}" />
-  {number}
+  <label class="flex cursor-pointer">
+    <input
+      on:change
+      bind:checked
+      type="checkbox"
+      id="closeSlot{number}"
+      data-key="closeSlots"
+      data-slot={parseInt(number) - 1}
+      data-setting="autoHost"
+    />
+    <label for="closeSlot{number}" />
+    {number}
+  </label>
 </span>

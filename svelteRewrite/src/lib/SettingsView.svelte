@@ -18,7 +18,6 @@
           currentTarget: EventTarget & HTMLInputElement;
         })
   ) {
-    console.log(e.currentTarget, e.currentTarget.id, e.currentTarget.value);
     let val: string | boolean;
     if (e.currentTarget.getAttribute("type") === "checkbox") {
       val = (e.currentTarget as EventTarget & HTMLInputElement).checked;
@@ -94,7 +93,6 @@
   }
 </script>
 
-<h5>Settings</h5>
 <div class="container">
   <AutoHostForm {onInputChange} {updateNumber} {toMain} {updateSettingSingle} />
   <ClientForm {onInputChange} {updateSettingSingle} />

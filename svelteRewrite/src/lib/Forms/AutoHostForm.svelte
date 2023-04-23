@@ -5,8 +5,10 @@
   import { appSettings } from "../../stores/page";
   import { type WindowSend, getTargetRegion } from "../../../../tsrc/utility";
   import type { AppSettings, SettingsKeys } from "../../../../tsrc/globals/settings";
+  import SettingsTextInput from "../SettingsTextInput.svelte";
   export let onInputChange: (
     e:
+      | KeyboardEvent
       | (Event & {
           currentTarget: EventTarget & HTMLSelectElement;
         })
@@ -275,15 +277,13 @@
       </div>
       <div class="row p-2">
         <div class="col">
-          <label for="autoHostGameName" class="form-label">Game Name</label>
-          <input
+          <SettingsTextInput
             type="text"
-            class="form-control"
-            id="autoHostGameName"
-            placeholder="Game Name"
-            maxlength="27"
-            minlength="3"
+            key="gameName"
+            frontFacingName="Game Name"
             value={$appSettings.autoHost.gameName}
+            maxlength={27}
+            minlength={3}
             on:keydown={(e) => {
               if (e.key === "Enter") {
                 onInputChange(e);
@@ -296,28 +296,24 @@
 
       <div class="row p-2">
         <div class="col">
-          <label for="delayStart">Delay Start</label>
-          <input
+          <SettingsTextInput
             type="number"
-            class="form-control"
-            id="delayStart"
-            placeholder="Seconds to delay"
-            min="0"
-            max="30"
+            key="delayStart"
+            frontFacingName="Delay Start"
+            minlength={0}
+            maxlength={30}
             value={$appSettings.autoHost.delayStart}
             on:change={updateNumber}
           />
         </div>
         {#if ["rapidHost", "smartHost"].includes($appSettings.autoHost.type)}
           <div class="col">
-            <label for="minPlayers">Mini Players to Autostart</label>
-            <input
+            <SettingsTextInput
               type="number"
-              class="form-control"
-              id="minPlayers"
-              placeholder="0 to disable"
-              min="0"
-              max="24"
+              key="minPlayers"
+              frontFacingName="Min Players to Autostart"
+              minlength={0}
+              maxlength={24}
               value={$appSettings.autoHost.minPlayers}
               on:change={updateNumber}
             />
@@ -327,21 +323,19 @@
       {#if $appSettings.autoHost.moveToSpec}
         <div class="row p-2">
           <div class="col">
-            <label for="autoHostGameName" class="form-label"
-              >Target Team Name (Blank for Auto)</label
-            >
-            <input
+            <SettingsTextInput
               type="text"
-              class="form-control"
-              id="moveToTeam"
-              placeholder="Team Name to Move to"
+              key="moveToTeam"
+              frontFacingName="Target Team Name (Blank for Auto)"
+              minlength={0}
+              maxlength={30}
               value={$appSettings.autoHost.moveToTeam}
+              on:change={updateNumber}
               on:keydown={(e) => {
                 if (e.key === "Enter") {
                   onInputChange(e);
                 }
               }}
-              on:change={onInputChange}
             />
           </div>
         </div>
@@ -388,18 +382,18 @@
       <div class="row p-2">
         {#if $appSettings.autoHost.voteStart && ["rapidHost", "smartHost"].includes($appSettings.autoHost.type)}
           <div class="col">
-            <label for="voteStartPercent" class="form-label">Vote Start Percentage</label>
-            <input
+            <SettingsTextInput
               type="number"
-              id="voteStartPercent"
-              class="form-control"
-              min="5"
-              max="100"
+              key="voteStartPercent"
+              frontFacingName="Vote Start Percentage"
+              minlength={5}
+              maxlength={100}
               value={$appSettings.autoHost.voteStartPercent}
               on:change={(e) =>
                 updateSettingSingle(
                   "autoHost",
                   "voteStartPercent",
+                  // @ts-expect-error This is an input current target
                   Math.min(Math.max(parseInt(e.currentTarget.value), 5), 100)
                 )}
             />
