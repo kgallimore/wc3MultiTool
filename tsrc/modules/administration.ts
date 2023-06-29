@@ -4,7 +4,6 @@ import { fn } from "sequelize";
 import type { Regions, SlotNumbers } from "wc3mt-lobby-container";
 import type { LobbyUpdatesExtended } from "./lobbyControl";
 
-import Store from "electron-store";
 import type { GameSocketEvents, AvailableHandicaps } from "./../globals/gameSocket";
 import { isInt, ensureInt } from "./../utility";
 import type { AutoHostSettings } from "./../globals/settings";
@@ -12,8 +11,6 @@ import type { AutoHostSettings } from "./../globals/settings";
 import { BanList } from "../models/BanList";
 import { WhiteList } from "../models/WhiteList";
 import { AdminList } from "../models/AdminList";
-
-const store = new Store();
 
 export type FetchWhiteBanListSortOptions =
   | "id"
@@ -793,7 +790,7 @@ class Administration extends ModuleBase {
           );
           return { reason: "Can not ban an admin without removing permissions first." };
         }
-        const newBan = new BanList({ username: player, admin, region, reason });
+        //const newBan = new BanList({ username: player, admin, region, reason });
         BanList.create({ username: player, admin, region, reason });
         this.info("Banned " + player + " by " + admin + (reason ? " for " + reason : ""));
         this.sendWindow({

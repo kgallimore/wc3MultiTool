@@ -186,7 +186,7 @@
                   frontFacingName="Intrusive check"
                   key="leaveAlternate"
                   checked={$appSettings.autoHost.leaveAlternate}
-                  tooltipContent="Queries the chat menu periodically in game in order to attempt to see if there are any other players left in lobby. Note: this still will not gaurantee that it games will be left successfully due to a minor WC3 bug."
+                  tooltipContent="Queries the chat menu periodically in game in order to attempt to see if there are any other players left in lobby. Note: this still will not guarantee that it games will be left successfully due to a minor WC3 bug."
                   on:change={onInputChange}
                 />
               {/if}

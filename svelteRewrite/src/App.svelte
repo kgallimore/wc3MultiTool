@@ -3,12 +3,12 @@
   import { onMount } from "svelte";
   import { MicroLobby } from "wc3mt-lobby-container";
   import type { PlayerData } from "wc3mt-lobby-container";
-  import WhiteBanList from "./lib/WhiteBanList.svelte";
   import StyledButton from "./lib/StyledButton.svelte";
   import Menu from "./lib/Menu.svelte";
   import MainView from "./lib/MainView.svelte";
   import SettingsView from "./lib/SettingsView.svelte";
   import { gameState, clientState, appSettings, windowData } from "./stores/page";
+  import UserLists from "./lib/UserLists.svelte";
 
   let lobby: MicroLobby;
 
@@ -198,34 +198,34 @@
             on:click={() => (viewSettings = "main")}
             disabled={viewSettings === "main"}
             active={viewSettings === "main"}
-            label="MAIN"
-          />
+            >MAIN
+          </StyledButton>
         </div>
         <div class="my-auto">
           <StyledButton
             on:click={() => (viewSettings = "banlist")}
             disabled={viewSettings === "banlist"}
             active={viewSettings === "banlist"}
-            label="BANLIST"
-          />
+          >
+            BANLIST</StyledButton
+          >
         </div>
         <div class="my-auto">
           <StyledButton
             on:click={() => (viewSettings = "settings")}
             disabled={viewSettings === "settings"}
             active={viewSettings === "settings"}
-            label="SETTINGS"
-          />
+            >SETTINGS
+          </StyledButton>
         </div>
       </div>
     </div>
   </div>
-  <main class="fixed overflow-scroll top-[130px] bottom-9 right-9 left-9">
+  <main class="fixed overflow-auto top-[130px] bottom-9 right-9 left-9">
     {#if viewSettings === "settings"}<SettingsView />{:else if viewSettings === "banlist"}
-      <WhiteBanList type="whiteList" list={whiteList} {toMain} />
-      <WhiteBanList type="banList" list={banList} {toMain} />
+      <UserLists lists={{ banList, whiteList }} {toMain} />
     {:else if viewSettings === "main"}
-      <MainView {lobby} {banList} {whiteList} {structuredTeamData} />
+      <MainView {lobby} {structuredTeamData} />
     {/if}
   </main>
   <div class="flex fixed bottom-[-15px] w-full items-center" style="	z-index: 10000;">

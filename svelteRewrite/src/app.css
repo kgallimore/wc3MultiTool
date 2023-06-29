@@ -152,17 +152,42 @@ main {
     padding-bottom: 18px;
     padding-left: 12px;
     padding-right: 12px;
+    margin: auto;
   }
   .generic-btn-blue {
     background-image: url("assets/keepitmoving/buttons/Generic-Inactive.png");
   }
-  .generic-btn-blue:active,
+  .generic-btn-blue:active:enabled,
   .generic-btn-blue-active {
     background-image: url("assets/keepitmoving/buttons/Generic-Pressed.png");
   }
-  .generic-btn:active {
+  .generic-btn-red {
+    background-image: url("assets/keepitmoving/buttons/banlist-calm.png");
+  }
+  .generic-btn-red:active:enabled,
+  .generic-btn-red-active {
+    background-image: url("assets/keepitmoving/buttons/banlist-pressed.png");
+  }
+  .generic-btn-teal {
+    background-image: url("assets/keepitmoving/buttons/modlist-calm.png");
+  }
+  .generic-btn-teal:active:enabled,
+  .generic-btn-teal-active {
+    background-image: url("assets/keepitmoving/buttons/modlist-pressed.png");
+  }
+  .generic-btn-green {
+    background-image: url("assets/keepitmoving/buttons/whitelist-calm.png");
+  }
+  .generic-btn-green:active:enabled,
+  .generic-btn-green-active {
+    background-image: url("assets/keepitmoving/buttons/whitelist-pressed.png");
+  }
+  .generic-btn:active:enabled {
     color: #ad911d;
     padding-top: 15px;
+  }
+  .generic-btn-disabled {
+    background-image: url("assets/keepitmoving/buttons/Generic-Pressed.png") !important;
   }
 }
 
