@@ -298,7 +298,7 @@ if (!gotLock) {
   }
 
   app.on("ready", async () => {
-    await seq.sync({ force: true });
+    await seq.sync();
     log.info("App ready");
     if (app.isPackaged) {
       setInterval(() => {
@@ -364,6 +364,12 @@ if (!gotLock) {
 
   async function commandClient(args: WindowSend) {
     switch (args.messageType) {
+      case "exit":
+        app.quit();
+        break;
+      case "minimize":
+        win.minimize();
+        break;
       case "changePerm":
         if (args.perm?.player) {
           if (args.perm.role === "moderator" || args.perm.role === "admin") {

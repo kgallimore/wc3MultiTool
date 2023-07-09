@@ -4,9 +4,6 @@ import type { Regions } from "wc3mt-lobby-container";
 
 @Table({ tableName: "adminList", freezeTableName: true })
 export class AdminList extends Model {
-  @Column({ primaryKey: true })
-  id: number;
-
   @Column
   username: string;
 

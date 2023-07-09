@@ -4,9 +4,10 @@
   import Radio from "./Radio.svelte";
   import CheckBox from "./SettingsCheckbox.svelte";
   import StyledButton from "./StyledButton.svelte";
+  import { onMount } from "svelte";
   export let type: "banList" | "whiteList";
   export let list: {
-    data: BanWhiteList;
+    data: BanWhiteList | null;
     page: number;
   };
   export let toMain: (args: WindowSend) => void;
@@ -30,6 +31,9 @@
       },
     });
   }
+  onMount(() => {
+    if (list.data.length === 0) reFetch();
+  });
 </script>
 
 <div class="w-full text-center py-4">
@@ -160,31 +164,38 @@
     <th>Removal</th>
   </tr>
   <tbody>
-    {#each list.data as player}
+    {#if !list.data}
       <tr>
-        <td>{player.username}</td>
-        <td>{player.add_date}</td>
-        <td>{player.admin}</td>
-        <td>{player.reason}</td>
-        <td>
-          {#if !player.removal_date}
-            <button
-              class="btn btn-primary"
-              on:click={() => {
-                toMain({
-                  messageType: "removeWhiteBan",
-                  removeWhiteBan: { type, player: player.username },
-                });
-                reFetch();
-              }}
-            >
-              Remove
-            </button>
-          {:else}
-            {player.removal_date}
-          {/if}</td
-        >
+        <td colspan="5">No {typeDisplay} Bans</td>
       </tr>
-    {/each}
+    {:else}
+      {#each list.data as player}
+        <tr>
+          <td>{player.username}</td>
+          <td>{player.createdAt}</td>
+          <td>{player.admin}</td>
+          <td>{player.reason}</td>
+          <td>
+            {#if !player.removal_date}
+              <StyledButton
+                color="red"
+                size="md"
+                on:click={() => {
+                  toMain({
+                    messageType: "removeWhiteBan",
+                    removeWhiteBan: { type, player: player.username },
+                  });
+                  reFetch();
+                }}
+              >
+                Remove
+              </StyledButton>
+            {:else}
+              {player.removal_date}
+            {/if}</td
+          >
+        </tr>
+      {/each}
+    {/if}
   </tbody>
 </table>

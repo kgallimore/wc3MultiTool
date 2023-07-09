@@ -1,7 +1,9 @@
 <script lang="ts">
+  import { tooltip } from "@svelte-plugins/tooltips";
+
   import StyledButton from "./StyledButton.svelte";
   import { gameState, clientState, windowData } from "./../stores/page";
-  import type { WindowSend, BanWhiteList } from "../../../tsrc/utility";
+  import type { WindowSend } from "../../../tsrc/utility";
   import type { MicroLobby, PlayerData } from "wc3mt-lobby-container";
   import StyledHref from "./StyledHref.svelte";
 
@@ -31,11 +33,6 @@
   </div>
   <div class="content-center">
     <div class="flex justify-center">
-      <div class="my-auto">
-        <StyledButton on:click={() => toMain({ messageType: "openLogs" })}>
-          Open Logs</StyledButton
-        >
-      </div>
       <div class="my-auto">
         <StyledHref label="Visit The Hub" href={"https://war.trenchguns.com"} />
       </div>
@@ -98,45 +95,72 @@
     </tbody>
   </table>
 
-  <div class="p-2" id="tablesDiv">
+  <div class="p-2 pr-6" id="tablesDiv">
     {#if structuredTeamData}
       {#each structuredTeamData as [teamName, teamData]}
-        <table class="table w-full">
-          <thead>
+        <table class="table w-full border-b rounded-full border-wc3-yellow m-6">
+          <thead class="border-b border-wc3-yellow">
             <tr>
-              <th>Actions</th>
+              <th class="w-1/6">Actions</th>
               <th>{teamName} Players</th>
-              <th>ELO/Rank/Games/Wins/Losses</th>
+              <th class="w-1/3">ELO/Rank/Games/Wins/Losses</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody class="">
             {#each teamData as player}
-              <tr>
+              <tr class="odd:bg-[rgba(255,255,255,0.05)]">
                 <td>
                   {#if player.slotStatus === 2 && player.realPlayer}
-                    <StyledButton
-                      on:click={() =>
-                        toMain({
-                          messageType: "addWhiteBan",
-                          addWhiteBan: {
-                            type: "banList",
-                            player: player.name,
-                            reason: $windowData.banReason,
-                          },
-                        })}>Ban</StyledButton
-                    >
+                    <div class="flex justify-center">
+                      <StyledButton
+                        size="sm"
+                        color="red"
+                        on:click={() =>
+                          toMain({
+                            messageType: "addWhiteBan",
+                            addWhiteBan: {
+                              type: "banList",
+                              player: player.name,
+                              reason: $windowData.banReason,
+                            },
+                          })}>Ban</StyledButton
+                      >
+                      <StyledButton
+                        size="sm"
+                        color="red"
+                        disabled
+                        on:click={() =>
+                          toMain({
+                            messageType: "addWhiteBan",
+                            addWhiteBan: {
+                              type: "banList",
+                              player: player.name,
+                              reason: $windowData.banReason,
+                            },
+                          })}>Kick</StyledButton
+                      >
+                    </div>
                   {/if}</td
                 >
+
                 <td>
-                  {player.name}<br />
-                  {player.data.joinedAt
-                    ? new Date(player.data.joinedAt).toLocaleString(undefined, {
-                        timeZone: "UTC",
-                        minute: "2-digit",
-                        hour: "2-digit",
-                      })
-                    : ""}
-                </td>
+                  {#if player.slotStatus === 2 && player.realPlayer}
+                    <span
+                      use:tooltip
+                      title={player.data.joinedAt
+                        ? new Date(player.data.joinedAt).toLocaleString(undefined, {
+                            timeZone: "UTC",
+                            minute: "2-digit",
+                            hour: "2-digit",
+                          })
+                        : ""}
+                    >
+                      {player.name}
+                    </span>
+                  {:else}
+                    {player.name}
+                  {/if}</td
+                >
                 <td
                   >{player.data.extra && player.data.extra.rating > -1
                     ? [

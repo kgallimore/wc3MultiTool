@@ -4,7 +4,6 @@
   import { MicroLobby } from "wc3mt-lobby-container";
   import type { PlayerData } from "wc3mt-lobby-container";
   import StyledButton from "./lib/StyledButton.svelte";
-  import Menu from "./lib/Menu.svelte";
   import MainView from "./lib/MainView.svelte";
   import SettingsView from "./lib/SettingsView.svelte";
   import { gameState, clientState, appSettings, windowData } from "./stores/page";
@@ -176,7 +175,19 @@
   }
 </script>
 
-<Menu />
+<div class="w-100 fixed flex justify-end right-6" style="z-index:10000">
+  <div class="right-0">
+    <button
+      class="menu-button min-button"
+      on:click={() => toMain({ messageType: "minimize" })}
+    />
+    <button class="menu-button max-button" />
+    <button
+      class="menu-button close-button"
+      on:click={() => toMain({ messageType: "exit" })}
+    />
+  </div>
+</div>
 <div>
   <div class="image-border top-bar w-[90%] top-2 mx-[36px] h-[39px]" />
   <div class="image-border bottom-bar w-[90%] bottom-4 mx-[36px] h-[39px]" />
@@ -244,27 +255,25 @@
         </div>
       </div>
       <span
-        class="inline-block connection-status {$gameState.connected
+        class="inline-block select-none connection-status {$gameState.connected
           ? 'online'
           : 'offline'}"
         id="mainStatus"
       >
         <div class="h-8" />
         <h2 class="coture text-center" id="statusText">
-          <strong
-            >{$gameState.connected ? "CONNECTED TO WARCRAFT" : "NO CONNECTION"}</strong
-          >
+          <strong>{$gameState.connected ? "CONNECTED" : "NO CONNECTION"}</strong>
         </h2>
       </span>
       <div class="launch-button content-center inline-block">
         <div class="h-4" />
         <div class="h-10 w-44 m-auto">
           <button
-            on:click={() => console.log("Placeholder")}
+            on:click={() => toMain({ messageType: "openLogs" })}
             type="button"
             class="cursor-pointer coture active:text-white w-full h-full"
           >
-            <strong>PLACEHOLDER</strong>
+            <strong>OPEN LOGS</strong>
           </button>
         </div>
       </div>

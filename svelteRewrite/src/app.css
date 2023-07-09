@@ -154,40 +154,78 @@ main {
     padding-right: 12px;
     margin: auto;
   }
+  .generic-btn.sm {
+    height: 25px;
+    width: 46px;
+    font-size: small;
+    padding: 0;
+  }
+  .generic-btn.md {
+    height: 47px;
+    width: 72px;
+    font-size: small;
+    padding: 0;
+  }
   .generic-btn-blue {
     background-image: url("assets/keepitmoving/buttons/Generic-Inactive.png");
   }
-  .generic-btn-blue:active:enabled,
+  .generic-btn-blue:has(button:active:enabled),
   .generic-btn-blue-active {
     background-image: url("assets/keepitmoving/buttons/Generic-Pressed.png");
   }
   .generic-btn-red {
     background-image: url("assets/keepitmoving/buttons/banlist-calm.png");
   }
-  .generic-btn-red:active:enabled,
+  .generic-btn-red:has(button:active:enabled),
   .generic-btn-red-active {
     background-image: url("assets/keepitmoving/buttons/banlist-pressed.png");
+  }
+  .generic-btn-red.sm {
+    background-image: url("assets/keepitmoving/buttons/ban-calm.png");
+  }
+  .generic-btn-red.sm:has(button:active:enabled),
+  .generic-btn-red-active.sm {
+    background-image: url("assets/keepitmoving/buttons/ban-pushed.png");
+  }
+  .generic-btn-red.md {
+    background-image: url("assets/keepitmoving/buttons/Banlist-short-calm.png");
+  }
+  .generic-btn-red.md:has(button:active:enabled),
+  .generic-btn-red-active.md {
+    background-image: url("assets/keepitmoving/buttons/Banlist-short-pressed.png");
   }
   .generic-btn-teal {
     background-image: url("assets/keepitmoving/buttons/modlist-calm.png");
   }
-  .generic-btn-teal:active:enabled,
+  .generic-btn-teal:has(button:active:enabled),
   .generic-btn-teal-active {
     background-image: url("assets/keepitmoving/buttons/modlist-pressed.png");
   }
   .generic-btn-green {
     background-image: url("assets/keepitmoving/buttons/whitelist-calm.png");
   }
-  .generic-btn-green:active:enabled,
+  .generic-btn-green:has(button:active:enabled),
   .generic-btn-green-active {
     background-image: url("assets/keepitmoving/buttons/whitelist-pressed.png");
   }
-  .generic-btn:active:enabled {
+  .generic-btn:has(button:active:enabled) {
     color: #ad911d;
     padding-top: 15px;
   }
+  .generic-btn.sm:has(button:active:enabled) {
+    color: #ad911d;
+    padding-top: 4px;
+  }
   .generic-btn-disabled {
     background-image: url("assets/keepitmoving/buttons/Generic-Pressed.png") !important;
+  }
+  .generic-btn-disabled.sm {
+    background-blend-mode: saturation;
+    background-image: linear-gradient(black, black),
+      url("assets/keepitmoving/buttons/ban-pushed.png") !important;
+  }
+  .generic-btn-disabled.sm {
+    background-image: url("assets/keepitmoving/buttons/Logs-pushed.png") !important;
   }
 }
 

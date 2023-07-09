@@ -103,6 +103,8 @@ export interface WindowSend {
     | "leaveLobby"
     | "startLobby"
     | "exportWhitesBans"
+    | "exit"
+    | "minimize"
     | "importWhitesBans";
   update?: SettingsUpdates;
   addWhiteBan?: {

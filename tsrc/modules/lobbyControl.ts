@@ -270,7 +270,7 @@ export class LobbyControl extends Module {
         }
         this.staleTimer = setInterval(() => {
           this.staleLobby();
-        }, 1000 * 1 * 15);
+        }, 1000 * 60 * 15);
         if (!metExpectedSwap) {
           this.bestCombo = [];
           if (this.isLobbyReady()) {

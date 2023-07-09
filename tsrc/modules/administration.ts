@@ -813,7 +813,12 @@ class Administration extends ModuleBase {
         this.error("Failed to ban, invalid battleTag: " + player);
         return { reason: "Failed to ban, invalid battleTag: " + player };
       }
+    } else {
+      this.info(
+        "Failed to ban " + player + " by " + admin + ": Missing required permissions."
+      );
     }
+
     return { reason: "Missing required permissions." };
   }
 
@@ -1010,6 +1015,7 @@ class Administration extends ModuleBase {
 
     let targetRole = await this.getRole(player);
     if (targetRole) {
+      console.log("targetRole", targetRole);
       return this.roleEqualOrHigher(minPerms, targetRole);
     }
     return false;
@@ -1023,7 +1029,7 @@ class Administration extends ModuleBase {
       swapper: 2,
       baswapper: 1,
     };
-    if (hierarchy[role] >= hierarchy[targetPerms]) {
+    if (hierarchy[role] <= hierarchy[targetPerms]) {
       return true;
     }
     return false;
@@ -1047,19 +1053,39 @@ class Administration extends ModuleBase {
     options: FetchListOptions
   ): Promise<WhiteList[] | BanList[] | undefined> {
     if (options.type === "whiteList") {
-      return await WhiteList.findAll({
-        where: { removal_date: null },
-        order: [["id", "ASC"]],
-        limit: 10,
-        offset: options.page !== undefined ? options.page * 10 : 0,
-      });
+      if (options.activeOnly) {
+        return await WhiteList.findAll({
+          where: { removal_date: null },
+          order: [["id", "ASC"]],
+          limit: 10,
+          offset: options.page !== undefined ? options.page * 10 : 0,
+          raw: true,
+        });
+      } else {
+        return await WhiteList.findAll({
+          order: [["id", "ASC"]],
+          limit: 10,
+          offset: options.page !== undefined ? options.page * 10 : 0,
+          raw: true,
+        });
+      }
     } else if (options.type === "banList") {
-      return await WhiteList.findAll({
-        where: { removal_date: null },
-        order: [["id", "ASC"]],
-        limit: 10,
-        offset: options.page !== undefined ? options.page * 10 : 0,
-      });
+      if (options.activeOnly) {
+        return await BanList.findAll({
+          raw: true,
+          where: { removal_date: null },
+          order: [["id", "ASC"]],
+          limit: 10,
+          offset: options.page !== undefined ? options.page * 10 : 0,
+        });
+      } else {
+        return await BanList.findAll({
+          raw: true,
+          order: [["id", "ASC"]],
+          limit: 10,
+          offset: options.page !== undefined ? options.page * 10 : 0,
+        });
+      }
     }
   }
 }

@@ -41,6 +41,7 @@ class WarControl extends Global {
   isPackaged: boolean = false;
   appPath: string;
   sendingInGameChat: { active: boolean; queue: string[] } = { active: false, queue: [] };
+  openingWarcraft = false;
 
   constructor() {
     super("War Control");
@@ -57,15 +58,22 @@ class WarControl extends Global {
     callCount = 0,
     reopen: boolean = false
   ): Promise<boolean> {
+    if (this.openingWarcraft && callCount === 0) {
+      return false;
+    } else {
+      this.openingWarcraft = true;
+    }
     gameState.updateGameState({ action: "openingWarcraft" });
     try {
       if (callCount > 180) {
         this.error("Failed to open Warcraft. Giving up.");
+        this.openingWarcraft = false;
         return false;
       }
       if (await this.isWarcraftOpen()) {
         this.info("Warcraft is now open");
         gameState.updateGameState({ action: "nothing" });
+        this.openingWarcraft = false;
         return true;
       }
       if (settings.values.client.alternateLaunch) {
@@ -167,6 +175,7 @@ class WarControl extends Global {
           if (await this.isWarcraftOpen()) {
             this.info("Warcraft is now open.");
             gameState.updateGameState({ action: "nothing" });
+            this.openingWarcraft = false;
             return true;
           }
           await sleep(100);
@@ -178,10 +187,12 @@ class WarControl extends Global {
       }
       this.error("Failed to open Warcraft.");
       gameState.updateGameState({ action: "nothing" });
+      this.openingWarcraft = false;
       return false;
     } catch (e) {
       this.error(e);
       gameState.updateGameState({ action: "nothing" });
+      this.openingWarcraft = false;
       return false;
     }
   }

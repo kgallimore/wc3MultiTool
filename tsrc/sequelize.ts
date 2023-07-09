@@ -3,6 +3,6 @@ import { app } from "electron";
 
 export const seq = new Sequelize({
   dialect: "sqlite",
-  storage: app.getPath("userData") + "/wc3mt.db",
+  storage: app.getPath("userData") + "/wc3mtv2.db",
   models: [__dirname + "/models"],
 });

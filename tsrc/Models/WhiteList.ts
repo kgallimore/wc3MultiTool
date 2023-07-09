@@ -3,9 +3,6 @@ import type { Regions } from "wc3mt-lobby-container";
 
 @Table({ tableName: "whiteList", freezeTableName: true })
 export class WhiteList extends Model {
-  @Column({ primaryKey: true })
-  id: number;
-
   @Column
   username: string;
 
@@ -20,7 +17,4 @@ export class WhiteList extends Model {
 
   @Column({ allowNull: true, type: DataType.DATE })
   removal_date: Date | null;
-
-  @Column({ type: DataType.DATE })
-  add_date: Date;
 }
