@@ -1,6 +1,6 @@
 {
   "name": "wc3multitool",
-  "version": "1.0.12-alpha",
+  "version": "1.1.0-alpha",
   "description": "A multi-tool for Warcraft 3",
   "repository": {
     "type": "git",
@@ -12,7 +12,7 @@
     "build": "tsc",
     "start": "concurrently \"npm:compile\"  \"electron-forge start\"",
     "publish": "electron-builder --publish always",
-    "pack": "electron-builder --dir",
+    "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder",
     "rebuild": "electron-rebuild",
     "postinstall": "electron-builder install-app-deps"
@@ -25,6 +25,10 @@
       {
         "from": "./src/webui.html",
         "to": "."
+      },
+      {
+        "from": "./src/Models",
+        "to": "./models"
       },
       {
         "from": "./src/webui.js",
@@ -111,61 +115,54 @@
       ]
     }
   },
-  "overrides": {
-    "@nut-tree/nut-js": {
-      "jpeg-js": "0.4.4"
-    }
-  },
   "devDependencies": {
-    "@discordjs/rest": "^1.7.0",
-    "@electron-forge/cli": "^6.0.1",
-    "@nut-tree/nut-js": "^3.1.2",
-    "@types/discord-rpc": "^4.0.3",
-    "@types/estree": "^1.0.0",
-    "@types/node": "^18.11.9",
-    "@types/node-fetch": "^2.6.2",
-    "@types/request": "^2.48.8",
+    "@electron-forge/cli": "^6.2.1",
+    "@types/discord-rpc": "^4.0.5",
+    "@types/node": "^20.4.1",
     "@types/sound-play": "^1.1.0",
-    "@types/validator": "^13.7.10",
-    "@types/ws": "^8.5.3",
-    "bufferutil": "^4.0.7",
-    "concurrently": "^6.5.1",
-    "cross-fetch": "^3.1.5",
-    "discord-api-types": "^0.37.39",
-    "discord-rpc": "^4.0.1",
-    "discord.js": "^14.9.0",
+    "@types/validator": "^13.7.17",
+    "@types/ws": "^8.5.5",
+    "concurrently": "^8.2.0",
     "electron": "^25.2.0",
-    "electron-builder": "^23.6.0",
-    "electron-log": "^5.0.0-beta.22",
+    "electron-builder": "^24.4.0",
     "electron-reload": "^2.0.0-alpha.1",
+    "tailwindcss": "^3.3.2",
+    "typescript": "^5.1.6"
+  },
+  "dependencies": {
+    "@discordjs/rest": "^1.7.1",
+    "@nut-tree/nl-matcher": "^2.2.0",
+    "@nut-tree/nut-js": "^3.1.2",
+    "bufferutil": "^4.0.7",
+    "cross-fetch": "^4.0.0",
+    "discord-api-types": "^0.37.47",
+    "discord-rpc": "^4.0.1",
+    "discord.js": "^14.11.0",
+    "electron-log": "^5.0.0-beta.24",
     "electron-store": "^8.1.0",
-    "electron-updater": "^5.3.0",
+    "electron-updater": "^6.1.1",
     "fast-geoip": "^1.1.88",
     "firebase": "^9.19.1",
     "form-data": "^4.0.0",
-    "https": "^1.0.0",
     "js-combinatorics": "^2.1.1",
     "languagedetect": "^2.0.0",
-    "mariadb": "^3.1.1",
-    "mysql2": "^3.2.3",
+    "mariadb": "^3.2.0",
+    "mysql2": "^3.5.0",
     "nanoid": "^4.0.2",
-    "node-abi": "^3.35.0",
+    "node-abi": "^3.45.0",
     "node-window-manager": "^2.2.4",
-    "obs-websocket-js": "^5.0.2",
-    "prisma": "^4.13.0",
+    "obs-websocket-js": "^5.0.3",
     "public-ip": "^4.0.4",
-    "sequelize": "^6.31.0",
+    "reflect-metadata": "^0.1.13",
+    "sequelize": "^6.32.1",
+    "sequelize-typescript": "^2.1.5",
     "socket.io-client": "^4.6.1",
     "sound-play": "^1.1.0",
+    "sqlite3": "^5.1.6",
     "translate": "^2.0.2",
     "translate-google": "^1.5.0",
-    "typescript": "^5.0.4",
     "w3gjs": "^2.5.0",
     "wc3mt-lobby-container": "^1.1.1",
     "ws": "^8.13.0"
-  },
-  "dependencies": {
-    "@nut-tree/nl-matcher": "^2.2.0",
-    "tailwindcss": "^3.2.3"
   }
 }
