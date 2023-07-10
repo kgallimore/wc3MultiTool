@@ -99,7 +99,7 @@ export async function checkMigration() {
   if (needsMigration) {
     try {
       const schemaPath = app.isPackaged
-        ? path.join(app.getAppPath(), "prisma", "schema.prisma")
+        ? path.join(process.resourcesPath, "..", "prisma", "schema.prisma")
         : path.join(__dirname, "..", "prisma", "schema.prisma");
       logger.info(
         `Needs a migration. Running prisma migrate with schema path ${schemaPath}`

@@ -1,6 +1,7 @@
-const { app, contextBridge, ipcRenderer, shell } = require("electron");
+import { app, contextBridge, ipcRenderer, shell } from "electron";
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
+
 contextBridge.exposeInMainWorld("api", {
   shell: (url: string) => {
     shell.openExternal(url);
@@ -20,6 +21,7 @@ contextBridge.exposeInMainWorld("api", {
     }
   },
 });
+contextBridge.exposeInMainWorld("appVersion", app.getVersion());
 // Log details of versions
 for (const dependency of ["chrome", "node", "electron"]) {
   console.log(`${dependency}-version`, process.versions[dependency]);

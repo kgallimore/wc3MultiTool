@@ -281,6 +281,7 @@ if (!gotLock) {
           settings: settings.values,
           gameState: gameState.values,
           clientState: clientState.values,
+          appVersion: app.getVersion(),
         },
       });
       win.show();
@@ -418,6 +419,7 @@ if (!gotLock) {
             settings: settings.values,
             gameState: gameState.values,
             clientState: clientState.values,
+            appVersion: app.getVersion(),
           },
         });
         if (lobbyControl.microLobby) {

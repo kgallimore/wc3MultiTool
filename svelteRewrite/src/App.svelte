@@ -8,9 +8,8 @@
   import SettingsView from "./lib/SettingsView.svelte";
   import { gameState, clientState, appSettings, windowData } from "./stores/page";
   import UserLists from "./lib/UserLists.svelte";
-
   let lobby: MicroLobby;
-
+  let appVersion = "0.0.0";
   let banList: {
     data: BanWhiteList;
     page: number;
@@ -100,6 +99,7 @@
       clientState.set(data.init.clientState);
       gameState.set(data.init.gameState);
       appSettings.set(data.init.settings);
+      appVersion = data.init.appVersion;
     } else if (data.legacy) {
       let newData = data.legacy.data;
       switch (data.legacy.messageType) {
@@ -201,8 +201,10 @@
 <div class="w-full">
   <div class="top-wood fixed top-[47px] z-10 h-[83px] left-[36px] right-[39px]">
     <div class="flex w-5/6 mx-auto h-full relative items-center">
-      <div class="friz text-center leading-none my-auto">ver<br />1.0.1</div>
-      <div class="coture my-auto text-xl font-semibold">WC3 MULTITOOL</div>
+      <div class="friz text-center leading-none my-auto">
+        ver<br />{appVersion}
+      </div>
+      <div class="coture my-auto text-xl font-semibold select-none">WC3 MULTITOOL</div>
       <div class="absolute flex right-0">
         <div class="my-auto">
           <StyledButton

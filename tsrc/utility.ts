@@ -19,6 +19,7 @@ export interface WindowReceive {
     clientState: ClientState;
     gameState: GameState;
     settings: AppSettings;
+    appVersion: string;
   };
   legacy?: {
     messageType:
