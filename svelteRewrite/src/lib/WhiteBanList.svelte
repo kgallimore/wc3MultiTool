@@ -12,8 +12,8 @@
   };
   export let toMain: (args: WindowSend) => void;
   let sort: FetchWhiteBanListSortOptions = "id";
-  let sortOrder: "ASC" | "DESC" = "ASC";
-  $: ascSort = sortOrder === "ASC";
+  let sortOrder: "asc" | "desc" = "asc";
+  $: ascSort = sortOrder === "asc";
   let activeOnly: boolean = false;
   let typeDisplay = type
     .split(/(?=[A-Z])/)
@@ -155,13 +155,13 @@
     Next Page
   </StyledButton>
 </div>
-<table class="table w-full">
+<table class="table w-full mb-12">
   <tr>
     <th>Username</th>
-    <th>Date Added</th>
+    <th class="w-1/6">Date Added</th>
     <th>Admin</th>
     <th>Reason</th>
-    <th>Removal</th>
+    <th class="w-1/12">Removal</th>
   </tr>
   <tbody>
     {#if !list.data}
@@ -172,7 +172,7 @@
       {#each list.data as player}
         <tr>
           <td>{player.username}</td>
-          <td>{player.createdAt}</td>
+          <td>{new Date(player.createdAt).toLocaleString()}</td>
           <td>{player.admin}</td>
           <td>{player.reason}</td>
           <td>
@@ -191,7 +191,7 @@
                 Remove
               </StyledButton>
             {:else}
-              {player.removal_date}
+              {new Date(player.removal_date).toLocaleString()}
             {/if}</td
           >
         </tr>

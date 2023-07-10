@@ -7,8 +7,7 @@ import type { ClientState } from "./globals/clientState";
 import type { SettingsUpdates } from "./globals/settings";
 
 import type { FetchListOptions } from "./modules/administration";
-import { BanList } from "./models/BanList";
-import { WhiteList } from "./models/WhiteList";
+import type { BanList, WhiteList } from "@prisma/client";
 
 export interface WindowReceive {
   globalUpdate?: {

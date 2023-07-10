@@ -13,6 +13,7 @@ import {
 } from "electron";
 import { autoUpdater } from "electron-updater";
 import * as log from "electron-log";
+import { checkMigration } from "./prismaClient";
 import { join } from "path";
 import Store from "electron-store";
 import {
@@ -61,11 +62,13 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
+  checkMigration();
   if (app.getVersion().includes("beta")) {
     settings.updateSettings({ client: { releaseChannel: "beta" } });
   } else if (app.getVersion().includes("alpha")) {
     settings.updateSettings({ client: { releaseChannel: "alpha" } });
   }
+
   autoUpdater.channel = settings.values.client.releaseChannel;
   autoUpdater.logger = log;
   log.errorHandler.startCatching();

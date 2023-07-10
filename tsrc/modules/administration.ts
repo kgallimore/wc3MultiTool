@@ -1,5 +1,6 @@
 import { ModuleBase } from "../moduleBase";
-import { fn } from "sequelize";
+import prisma from "../prismaClient";
+import type { BanList, WhiteList } from "@prisma/client";
 
 import type { Regions, SlotNumbers } from "wc3mt-lobby-container";
 import type { LobbyUpdatesExtended } from "./lobbyControl";
@@ -8,9 +9,9 @@ import type { GameSocketEvents, AvailableHandicaps } from "./../globals/gameSock
 import { isInt, ensureInt } from "./../utility";
 import type { AutoHostSettings } from "./../globals/settings";
 
-import { BanList } from "../models/BanList";
-import { WhiteList } from "../models/WhiteList";
-import { AdminList } from "../models/AdminList";
+// import { BanList } from "../models/BanList";
+// import { WhiteList } from "../models/WhiteList";
+// import { AdminList } from "../models/AdminList";
 
 export type FetchWhiteBanListSortOptions =
   | "id"
@@ -50,7 +51,7 @@ export interface FetchListOptions {
   type: "whiteList" | "banList";
   page?: number;
   sort?: FetchWhiteBanListSortOptions;
-  sortOrder?: "ASC" | "DESC";
+  sortOrder?: "asc" | "desc";
   activeOnly?: boolean;
 }
 
@@ -762,7 +763,7 @@ class Administration extends ModuleBase {
 
   async checkPlayer(
     name: string
-  ): Promise<{ type: "black" | "white" | false; reason?: string | undefined }> {
+  ): Promise<{ type: "black" | "white" | false; reason?: string | null }> {
     let row = await this.isBanned(name);
     if (row) {
       return { type: "black", reason: row.reason };
@@ -791,7 +792,9 @@ class Administration extends ModuleBase {
           return { reason: "Can not ban an admin without removing permissions first." };
         }
         //const newBan = new BanList({ username: player, admin, region, reason });
-        BanList.create({ username: player, admin, region, reason });
+        await prisma.banList.create({
+          data: { username: player, admin, region, reason },
+        });
         this.info("Banned " + player + " by " + admin + (reason ? " for " + reason : ""));
         this.sendWindow({
           legacy: {
@@ -831,7 +834,9 @@ class Administration extends ModuleBase {
   ): Promise<true | { reason: string }> {
     if ((await this.checkRole(admin, "moderator")) || bypassCheck) {
       if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
-        WhiteList.create({ username: player, admin, region, reason });
+        await prisma.whiteList.create({
+          data: { username: player, admin, region, reason },
+        });
         this.info(
           "Whitelisted " + player + " by " + admin + (reason ? " for " + reason : "")
         );
@@ -864,10 +869,10 @@ class Administration extends ModuleBase {
 
   async unWhitePlayer(player: string, admin: string): Promise<true | { reason: string }> {
     try {
-      await WhiteList.update(
-        { removal_date: fn("NOW") },
-        { where: { username: player, removal_date: null } }
-      );
+      await prisma.whiteList.updateMany({
+        where: { username: player, removal_date: null },
+        data: { removal_date: new Date() },
+      });
       this.info("Un-whitelisted " + player + " by " + admin);
       this.sendWindow({
         legacy: {
@@ -884,10 +889,10 @@ class Administration extends ModuleBase {
 
   async unBanPlayer(player: string, admin: string): Promise<true | { reason: string }> {
     try {
-      await BanList.update(
-        { removal_date: fn("NOW") },
-        { where: { username: player, removal_date: null } }
-      );
+      await prisma.banList.updateMany({
+        where: { username: player, removal_date: null },
+        data: { removal_date: new Date() },
+      });
 
       this.info("Unbanned " + player + " by " + admin);
       this.sendWindow({
@@ -914,7 +919,11 @@ class Administration extends ModuleBase {
       if (["baswapper", "swapper", "moderator", "admin"].includes(role)) {
         if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
           if (await this.checkRole(player, "moderator")) {
-            AdminList.update({ role, admin, region }, { where: { username: player } })
+            prisma.adminList
+              .updateMany({
+                where: { username: player },
+                data: { role, admin, region },
+              })
               .then(() => {
                 this.info("Updated " + player + " to " + role + " by " + admin);
                 this.sendWindow({
@@ -933,7 +942,8 @@ class Administration extends ModuleBase {
                 );
               });
           } else {
-            AdminList.create({ username: player, admin, region, role })
+            prisma.adminList
+              .create({ data: { username: player, admin, region, role } })
               .then(() => {
                 this.info("Added " + player + " to " + role + " by " + admin);
                 this.sendWindow({
@@ -974,7 +984,8 @@ class Administration extends ModuleBase {
     if ((await this.checkRole(admin, "admin")) || bypassCheck) {
       if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
         if (await this.checkRole(player, "baswapper")) {
-          AdminList.destroy({ where: { username: player } })
+          prisma.adminList
+            .deleteMany({ where: { username: player } })
             .then(() => {
               this.info("Removed permissions from " + player);
               this.sendWindow({
@@ -1006,8 +1017,8 @@ class Administration extends ModuleBase {
       (player === "Trenchguns#1800" && this.settings.values.client.debugAssistance)
     )
       return "admin";
-    const row = await AdminList.findOne({ where: { username: player } });
-    return row?.role ?? null;
+    const row = await prisma.adminList.findFirst({ where: { username: player } });
+    return (row?.role as AdminRoles) ?? null;
   }
 
   async checkRole(player: string, minPerms: AdminRoles) {
@@ -1036,14 +1047,14 @@ class Administration extends ModuleBase {
   }
 
   async isWhiteListed(player: string): Promise<boolean> {
-    const row = await WhiteList.findOne({
+    const row = await prisma.whiteList.findFirst({
       where: { username: player, removal_date: null },
     });
     return !!row;
   }
 
-  async isBanned(player: string): Promise<{ reason: string } | null> {
-    const row = await BanList.findOne({
+  async isBanned(player: string): Promise<BanList | null> {
+    const row = await prisma.banList.findFirst({
       where: { username: player, removal_date: null },
     });
     return row;
@@ -1051,39 +1062,35 @@ class Administration extends ModuleBase {
 
   async fetchList(
     options: FetchListOptions
-  ): Promise<WhiteList[] | BanList[] | undefined> {
+  ): Promise<BanList[] | WhiteList[] | undefined> {
     if (options.type === "whiteList") {
       if (options.activeOnly) {
-        return await WhiteList.findAll({
+        return await prisma.whiteList.findMany({
           where: { removal_date: null },
-          order: [["id", "ASC"]],
-          limit: 10,
-          offset: options.page !== undefined ? options.page * 10 : 0,
-          raw: true,
+          orderBy: [{ id: options.sortOrder }],
+          take: 10,
+          skip: options.page !== undefined ? options.page * 10 : 0,
         });
       } else {
-        return await WhiteList.findAll({
-          order: [["id", "ASC"]],
-          limit: 10,
-          offset: options.page !== undefined ? options.page * 10 : 0,
-          raw: true,
+        return await prisma.whiteList.findMany({
+          orderBy: [{ id: options.sortOrder }],
+          take: 10,
+          skip: options.page !== undefined ? options.page * 10 : 0,
         });
       }
     } else if (options.type === "banList") {
       if (options.activeOnly) {
-        return await BanList.findAll({
-          raw: true,
+        return await prisma.banList.findMany({
           where: { removal_date: null },
-          order: [["id", "ASC"]],
-          limit: 10,
-          offset: options.page !== undefined ? options.page * 10 : 0,
+          orderBy: [{ id: options.sortOrder }],
+          take: 10,
+          skip: options.page !== undefined ? options.page * 10 : 0,
         });
       } else {
-        return await BanList.findAll({
-          raw: true,
-          order: [["id", "ASC"]],
-          limit: 10,
-          offset: options.page !== undefined ? options.page * 10 : 0,
+        return await prisma.banList.findMany({
+          orderBy: [{ id: options.sortOrder }],
+          take: 10,
+          skip: options.page !== undefined ? options.page * 10 : 0,
         });
       }
     }

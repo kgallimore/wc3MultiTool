@@ -21,14 +21,40 @@
     "appId": "wc3multitool",
     "productName": "WC3 Multi-Tool",
     "copyright": "Keith Gallimore",
+    "files": [
+      "**/*",
+      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
+      "!**/node_modules/*.d.ts",
+      "!**/node_modules/.bin",
+      "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}",
+      "!.editorconfig",
+      "!**/._*",
+      "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}",
+      "!**/{__pycache__,thumbs.db,.flowconfig,.idea,.vs,.nyc_output}",
+      "!**/{appveyor.yml,.travis.yml,circle.yml}",
+      "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}",
+      "prisma/**/*",
+      "!prisma/*.db"
+    ],
+    "extraResources": [
+      "node_modules/@prisma/engines/migration-engine*",
+      "node_modules/@prisma/engines/query*",
+      "node_modules/@prisma/engines/libquery*",
+      "node_modules/prisma/build*"
+    ],
     "extraFiles": [
+      {
+        "from": "./prisma/schema.prisma",
+        "to": "./prisma/schema.prisma"
+      },
+      {
+        "from": "./prisma/migrations",
+        "to": "./prisma/migrations"
+      },
       {
         "from": "./src/webui.html",
         "to": "."
-      },
-      {
-        "from": "./src/Models",
-        "to": "./models"
       },
       {
         "from": "./src/webui.js",
@@ -133,6 +159,7 @@
     "@discordjs/rest": "^1.7.1",
     "@nut-tree/nl-matcher": "^2.2.0",
     "@nut-tree/nut-js": "^3.1.2",
+    "@prisma/client": "^4.16.2",
     "bufferutil": "^4.0.7",
     "cross-fetch": "^4.0.0",
     "discord-api-types": "^0.37.47",
@@ -152,6 +179,7 @@
     "node-abi": "^3.45.0",
     "node-window-manager": "^2.2.4",
     "obs-websocket-js": "^5.0.3",
+    "prisma": "^4.16.2",
     "public-ip": "^4.0.4",
     "reflect-metadata": "^0.1.13",
     "sequelize": "^6.32.1",
