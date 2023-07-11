@@ -25,7 +25,6 @@ import {
   writeFileSync,
 } from "fs";
 import { play } from "sound-play";
-import { seq } from "./sequelize";
 
 import { settings, SettingsUpdates } from "./globals/settings";
 import { gameState, GameState } from "./globals/gameState";
@@ -302,7 +301,6 @@ if (!gotLock) {
   }
 
   app.on("ready", async () => {
-    await seq.sync();
     log.info("App ready");
     if (app.isPackaged) {
       setInterval(() => {

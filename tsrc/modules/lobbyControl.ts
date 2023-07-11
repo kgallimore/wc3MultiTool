@@ -214,10 +214,12 @@ export class LobbyControl extends Module {
           } else {
             this.isTargetMap = true;
           }
+          if(this.settings.values.autoHost.type !== "off") {
           this.settings.values.autoHost.closeSlots.forEach((slot) => {
             this.closeSlot(slot);
           });
           setTimeout(() => this.moveToSpec(), 150);
+        }
           this.emitLobbyUpdate({ newLobby: this.microLobby.exportMin() });
         } catch (e) {
           // @ts-ignore

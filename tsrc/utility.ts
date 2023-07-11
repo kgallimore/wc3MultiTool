@@ -293,3 +293,204 @@ export function isInt(
   }
   return isInt;
 }
+
+export type AdminRoles = "baswapper" | "swapper" | "moderator" | "admin";
+export type AdminCommands =
+  | "st"
+  | "sp"
+  | "start"
+  | "closeall"
+  | "a"
+  | "closeall"
+  | "hold"
+  | "mute"
+  | "unmute"
+  | "swap"
+  | "handi"
+  | "close"
+  | "open"
+  | "openall"
+  | "kick"
+  | "ban"
+  | "unban"
+  | "white"
+  | "unwhite"
+  | "perm"
+  | "unperm"
+  | "autohost"
+  | "autostart"
+  | "balance";
+
+export const commands: Record<
+  AdminCommands,
+  {
+    minPermissions: AdminRoles;
+    requiresHost: boolean;
+    requiresLobby: boolean;
+    description: string;
+    arguments?: string;
+  }
+> = {
+  sp: {
+    minPermissions: "moderator",
+    requiresHost: true,
+    requiresLobby: true,
+    description: "Shuffles players",
+  },
+  st: {
+    minPermissions: "moderator",
+    requiresHost: true,
+    requiresLobby: true,
+    description: "Shuffles players inside their current teams",
+  },
+  start: {
+    minPermissions: "moderator",
+    requiresHost: true,
+    requiresLobby: true,
+    description: "Starts the game",
+  },
+  close: {
+    minPermissions: "moderator",
+    requiresHost: true,
+    requiresLobby: true,
+    description: "Closes a slot/player",
+    arguments: "(name|slotNumber)",
+  },
+  closeall: {
+    minPermissions: "moderator",
+    requiresHost: true,
+    requiresLobby: true,
+    description: "Close all slots",
+  },
+  a: {
+    minPermissions: "moderator",
+    requiresHost: true,
+    requiresLobby: true,
+    description: "Aborts the start countdown",
+  },
+  hold: {
+    minPermissions: "moderator",
+    requiresHost: true,
+    requiresLobby: true,
+    description: "Holds a slot for a player",
+    arguments: "(name)",
+  },
+  mute: {
+    minPermissions: "moderator",
+    requiresHost: false,
+    requiresLobby: true,
+    description: "Mutes a player",
+    arguments: "(name|slotNumber)",
+  },
+  unmute: {
+    minPermissions: "moderator",
+    requiresHost: false,
+    requiresLobby: true,
+    description: "Unmutes a player",
+    arguments: "(name|slotNumber)",
+  },
+  open: {
+    minPermissions: "moderator",
+    requiresHost: true,
+    requiresLobby: true,
+    description: "Opens a slot",
+    arguments: "(slotNumber)",
+  },
+  openall: {
+    minPermissions: "moderator",
+    requiresHost: true,
+    requiresLobby: true,
+    description: "Opens all slots",
+  },
+  handi: {
+    minPermissions: "moderator",
+    requiresHost: true,
+    requiresLobby: true,
+    description: "Sets a handicap for a slot",
+    arguments: "(name|slotNumber) (50|60|70|80|100)",
+  },
+  kick: {
+    minPermissions: "moderator",
+    requiresHost: true,
+    requiresLobby: true,
+    description: "Kicks a player",
+    arguments: "(name|slotNumber) (?reason)",
+  },
+  ban: {
+    minPermissions: "moderator",
+    requiresHost: false,
+    requiresLobby: false,
+    description: "Bans a player",
+    arguments: "(name|slotNumber) (?reason)",
+  },
+  unban: {
+    minPermissions: "moderator",
+    requiresHost: false,
+    requiresLobby: false,
+    description: "Unbans a player",
+    arguments: "(name)",
+  },
+  white: {
+    minPermissions: "moderator",
+    requiresHost: false,
+    requiresLobby: false,
+    description: "Whitelists a player",
+    arguments: "(name) (?reason)",
+  },
+  unwhite: {
+    minPermissions: "moderator",
+    requiresHost: false,
+    requiresLobby: false,
+    description: "Unwhitelists a player",
+    arguments: "(name)",
+  },
+  perm: {
+    minPermissions: "admin",
+    requiresHost: false,
+    requiresLobby: false,
+    description: "Gives a player privileged permissions",
+    arguments: "(name) (?role=moderator)",
+  },
+  unperm: {
+    minPermissions: "admin",
+    requiresHost: false,
+    requiresLobby: false,
+    description: "Removes privileged permissions from a player",
+    arguments: "(name)",
+  },
+  autohost: {
+    minPermissions: "admin",
+    requiresHost: false,
+    requiresLobby: false,
+    description: "Gets or sets autohost type",
+    arguments: "(?off|rapid|lobby|smart)",
+  },
+  autostart: {
+    minPermissions: "admin",
+    requiresHost: false,
+    requiresLobby: false,
+    description: "Gets or sets autostart amount",
+    arguments: "(number)",
+  },
+  balance: {
+    minPermissions: "moderator",
+    requiresHost: false,
+    requiresLobby: true,
+    description: "Balances current lobby",
+  },
+  swap: {
+    minPermissions: "swapper",
+    requiresHost: true,
+    requiresLobby: true,
+    description: "Swaps two players",
+    arguments: "(name|slotNumber) (name|slotNumber)",
+  },
+};
+export const commandArray = Object.entries(commands);
+
+export const hierarchy: { [key: string]: number } = {
+  admin: 4,
+  moderator: 3,
+  swapper: 2,
+  baswapper: 1,
+};

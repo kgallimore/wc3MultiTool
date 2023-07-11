@@ -9,14 +9,14 @@ import { REST } from "@discordjs/rest";
 import type { mmdResults } from "./replayHandler";
 import type { PlayerTeamsData } from "wc3mt-lobby-container";
 import type { LobbyUpdatesExtended } from "./lobbyControl";
-import { DeColorName } from "../utility";
+import { DeColorName, type AdminCommands } from "../utility";
 import { app } from "electron";
 import { GameState } from "../globals/gameState";
 import { GameSocketEvents } from "../globals/gameSocket";
 import { readdir } from "fs";
 import { join } from "path";
 
-import { AdminCommands, administration } from "./administration";
+import { administration } from "./administration";
 
 export type ChatChannelMatch = "chat" | "announce" | "admin" | "";
 
