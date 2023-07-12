@@ -24,7 +24,9 @@ import {
   mkdirSync,
   writeFileSync,
 } from "fs";
-import { play } from "sound-play";
+// @ts-expect-error
+import audioLoader from "audio-loader";
+import playAudio from "audio-play";
 
 import { settings, SettingsUpdates } from "./globals/settings";
 import { gameState, GameState } from "./globals/gameState";
@@ -352,9 +354,10 @@ if (!gotLock) {
 
   function playSound(file: string) {
     if (!app.isPackaged) {
-      play(join(__dirname, "sounds\\" + file));
+      audioLoader(join(__dirname, "sounds\\" + file)).then(playAudio);
+      //play(join(__dirname, "sounds\\" + file));
     } else {
-      play(join(app.getAppPath(), "\\src\\sounds\\" + file));
+      audioLoader(join(app.getAppPath(), "\\src\\sounds\\" + file)).then(playAudio);
     }
   }
 

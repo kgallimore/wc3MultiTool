@@ -335,13 +335,13 @@ export const commands: Record<
     minPermissions: "moderator",
     requiresHost: true,
     requiresLobby: true,
-    description: "Shuffles players",
+    description: "Shuffles players including within teams",
   },
   st: {
     minPermissions: "moderator",
     requiresHost: true,
     requiresLobby: true,
-    description: "Shuffles players inside their current teams",
+    description: "Shuffles players between teams",
   },
   start: {
     minPermissions: "moderator",

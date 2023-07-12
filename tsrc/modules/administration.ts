@@ -40,67 +40,69 @@ class Administration extends ModuleBase {
   protected async onGameSocketEvent(events: GameSocketEvents): Promise<void> {
     if (events.processedChat) {
       let sender = events.processedChat.sender;
-      if (events.processedChat.content.match(/^\?/)) {
-        var command = events.processedChat.content.replace(/^\?/, "");
-        if (command.match(/^(help)|(commands)/i)) {
-          if (this.lobby.microLobby?.lobbyStatic.isHost) {
-            if (this.lobby.microLobby?.statsAvailable) {
+      let firstArg = events.processedChat.content.split(" ")[0];
+      console.log(firstArg);
+      if (firstArg.match(/^\?/)) {
+        console.log("Is command");
+        firstArg = firstArg.slice(1).toLowerCase();
+        if (firstArg in commands) {
+          console.log("Is known command");
+          var command = firstArg as AdminCommands;
+          if (command.match(/^(help)|(commands)/i)) {
+            if (this.lobby.microLobby?.lobbyStatic.isHost) {
+              if (this.lobby.microLobby?.statsAvailable) {
+                this.gameSocket.sendChatMessage(
+                  "?stats <?player>: Return back your stats, or target player stats"
+                );
+              }
+              if (
+                ["rapidHost", "smartHost"].includes(this.settings.values.autoHost.type) &&
+                this.settings.values.autoHost.voteStart
+              ) {
+                this.gameSocket.sendChatMessage(
+                  "?voteStart: Starts or accepts a vote to start"
+                );
+              }
+              if (await this.checkRole(sender, "moderator")) {
+                commandArray
+                  .filter(([command, details]) => details.minPermissions === "moderator")
+                  .forEach(([command, details]) => {
+                    this.gameSocket.sendChatMessage(
+                      `?${command}${details.arguments ? " " + details.arguments : ""}: ${
+                        details.description
+                      } `
+                    );
+                  });
+              }
+              if (await this.checkRole(sender, "admin")) {
+                commandArray
+                  .filter(([command, details]) => details.minPermissions === "admin")
+                  .forEach(([command, details]) => {
+                    this.gameSocket.sendChatMessage(
+                      `?${command}${details.arguments ? " " + details.arguments : ""}: ${
+                        details.description
+                      } `
+                    );
+                  });
+              }
               this.gameSocket.sendChatMessage(
-                "?stats <?player>: Return back your stats, or target player stats"
+                "?help: Shows commands with <required arg> <?optional arg>"
               );
             }
-            if (
-              ["rapidHost", "smartHost"].includes(this.settings.values.autoHost.type) &&
-              this.settings.values.autoHost.voteStart
-            ) {
-              this.gameSocket.sendChatMessage(
-                "?voteStart: Starts or accepts a vote to start"
-              );
-            }
-            if (await this.checkRole(sender, "moderator")) {
-              commandArray
-                .filter(([command, details]) => details.minPermissions === "moderator")
-                .forEach(([command, details]) => {
-                  this.gameSocket.sendChatMessage(
-                    `?${command}${details.arguments ? " " + details.arguments : ""}: ${
-                      details.description
-                    } `
-                  );
-                });
-            }
-            if (await this.checkRole(sender, "admin")) {
-              commandArray
-                .filter(([command, details]) => details.minPermissions === "admin")
-                .forEach(([command, details]) => {
-                  this.gameSocket.sendChatMessage(
-                    `?${command}${details.arguments ? " " + details.arguments : ""}: ${
-                      details.description
-                    } `
-                  );
-                });
-            }
-            this.gameSocket.sendChatMessage(
-              "?help: Shows commands with <required arg> <?optional arg>"
-            );
-          }
-        } else {
-          var content = command.split(" ");
-          const role = await this.getRole(sender);
-          if (role) {
-            let runCom = await this.runCommand(
-              content[0] as AdminCommands,
-              role,
-              sender,
-              content.slice(1)
-            );
-            if (runCom) {
-              this.gameSocket.sendChatMessage(runCom);
+          } else {
+            var content = events.processedChat.content.split(" ");
+            const role = await this.getRole(sender);
+            if (role) {
+              let runCom = await this.runCommand(command, role, sender, content.slice(1));
+              if (runCom) {
+                this.gameSocket.sendChatMessage(runCom);
+              }
             }
           }
+          return;
         }
-      } else {
-        this.gameSocket.emitEvent({ nonAdminChat: events.processedChat });
       }
+      this.gameSocket.emitEvent({ nonAdminChat: events.processedChat });
     }
   }
 
@@ -110,7 +112,6 @@ class Administration extends ModuleBase {
     user: string,
     args?: string[]
   ): Promise<string | false> {
-    this.info("Running command: " + command, role, user, args);
     var retString = "";
     if (!commands[command]) {
       return false;
@@ -533,28 +534,27 @@ class Administration extends ModuleBase {
     let isClear = await this.checkPlayer(data.name);
     if (!isClear.type) {
       this.lobby.clearPlayer(data.name, true);
-    } else {
-      this.lobby.banSlot(data.slot);
-      if (isClear.type === "black") {
-        this.gameSocket.sendChatMessage(
-          data.name +
-            " is permanently banned" +
-            (isClear.reason ? ": " + isClear.reason : "")
-        );
-        this.info(
-          "Kicked " +
-            data.name +
-            " for being banned" +
-            (isClear ? " for: " + isClear : "")
-        );
-      } else if (isClear.type === "white") {
-        this.lobby.banSlot(data.slot);
-        this.gameSocket.sendChatMessage(data.name + " is not whitelisted");
-        this.info("Kicked " + data.name + " for not being whitelisted");
-      } else {
-        this.info("Player cleared: " + data.name);
-      }
+      return;
     }
+    this.lobby.banSlot(data.slot);
+    if (isClear.type === "black") {
+      this.gameSocket.sendChatMessage(
+        data.name +
+          " is permanently banned" +
+          (isClear.reason ? ": " + isClear.reason : "")
+      );
+      this.info(
+        "Kicked " + data.name + " for being banned" + (isClear ? " for: " + isClear : "")
+      );
+      return;
+    }
+    if (isClear.type === "white") {
+      this.lobby.banSlot(data.slot);
+      this.gameSocket.sendChatMessage(data.name + " is not whitelisted");
+      this.info("Kicked " + data.name + " for not being whitelisted");
+      return;
+    }
+    this.info("Player cleared: " + data.name);
   }
 
   async checkPlayer(
@@ -565,7 +565,9 @@ class Administration extends ModuleBase {
       return { type: "black", reason: row.reason };
     }
     if (this.settings.values.autoHost.whitelist) {
-      if (name !== this.gameState.values.selfBattleTag && !this.isWhiteListed(name)) {
+      let isPrivileged = await this.checkRole(name, "swapper");
+      let whiteListed = await this.isWhiteListed(name);
+      if (!isPrivileged && name !== this.gameState.values.selfBattleTag && !whiteListed) {
         return { type: "white" };
       }
     }

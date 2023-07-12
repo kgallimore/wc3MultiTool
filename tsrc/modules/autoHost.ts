@@ -27,7 +27,7 @@ const exec = require("child_process").exec;
 class AutoHost extends ModuleBase {
   voteStartVotes: Array<string> = [];
   wc3mtTargetFile = `${app.getPath("documents")}\\Warcraft III\\CustomMapData\\wc3mt.txt`;
-  gameNumber = 0;
+  gameNumber = 1;
   voteTimer: NodeJS.Timeout | null = null;
   creatingGame: { status: boolean; targetName: string; tryCount: number } = {
     status: false,
@@ -149,7 +149,7 @@ class AutoHost extends ModuleBase {
         this.lobby.startGame(this.settings.values.autoHost.delayStart);
       }
       if (this.settings.values.autoHost.sounds) {
-        this.playSound("ready.wav");
+        this.playSound("ready2.wav");
       }
       this.clientState.updateClientState({
         currentStep: "Starting Game",
@@ -173,58 +173,64 @@ class AutoHost extends ModuleBase {
     }
     if (events.nonAdminChat) {
       if (events.nonAdminChat.content.match(/^\?votestart$/i)) {
-        if (
-          this.settings.values.autoHost.voteStart &&
-          this.lobby.microLobby?.lobbyStatic.isHost &&
-          ["rapidHost", "smartHost"].includes(this.settings.values.autoHost.type)
-        ) {
-          if (!this.lobby.microLobby.allPlayers.includes(events.nonAdminChat.sender)) {
-            this.gameSocket.sendChatMessage("Only players may vote start.");
-            return;
-          }
-          if (this.voteStartVotes.length === 0) {
-            let numPlayers = Object.values(
-              this.lobby.exportDataStructure("Autohost 2", true)
-            )
-              .flatMap((team) => team)
-              .filter((player) => player.realPlayer).length;
-            if (numPlayers < 2) {
-              this.gameSocket.sendChatMessage("Unavailable. Not enough players.");
-              return;
-            }
-            if (
-              (this.settings.values.autoHost.voteStartTeamFill &&
-                this.lobby.allPlayerTeamsContainPlayers()) ||
-              !this.settings.values.autoHost.voteStartTeamFill
-            ) {
-              this.voteTimer = setTimeout(this.cancelVote.bind(this), 60000);
-              this.gameSocket.sendChatMessage("You have 60 seconds to ?votestart.");
-            } else {
-              this.gameSocket.sendChatMessage("Unavailable. Not all teams have players.");
-              return;
-            }
-          }
+        console.log("Vote start received");
+        if (["rapidHost", "smartHost"].includes(this.settings.values.autoHost.type)) {
           if (
-            !this.voteStartVotes.includes(events.nonAdminChat.sender) &&
-            this.voteTimer
+            this.settings.values.autoHost.voteStart &&
+            this.lobby.microLobby?.lobbyStatic.isHost
           ) {
-            this.voteStartVotes.push(events.nonAdminChat.sender);
-            if (
-              this.voteStartVotes.length >=
-              this.lobby.microLobby?.nonSpecPlayers.length *
-                (this.settings.values.autoHost.voteStartPercent / 100)
-            ) {
-              this.info("Vote start succeeded");
-              this.lobby.startGame();
-            } else {
-              this.gameSocket.sendChatMessage(
-                Math.ceil(
-                  this.lobby.microLobby?.nonSpecPlayers.length *
-                    (this.settings.values.autoHost.voteStartPercent / 100) -
-                    this.voteStartVotes.length
-                ).toString() + " more vote(s) required."
-              );
+            if (!this.lobby.microLobby.allPlayers.includes(events.nonAdminChat.sender)) {
+              this.gameSocket.sendChatMessage("Only players may vote start.");
+              return;
             }
+            if (this.voteStartVotes.length === 0) {
+              let numPlayers = Object.values(
+                this.lobby.exportDataStructure("Autohost 2", true)
+              )
+                .flatMap((team) => team)
+                .filter((player) => player.realPlayer).length;
+              if (numPlayers < 2) {
+                this.gameSocket.sendChatMessage("Unavailable. Not enough players.");
+                return;
+              }
+              if (
+                (this.settings.values.autoHost.voteStartTeamFill &&
+                  this.lobby.allPlayerTeamsContainPlayers()) ||
+                !this.settings.values.autoHost.voteStartTeamFill
+              ) {
+                this.voteTimer = setTimeout(this.cancelVote.bind(this), 60000);
+                this.gameSocket.sendChatMessage("You have 60 seconds to ?votestart.");
+              } else {
+                this.gameSocket.sendChatMessage(
+                  "Unavailable. Not all teams have players."
+                );
+                return;
+              }
+            }
+            if (
+              !this.voteStartVotes.includes(events.nonAdminChat.sender) &&
+              this.voteTimer
+            ) {
+              this.voteStartVotes.push(events.nonAdminChat.sender);
+              if (
+                this.voteStartVotes.length >=
+                this.lobby.microLobby?.nonSpecPlayers.length *
+                  (this.settings.values.autoHost.voteStartPercent / 100)
+              ) {
+                this.info("Vote start succeeded");
+                this.lobby.startGame();
+              } else {
+                this.gameSocket.sendChatMessage(
+                  Math.ceil(
+                    this.lobby.microLobby?.nonSpecPlayers.length *
+                      (this.settings.values.autoHost.voteStartPercent / 100) -
+                      this.voteStartVotes.length
+                  ).toString() + " more vote(s) required."
+                );
+              }
+            }
+          } else {
+            this.gameSocket.sendChatMessage("Unavailable. Vote start is disabled.");
           }
         }
       }
@@ -367,9 +373,6 @@ class AutoHost extends ModuleBase {
             return this.openWarcraftRegion();
           }
         }
-      }
-      if (this.settings.values.autoHost.increment) {
-        this.gameNumber += 1;
       }
       return await this.createGame();
     }
@@ -733,7 +736,7 @@ class AutoHost extends ModuleBase {
             if (this.settings.values.autoHost.voteStart) {
               text += " You can vote start with ?votestart";
             }
-            if (this.settings.values.autoHost.regionChangeType) {
+            if (this.settings.values.autoHost.regionChangeType != "off") {
               text += " I switch regions.";
             }
             this.gameSocket.sendChatMessage(text);
