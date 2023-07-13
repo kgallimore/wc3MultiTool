@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { SvelteToast, toast } from "@zerodevx/svelte-toast";
   import type { BanWhiteList, WindowReceive, WindowSend } from "../../tsrc/utility";
   import { onMount } from "svelte";
   import { MicroLobby } from "wc3mt-lobby-container";
@@ -104,6 +105,7 @@
       let newData = data.legacy.data;
       switch (data.legacy.messageType) {
         case "action":
+          toast.push(newData.value);
           windowData.update((state) => {
             state.lastAction = newData.value;
             state.banReason = "";
@@ -136,17 +138,7 @@
           }
           break;
         case "error":
-          let alertDiv = document.createElement("div");
-          alertDiv.classList.add(
-            "alert",
-            "alert-danger",
-            "alert-dismissible",
-            "fade",
-            "show"
-          );
-          alertDiv.setAttribute("role", "alert");
-          alertDiv.innerHTML = `<strong>Error!</strong> ${data.legacy.data.error} <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>`;
-          document.body.prepend(alertDiv);
+          toast.push(`<strong>Error!</strong> ${data.legacy.data.error}`);
           break;
         case "gotMapPath":
           appSettings.update((state) => {
@@ -174,6 +166,8 @@
     window.api.send("toMain", args);
   }
 </script>
+
+<SvelteToast options={{ intro: { x: 0 } }} />
 
 <div class="w-100 fixed flex justify-end right-6" style="z-index:10000">
   <div class="right-0">
@@ -282,3 +276,12 @@
     </div>
   </div>
 </div>
+
+<style>
+  :root {
+    --toastContainerTop: auto;
+    --toastContainerRight: auto;
+    --toastContainerBottom: 8rem;
+    --toastContainerLeft: calc(50vw - 8rem);
+  }
+</style>

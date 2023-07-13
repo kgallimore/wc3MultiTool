@@ -14,6 +14,7 @@
     "@svelte-plugins/tooltips": "^0.1.6",
     "@sveltejs/vite-plugin-svelte": "^2.4.2",
     "@tsconfig/svelte": "^4.0.1",
+    "@zerodevx/svelte-toast": "^0.9.5",
     "autoprefixer": "^10.4.14",
     "postcss": "^8.4.24",
     "svelte": "^4.0.0",

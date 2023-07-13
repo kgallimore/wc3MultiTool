@@ -52,7 +52,11 @@
       {/each}
       {#each Object.entries($clientState) as [key, value]}
         <div class="d-flex justify-content-center pt-1">
-          {key}: {typeof value !== "object" ? value : JSON.stringify(value)}
+          {#if key === "latestUploadedReplay"}
+            Last uploaded replay: {new Date(value).toLocaleString()}
+          {:else}
+            {key}: {typeof value !== "object" ? value : JSON.stringify(value)}
+          {/if}
         </div>
       {/each}
     </details>

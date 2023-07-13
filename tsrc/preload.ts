@@ -21,7 +21,6 @@ contextBridge.exposeInMainWorld("api", {
     }
   },
 });
-contextBridge.exposeInMainWorld("appVersion", app.getVersion());
 // Log details of versions
 for (const dependency of ["chrome", "node", "electron"]) {
   console.log(`${dependency}-version`, process.versions[dependency]);

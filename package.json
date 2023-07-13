@@ -1,6 +1,6 @@
 {
   "name": "wc3multitool",
-  "version": "2.0.3-alpha",
+  "version": "2.0.4-alpha",
   "description": "A multi-tool for Warcraft 3",
   "repository": {
     "type": "git",
@@ -38,7 +38,7 @@
       "!prisma/*.db"
     ],
     "extraResources": [
-      "node_modules/@prisma/engines/migration-engine*",
+      "node_modules/@prisma/engines/schema-engine-*",
       "node_modules/@prisma/engines/query*",
       "node_modules/@prisma/engines/libquery*",
       "node_modules/prisma/build*"
@@ -157,14 +157,14 @@
   },
   "dependencies": {
     "@discordjs/rest": "^1.7.1",
+    "@iamtraction/google-translate": "^2.0.1",
     "@nut-tree/nl-matcher": "^2.2.0",
     "@nut-tree/nut-js": "^3.1.2",
-    "@prisma/client": "^4.16.2",
+    "@prisma/client": "^5.0.0",
     "@types/audio-play": "^2.3.0",
     "audio-loader": "^1.0.3",
     "audio-play": "^2.3.1",
     "bufferutil": "^4.0.7",
-    "cross-fetch": "^4.0.0",
     "discord-api-types": "^0.37.47",
     "discord-rpc": "^4.0.1",
     "discord.js": "^14.11.0",
@@ -173,7 +173,6 @@
     "electron-updater": "^6.1.1",
     "fast-geoip": "^1.1.88",
     "firebase": "^9.19.1",
-    "form-data": "^4.0.0",
     "js-combinatorics": "^2.1.1",
     "languagedetect": "^2.0.0",
     "mariadb": "^3.2.0",
@@ -182,14 +181,13 @@
     "node-abi": "^3.45.0",
     "node-window-manager": "^2.2.4",
     "obs-websocket-js": "^5.0.3",
-    "prisma": "^4.16.2",
+    "prisma": "^5.0.0",
     "reflect-metadata": "^0.1.13",
     "sequelize": "^6.32.1",
     "sequelize-typescript": "^2.1.5",
     "socket.io-client": "^4.6.1",
     "sqlite3": "^5.1.6",
     "translate": "^2.0.2",
-    "translate-google": "github:shikar/NODE_GOOGLE_TRANSLATE#pull/4",
     "w3gjs": "^2.5.0",
     "wc3mt-lobby-container": "^1.1.1",
     "ws": "^8.13.0"

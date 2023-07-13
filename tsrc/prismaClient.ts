@@ -26,9 +26,9 @@ export const qePath = path.join(
 );
 export const mePath = path.join(
   extraResourcesPath,
-  "node_modules/@prisma/engines/migration-engine-windows.exe"
+  "node_modules/@prisma/engines/schema-engine-windows.exe"
 );
-export const dbPath = path.join(process.resourcesPath, "wc3mtv2.db");
+export const dbPath = path.join(app.getPath("userData"), "wc3mtv2.db");
 
 export async function runPrismaCommand({
   command,
@@ -48,7 +48,7 @@ export async function runPrismaCommand({
         env: {
           ...process.env,
           DATABASE_URL: dbUrl,
-          PRISMA_MIGRATION_ENGINE_BINARY: mePath,
+          PRISMA_SCHEMA_ENGINE_BINARY: mePath,
           PRISMA_QUERY_ENGINE_LIBRARY: qePath,
           PRISMA_FMT_BINARY: qePath,
           PRISMA_INTROSPECTION_ENGINE_BINARY: qePath,

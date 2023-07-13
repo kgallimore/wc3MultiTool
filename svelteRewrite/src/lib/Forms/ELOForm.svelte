@@ -67,11 +67,10 @@
     <div id="eloSettings" class="border p-2">
       <div class="row">
         <div class="col">
-          <div class="d-flex justify-content-center">ELO Settings</div>
           {#if ["mysql", "mariadb"].includes($appSettings.elo.type)}
             <div class="row">
               <div class="col">
-                <label for="dbIP">Databse Address</label>
+                <label for="dbIP">Database Address</label>
                 <input
                   type="text"
                   class="form-control"
@@ -82,7 +81,7 @@
                 />
               </div>
               <div class="col">
-                <label for="dbPort">Databse Port</label>
+                <label for="dbPort">Database Port</label>
                 <input
                   type="number"
                   class="form-control"

@@ -16,16 +16,6 @@
 </script>
 
 <form class="border p-2">
-  {#if $windowData.lastAction}
-    <div class="alert alert-warning alert-dismissible fade show" role="alert">
-      {$windowData.lastAction}<button
-        type="button"
-        class="btn-close"
-        data-bs-dismiss="alert"
-        aria-label="Close"
-      />
-    </div>
-  {/if}
   <div class="row p-2">
     <div class="col">
       <input

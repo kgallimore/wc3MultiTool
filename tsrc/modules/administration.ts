@@ -581,6 +581,7 @@ class Administration extends ModuleBase {
     reason = "",
     bypassCheck: boolean = false
   ): Promise<true | { reason: string }> {
+    console.log("ban");
     if ((await this.checkRole(admin, "moderator")) || bypassCheck) {
       if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
         if (await this.checkRole(player, "admin")) {
@@ -667,6 +668,9 @@ class Administration extends ModuleBase {
 
   async unWhitePlayer(player: string, admin: string): Promise<true | { reason: string }> {
     try {
+      if (!(await this.checkRole(admin, "moderator"))) {
+        return { reason: "Missing required permissions" };
+      }
       await prisma.whiteList.updateMany({
         where: { username: player, removal_date: null },
         data: { removal_date: new Date() },
@@ -687,6 +691,9 @@ class Administration extends ModuleBase {
 
   async unBanPlayer(player: string, admin: string): Promise<true | { reason: string }> {
     try {
+      if (!(await this.checkRole(admin, "moderator"))) {
+        return { reason: "Missing required permissions" };
+      }
       await prisma.banList.updateMany({
         where: { username: player, removal_date: null },
         data: { removal_date: new Date() },
@@ -818,9 +825,9 @@ class Administration extends ModuleBase {
     return (row?.role as AdminRoles) ?? null;
   }
 
-  async checkRole(player: string, minPerms: AdminRoles) {
+  async checkRole(player: string, minPerms: AdminRoles): Promise<boolean> {
     if (!player) return false;
-
+    if (player === "client") return true;
     let targetRole = await this.getRole(player);
     if (targetRole) {
       return this.roleEqualOrHigher(minPerms, targetRole);

@@ -5,6 +5,7 @@
   import CheckBox from "./SettingsCheckbox.svelte";
   import StyledButton from "./StyledButton.svelte";
   import { onMount } from "svelte";
+  import { windowData } from "../stores/page";
   export let type: "banList" | "whiteList";
   export let list: {
     data: BanWhiteList | null;
@@ -31,6 +32,7 @@
       },
     });
   }
+  $: $windowData.lastAction && reFetch();
   onMount(() => {
     if (list.data.length === 0) reFetch();
   });
