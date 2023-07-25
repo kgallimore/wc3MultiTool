@@ -14,6 +14,7 @@ export type MenuStates =
   | "SCORE_SCREEN"
   | "LOGIN_DOORS"
   | "CUSTOM_GAME_LOBBY"
+  | "DISABLED_SCREEN"
   | "";
 
 export type GameStateActions =
@@ -36,25 +37,25 @@ export interface OpenLobbyParams {
 export interface GameState {
   selfRegion: Regions | "";
   menuState: MenuStates;
-  screenState: string;
   selfBattleTag: string;
   inGame: boolean;
   action: GameStateActions;
   openLobbyParams: OpenLobbyParams;
   connected: boolean;
+  gameVersion: string;
 }
 
 class GameStateContainer extends Global {
   private gameSocket = gameSocket;
   private _values: GameState = {
     menuState: "OUT_OF_MENUS",
-    screenState: "",
     selfBattleTag: "",
     selfRegion: "",
     inGame: false,
     action: "nothing",
     openLobbyParams: {},
     connected: false,
+    gameVersion: "",
   };
 
   constructor() {
@@ -76,19 +77,18 @@ class GameStateContainer extends Global {
         menuState: "",
         selfRegion: "",
         inGame: false,
-        screenState: "",
         selfBattleTag: "",
         connected: false,
       });
+    }
+    if (events.GameVersion) {
+      this.updateGameState({ gameVersion: events.GameVersion.gameVersion });
     }
     if (events.connected) {
       this.updateGameState({ connected: true });
     }
     if (events.MultiplayerGameLeave) {
       this.updateGameState({ action: "nothing" });
-    }
-    if (events.ScreenTransitionInfo) {
-      this.updateGameState({ screenState: events.ScreenTransitionInfo.screen });
     }
     if (events.UpdateUserInfo) {
       this.updateGameState({
@@ -97,19 +97,27 @@ class GameStateContainer extends Global {
       });
     }
     if (events.SetGlueScreen) {
+      console.log("setGlueScreen", events.SetGlueScreen);
       if (
         this.values.menuState === "LOADING_SCREEN" &&
-        events.SetGlueScreen.screen === "SCORE_SCREEN"
+        events.SetGlueScreen.screen === "DISABLED_SCREEN"
       ) {
         this.info("Game has finished loading in.");
-        gameState.updateGameState({ inGame: true });
+        this.updateGameState({ inGame: true });
         //  action: "waitingToLeaveGame"
       } else {
-        gameState.updateGameState({ menuState: events.SetGlueScreen.screen });
+        this.updateGameState({ menuState: events.SetGlueScreen.screen });
       }
     }
-    if (events.GameListRemove || events.GameListUpdate) {
-      gameState.updateGameState({ menuState: "CUSTOM_LOBBIES" });
+    if (events.UpdateScoreInfo) {
+      this.updateGameState({ inGame: false, menuState: "SCORE_SCREEN" });
+    }
+    if (
+      (events.GameList?.games && events.GameList.games.length > 0) ||
+      events.GameListClear
+    ) {
+      console.log("Custom Lobbies");
+      this.updateGameState({ menuState: "CUSTOM_LOBBIES" });
     }
   }
 
@@ -140,8 +148,6 @@ class GameStateContainer extends Global {
           this._values[key] = value as Regions;
         } else if (key === "menuState" && typeof value === "string") {
           this._values[key] = value as GameState["menuState"];
-        } else if (key === "screenState" && typeof value === "string") {
-          this._values[key] = value;
         } else if (
           key === "action" &&
           typeof value === "string" &&

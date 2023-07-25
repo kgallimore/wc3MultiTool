@@ -2,12 +2,18 @@ import { Global } from "../globalBase";
 import Store from "electron-store";
 
 import type { PickByValue } from "./../utility";
+import { lookup } from "fast-geoip";
+import { request } from "http";
 
 export interface ClientState {
   tableVersion: number;
   latestUploadedReplay: number;
   currentStep: string;
   currentStepProgress: number;
+  vpnActive: "us" | "eu" | false;
+  currentIP: string;
+  ipCountry: string;
+  ipIsEU: boolean;
 }
 
 class ClientStateSingle extends Global {
@@ -26,7 +32,12 @@ class ClientStateSingle extends Global {
       latestUploadedReplay: (this._store.get("latestUploadedReplay") as number) ?? 0,
       currentStep: "",
       currentStepProgress: 0,
+      vpnActive: false,
+      currentIP: "",
+      ipCountry: "",
+      ipIsEU: false,
     };
+    this.getPublicIP();
   }
 
   get values() {
@@ -35,6 +46,58 @@ class ClientStateSingle extends Global {
 
   set values(value: ClientState) {
     throw new Error("Can not set values directly. Use updateClientState.");
+  }
+
+  async getPublicIP(): Promise<{
+    current: string;
+    country: string;
+    isEU: boolean;
+    old?: string;
+  }> {
+    let retVal: { current: string; country: string; isEU: boolean; old?: string };
+
+    let ip: string = "";
+    const req = request(
+      {
+        host: "api.ipify.org",
+        port: 80,
+        path: "/?format=json",
+      },
+      (res) => {
+        res.setEncoding("utf8");
+
+        let body = "";
+        res.on("data", (chunk) => {
+          body += chunk;
+        });
+        res.on("end", () => {
+          const data = JSON.parse(body);
+          ip = data.ip;
+        });
+      }
+    );
+    req.end();
+    let oldVal: string = "";
+    if (ip !== this._values.currentIP) {
+      oldVal = this._values.currentIP;
+      this.updateClientState({ currentIP: ip });
+      let ipLookup = await lookup(ip);
+      if (ipLookup) {
+        this.updateClientState({
+          ipIsEU: ipLookup.eu === "1",
+          ipCountry: ipLookup.country,
+        });
+      } else {
+        this.error("IP lookup failed.");
+      }
+    }
+    retVal = {
+      current: ip,
+      country: this._values.ipCountry,
+      isEU: this._values.ipIsEU,
+      old: oldVal,
+    };
+    return retVal;
   }
 
   updateClientState(values: Partial<ClientState>) {

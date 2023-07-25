@@ -37,6 +37,7 @@ export interface ClientSettings {
   bnetUsername: string;
   bnetPassword: string;
   releaseChannel: "latest" | "beta" | "alpha";
+  debugAssistance: boolean;
 }
 export interface AutoHostSettings {
   type: "off" | "lobbyHost" | "rapidHost" | "smartHost";
@@ -67,13 +68,16 @@ export interface AutoHostSettings {
   flagRandomHero: boolean;
   settingVisibility: "0" | "1" | "2" | "3";
   leaveAlternate: boolean;
-  regionChange: boolean;
+  regionChangeType: "off" | "realm" | "openVPN" | "both";
   regionChangeTimeEU: string;
+  regionChangeOpenVPNConfigEU: string;
   regionChangeTimeNA: string;
+  regionChangeOpenVPNConfigNA: string;
   shufflePlayers: boolean;
   whitelist: boolean;
   minPlayers: number;
   delayStart: number;
+  openVPNPath: string;
 }
 export interface ObsSettings {
   enabled: boolean;
@@ -93,13 +97,38 @@ export interface DiscordSettings {
   token: string;
   announceChannel: string;
   chatChannel: string;
+  useThreads: boolean;
+  adminChannel: string;
+  logLevel: "error" | "warn" | "off";
   bidirectionalChat: boolean;
   sendInGameChat: boolean;
+  adminRole: string;
+  customName: string;
 }
 export interface EloSettings {
-  type: "off" | "wc3stats" | "pyroTD" | "random";
+  type: "off" | "wc3stats" | "pyroTD" | "mariadb" | "mysql" | "sqlite" | "random";
+  dbIP: string;
+  dbPort: number;
+  dbUser: string;
+  dbPassword: string;
+  dbName: string;
+  dbTableName: string;
+  dbSecondaryTable: string;
+  dbPrimaryTableKey: string;
+  dbSecondaryTableKey: string;
+  dbUserColumn: string;
+  dbELOColumn: string;
+  dbPlayedColumn: string;
+  dbWonColumn: string;
+  dbRankColumn: string;
+  dbLastChangeColumn: string;
+  dbSeasonColumn: string;
+  dbCurrentSeason: string;
+  dbDefaultElo: number;
+  sqlitePath: string;
   balanceTeams: boolean;
   announce: boolean;
+  hideElo: boolean;
   excludeHostFromSwap: boolean;
   lookupName: string;
   privateKey: string;
@@ -175,12 +204,17 @@ class AppSettingsContainer extends Global {
         settingVisibility: store.get("autoHost.settingVisibility") ?? "0",
         leaveAlternate: store.get("autoHost.leaveAlternate") ?? false,
         shufflePlayers: store.get("autoHost.shufflePlayers") ?? false,
-        regionChange: store.get("autoHost.regionChange") ?? false,
+        regionChangeType: store.get("autoHost.regionChangeType") ?? "off",
         regionChangeTimeEU: store.get("autoHost.regionChangeTimeEU") ?? "11:00",
+        regionChangeOpenVPNConfigEU:
+          store.get("autoHost.regionChangeOpenVPNConfigEU") ?? "",
         regionChangeTimeNA: store.get("autoHost.regionChangeTimeNA") ?? "01:00",
+        regionChangeOpenVPNConfigNA:
+          store.get("autoHost.regionChangeOpenVPNConfigNA") ?? "",
         whitelist: store.get("autoHost.whitelist") ?? false,
         minPlayers: store.get("autoHost.minPlayers") ?? 0,
         delayStart: store.get("autoHost.delayStart") ?? 0,
+        openVPNPath: store.get("autoHost.openVPNPath") ?? "",
       },
       obs: {
         enabled: store.get("obs.enabled") ?? false,
@@ -196,8 +230,28 @@ class AppSettingsContainer extends Global {
       },
       elo: {
         type: store.get("elo.type") ?? "off",
+        dbIP: store.get("elo.dbIP") ?? "127.0.0.1",
+        dbPort: store.get("elo.dbPort") ?? 3306,
+        dbUser: store.get("elo.dbUser") ?? "",
+        dbPassword: store.get("elo.dbPassword") ?? "",
+        dbName: store.get("elo.dbName") ?? "",
+        dbTableName: store.get("elo.dbTableName") ?? "",
+        dbSecondaryTable: store.get("elo.dbSecondaryTable") ?? "",
+        dbPrimaryTableKey: store.get("elo.dbPrimaryTableKey") ?? "",
+        dbSecondaryTableKey: store.get("elo.dbSecondaryTableKey") ?? "",
+        dbUserColumn: store.get("elo.dbUserColumn") ?? "player",
+        dbELOColumn: store.get("elo.dbELOColumn") ?? "rating",
+        dbPlayedColumn: store.get("elo.dbPlayedColumn") ?? "played",
+        dbWonColumn: store.get("elo.dbWonColumn") ?? "wins",
+        dbRankColumn: store.get("elo.dbRankColumn") ?? "rank",
+        dbLastChangeColumn: store.get("elo.dbLastChangeColumn") ?? "",
+        dbSeasonColumn: store.get("elo.dbSeasonColumn") ?? "",
+        dbCurrentSeason: store.get("elo.dbCurrentSeason") ?? "",
+        dbDefaultElo: store.get("elo.dbDefaultElo") ?? 500,
+        sqlitePath: store.get("elo.sqlitePath") ?? "",
         balanceTeams: store.get("elo.balanceTeams") ?? true,
         announce: store.get("elo.announce") ?? true,
+        hideElo: store.get("elo.hideElo") ?? false,
         excludeHostFromSwap: store.get("elo.excludeHostFromSwap") ?? true,
         lookupName: store.get("elo.lookupName") ?? "",
         privateKey: store.get("elo.privateKey") ?? "",
@@ -216,8 +270,13 @@ class AppSettingsContainer extends Global {
         token: store.get("discord.token") ?? "",
         announceChannel: store.get("discord.announceChannel") ?? "",
         chatChannel: store.get("discord.chatChannel") ?? "",
+        useThreads: store.get("discord.useThreads") ?? true,
         bidirectionalChat: store.get("discord.bidirectionalChat") ?? false,
         sendInGameChat: store.get("discord.sendInGameChat") ?? false,
+        adminChannel: store.get("discord.adminChannel") ?? "",
+        logLevel: store.get("discord.logLevel") ?? "error",
+        adminRole: store.get("discord.adminRole") ?? "wc3mt",
+        customName: store.get("client.customName") ?? store.get("anonymousIdentifier"),
       },
       client: {
         restartOnUpdate: store.get("client.restartOnUpdate") ?? false,
@@ -232,6 +291,8 @@ class AppSettingsContainer extends Global {
         alternateLaunch: store.get("client.alternateLaunch") ?? false,
         bnetUsername: store.get("client.bnetUsername") ?? "",
         bnetPassword: store.get("client.bnetPassword") ?? "",
+        releaseChannel: store.get("client.releaseChannel") ?? "latest",
+        debugAssistance: store.get("client.debugAssistance") ?? false,
       },
       streaming: {
         enabled: store.get("streaming.enabled") ?? false,
@@ -249,7 +310,36 @@ class AppSettingsContainer extends Global {
   }
 
   set values(value: AppSettings) {
-    throw new Error("Can not set values directly. Use updateGameState.");
+    throw new Error("Can not set values directly. Use updateSettings.");
+  }
+
+  getCleanSetting(
+    setting: keyof AppSettings
+  ):
+    | DiscordSettings
+    | ClientSettings
+    | StreamingSettings
+    | AutoHostSettings
+    | ObsSettings
+    | EloSettings {
+    let copy = this._values[setting];
+    Object.keys(copy)
+      .filter(
+        (key) =>
+          key.toLowerCase().includes("token") || key.toLowerCase().includes("password")
+      )
+      //@ts-expect-error This is fine.
+      .forEach((key) => (copy[key] = copy[key] ? "*****" : ""));
+    return copy;
+  }
+
+  getAllSettingsClean(): AppSettings {
+    let fullCopy = this._values;
+    Object.keys(this._values).forEach((sett) => {
+      // @ts-expect-error Not sure
+      fullCopy[sett as keyof AppSettings] = this.cleanSetting(sett as keyof AppSettings);
+    });
+    return fullCopy;
   }
 
   updateSettings(updates: SettingsUpdates) {
@@ -270,40 +360,82 @@ class AppSettingsContainer extends Global {
       Object.entries(entries).forEach(([key, value]) => {
         // @ts-expect-error Still need to figure out how to type this
         let targetCurrentValue = this._values[settingName]?.[key];
-        if (
-          targetCurrentValue !== undefined &&
-          (typeof targetCurrentValue === typeof value ||
-            ((key === "inGameHotkey" || key === "outOfGameHotkey") &&
-              (typeof value === "boolean" || typeof value === "object"))) &&
-          targetCurrentValue !== value
-        ) {
-          // @ts-expect-error
-          this._values[settingName][key] = value;
-          // TODO Make this not update the whole settingName section
-          store.set(settingName + "." + key, value);
-          this.info(
-            settingName + " settings changed: " + key,
-            key.toLowerCase().includes("token") || key.toLowerCase().includes("password")
-              ? "*HIDDEN*"
-              : value
-          );
-          if (!filteredUpdates[settingName]) {
-            filteredUpdates[settingName] = {};
-          }
-          // @ts-expect-error Still need to figure out how to type this
-          filteredUpdates[settingName][key] = value;
-        } else if (targetCurrentValue !== value) {
-          this.emit(
-            "warn",
-            "Invalid update:",
-            settingName,
-            key,
-            key.toLowerCase().includes("token") || key.toLowerCase().includes("password")
-              ? "*HIDDEN*"
-              : value
-          );
+        if (targetCurrentValue === undefined) {
+          this._generateError("Target key does not exist.", settingName, key, value);
           return false;
         }
+        if (targetCurrentValue === value) {
+          this._generateError("Target key is already value.", settingName, key, value);
+          return false;
+        }
+        if (key === "inGameHotkey" || key === "outOfGameHotkey") {
+          if (typeof value !== "boolean" && typeof value !== "object") {
+            this._generateError(
+              "Hotkeys must be a boolean or false",
+              settingName,
+              key,
+              value
+            );
+            return false;
+          }
+        } else if (typeof targetCurrentValue !== typeof value) {
+          if (typeof targetCurrentValue === "number" && typeof value === "string") {
+            if (parseInt(value).toString() !== value) {
+              this._generateError(
+                "New value needs to be a number",
+                settingName,
+                key,
+                value
+              );
+              return false;
+            } else {
+              value = parseInt(value);
+            }
+          } else if (
+            typeof targetCurrentValue === "string" &&
+            typeof value === "number"
+          ) {
+            value = value.toString();
+          } else {
+            var errorText =
+              "Invalid type. Target is " +
+              typeof targetCurrentValue +
+              ". Given was " +
+              typeof value +
+              ".";
+            this._generateError(errorText, settingName, key, value);
+            return false;
+          }
+        }
+        if (key === "mapPath" && typeof value === "string") {
+          value.replace(/\\/g, "/");
+          let splitName = (value as string).split("/");
+          let mapName = splitName[splitName.length - 1];
+          if (mapName) {
+            mapName = mapName.substring(0, mapName.length - 4);
+            this._values.autoHost.mapName = mapName;
+            if (!filteredUpdates.autoHost) {
+              filteredUpdates.autoHost = { mapName };
+            } else {
+              filteredUpdates.autoHost.mapName = mapName;
+            }
+          }
+        }
+        // @ts-expect-error
+        this._values[settingName][key] = value;
+
+        store.set(settingName + "." + key, value);
+        this.info(
+          settingName + " settings changed: " + key,
+          key.toLowerCase().includes("token") || key.toLowerCase().includes("password")
+            ? "*HIDDEN*"
+            : value
+        );
+        if (!filteredUpdates[settingName]) {
+          filteredUpdates[settingName] = {};
+        }
+        // @ts-expect-error Still need to figure out how to type this
+        filteredUpdates[settingName][key] = value;
       });
     });
     if (Object.keys(filteredUpdates).length > 0) {
@@ -311,6 +443,23 @@ class AppSettingsContainer extends Global {
       return true;
     }
     return false;
+  }
+
+  private _generateError(
+    errorText: string,
+    settingName: string,
+    key: string,
+    value: any
+  ) {
+    this.warn(
+      "Invalid update:",
+      errorText,
+      settingName,
+      key,
+      key.toLowerCase().includes("token") || key.toLowerCase().includes("password")
+        ? "*HIDDEN*"
+        : value
+    );
   }
 }
 

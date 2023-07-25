@@ -36,7 +36,7 @@ class WebUISocket extends Global {
       gameState.updateGameState({ connected: true });
       ws.on("message", this.handleWebUIMessage.bind(this));
       ws.on("close", () => {
-        this.error("Socket closed");
+        this.warn("Socket closed");
         this.webUISocket = null;
         gameState.updateGameState({ connected: false });
       });
@@ -107,6 +107,10 @@ class WebUISocket extends Global {
         break;
       case "info":
         this.info(JSON.stringify(data.data));
+        break;
+      case "sendMessage":
+        // Debugging
+        console.log(JSON.stringify(data.data));
         break;
       default:
         this.info(data);

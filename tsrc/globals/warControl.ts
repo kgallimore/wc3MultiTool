@@ -1,6 +1,5 @@
 import { Global } from "../globalBase";
 
-import { getTargetRegion } from "../utility";
 import { shell, app } from "electron";
 import { settings } from "./settings";
 import { gameState } from "./gameState";
@@ -16,16 +15,15 @@ import {
   screen,
   getActiveWindow,
   mouse,
-  getWindows,
   centerOf,
   imageResource,
   Point,
-  left,
-  right,
-  up,
   Region,
   sleep,
 } from "@nut-tree/nut-js";
+
+import { windowManager } from "node-window-manager";
+
 import { join } from "path";
 require("@nut-tree/nl-matcher");
 import { clipboard } from "electron";
@@ -43,6 +41,7 @@ class WarControl extends Global {
   isPackaged: boolean = false;
   appPath: string;
   sendingInGameChat: { active: boolean; queue: string[] } = { active: false, queue: [] };
+  openingWarcraft = false;
 
   constructor() {
     super("War Control");
@@ -57,16 +56,24 @@ class WarControl extends Global {
   async openWarcraft(
     region: Regions | "" = "",
     callCount = 0,
-    focusAttempted = false
+    reopen: boolean = false
   ): Promise<boolean> {
+    if (this.openingWarcraft && callCount === 0) {
+      return false;
+    } else {
+      this.openingWarcraft = true;
+    }
     gameState.updateGameState({ action: "openingWarcraft" });
     try {
-      if (callCount > 60) {
-        this.error("Failed to open Warcraft after 60 attempts");
+      if (callCount > 180) {
+        this.error("Failed to open Warcraft. Giving up.");
+        this.openingWarcraft = false;
+        return false;
       }
       if (await this.isWarcraftOpen()) {
         this.info("Warcraft is now open");
         gameState.updateGameState({ action: "nothing" });
+        this.openingWarcraft = false;
         return true;
       }
       if (settings.values.client.alternateLaunch) {
@@ -77,21 +84,25 @@ class WarControl extends Global {
           );
         }
         await sleep(1000);
-        return await this.openWarcraft(region, callCount + 1);
+        return await this.openWarcraft(region, callCount + 1, reopen);
       }
       let battleNetOpen = await this.checkProcess("Battle.net.exe");
       if (battleNetOpen !== true) {
         shell.openPath(this.warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe");
         await sleep(1000);
-        return await this.openWarcraft(region, callCount + 1);
+        return await this.openWarcraft(region, callCount + 1, reopen);
+      } else if (callCount > 60 && !reopen) {
+        this.error("Failed to open Warcraft. Restarting Battle.net");
+        await this.forceQuitProcess("Battle.net.exe");
+        return await this.openWarcraft(region, callCount + 10, true);
       }
       let battleNetWindow;
-      let windows = await getWindows();
+      let windows = windowManager.getWindows();
       for (let window of windows) {
-        let title = await window.title;
+        let title = window.getTitle();
         if (title === "Battle.net Login") {
           await sleep(1000);
-          return await this.openWarcraft(region, callCount + 1);
+          return await this.openWarcraft(region, callCount + 1, reopen);
         }
         if (title === "Blizzard Battle.net Login") {
           this.error("A login is required to open Warcraft");
@@ -107,93 +118,27 @@ class WarControl extends Global {
           shell.openPath(this.warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe");
         }
         await sleep(3000);
-        return await this.openWarcraft(region, callCount + 3);
+        return await this.openWarcraft(region, callCount + 3, reopen);
       }
+      battleNetWindow.restore();
+      battleNetWindow.show();
+      battleNetWindow.bringToTop();
+      battleNetWindow.setBounds({ x: 0, y: 0 });
+      await sleep(500);
       let activeWindow = await getActiveWindow();
       let activeWindowTitle = await activeWindow.title;
-      let screenSize = { width: await screen.width(), height: await screen.height() };
       if (activeWindowTitle !== "Battle.net") {
-        let bnetRegion = await battleNetWindow.region;
-        if (bnetRegion.left < -bnetRegion.width || bnetRegion.top < -bnetRegion.height) {
-          this.info("Battle.net window minimized. Attempting to open the window");
-          shell.openPath(this.warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe");
-          await sleep(1000);
-          return await this.openWarcraft(region, callCount + 1, false);
-        }
-        if (!focusAttempted) {
-          this.info("Attempting to focus Battle.net");
-          if (this.isPackaged) {
-            shell.openPath(join(this.appPath, "../../focusWar.js"));
-          } else {
-            shell.openPath(join(__dirname, "../focusWar.js"));
-          }
-          await sleep(1000);
-          return await this.openWarcraft(region, callCount + 1, true);
-        } else {
-          this.error("Failed to focus Battle.net");
-          gameState.updateGameState({ action: "nothing" });
-          return false;
-        }
+        this.verbose("Nut.js and NWM title mismatch.");
+        await sleep(500);
+        return await this.openWarcraft(region, callCount + 1, reopen);
       }
       let searchRegion = await activeWindow.region;
-      searchRegion.width = searchRegion.width * 0.4;
-      if (searchRegion.left < 0) {
-        //Battle.net window left of screen
-        this.info("Move Battle.net window right");
-        let targetPosition = new Point(
-          searchRegion.left + searchRegion.width - searchRegion.width * 0.12,
-          searchRegion.top + 10
-        );
-        await mouse.setPosition(targetPosition);
-        await mouse.pressButton(0);
-        await mouse.move(right(searchRegion.left * -1 + 10));
-        await mouse.releaseButton(0);
-        searchRegion = await activeWindow.region;
-      }
-      if (searchRegion.left + searchRegion.width > screenSize.width) {
-        //Battle.net window right of screen
-        this.info("Move Battle.net window left");
-        let targetPosition = new Point(searchRegion.left + 10, searchRegion.top + 10);
-        await mouse.setPosition(targetPosition);
-        await mouse.pressButton(0);
-        await mouse.move(
-          left(searchRegion.left - (screenSize.width - searchRegion.width) + 10)
-        );
-        await mouse.releaseButton(0);
-      }
-      if (searchRegion.top + searchRegion.height > screenSize.height) {
-        //Battle.net window bottom of screen
-        this.info("Move Battle.net window up");
-        let targetPosition = new Point(
-          searchRegion.left + searchRegion.width / 2,
-          searchRegion.top + 10
-        );
-        await mouse.setPosition(targetPosition);
-        await mouse.pressButton(0);
-        await mouse.move(
-          up(searchRegion.top - (screenSize.height - searchRegion.height) + 10)
-        );
-        await mouse.releaseButton(0);
-      }
-      if (searchRegion.top < 0) {
-        // Battle.net window top of screen
-        this.error("Battle.net window in inaccessible region.");
-        await this.forceQuitProcess("Battle.net.exe");
-        return await this.openWarcraft(region, callCount + 1);
-      }
-      searchRegion = await activeWindow.region;
-      searchRegion.height = searchRegion.height * 0.5;
-      searchRegion.width = searchRegion.width * 0.4;
-      searchRegion.top = searchRegion.top + searchRegion.height;
-      if (!region && settings.values.autoHost.regionChange) {
-        region = getTargetRegion(
-          settings.values.autoHost.regionChangeTimeEU,
-          settings.values.autoHost.regionChangeTimeNA
-        );
-      }
+      searchRegion.width = searchRegion.width * 0.35;
+      searchRegion.top = searchRegion.top + searchRegion.height * 0.7;
+      searchRegion.height = searchRegion.height * 0.2;
       let targetRegion = { asia: 1, eu: 2, us: 3, usw: 3, "": 0 }[region];
       try {
-        if (targetRegion && targetRegion > 0 && gameState.values.selfRegion !== region) {
+        if (targetRegion > 0 && gameState.values.selfRegion !== region) {
           this.info(`Changing region to ${region}`);
           let changeRegionPosition = await screen.waitFor(
             imageResource("changeRegion.png"),
@@ -226,10 +171,11 @@ class WarControl extends Global {
         await mouse.setPosition(playRegionCenter);
         await mouse.leftClick();
         this.info("Found and clicked play");
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 20; i++) {
           if (await this.isWarcraftOpen()) {
             this.info("Warcraft is now open.");
             gameState.updateGameState({ action: "nothing" });
+            this.openingWarcraft = false;
             return true;
           }
           await sleep(100);
@@ -241,10 +187,12 @@ class WarControl extends Global {
       }
       this.error("Failed to open Warcraft.");
       gameState.updateGameState({ action: "nothing" });
+      this.openingWarcraft = false;
       return false;
     } catch (e) {
-      this.error(e as string);
+      this.error(e);
       gameState.updateGameState({ action: "nothing" });
+      this.openingWarcraft = false;
       return false;
     }
   }
@@ -322,10 +270,10 @@ class WarControl extends Global {
       return false;
     } else {
       if (stdout.includes(processName)) {
-        console.log(`${processName} is running`);
+        //console.log(`${processName} is running`);
         return true;
       } else {
-        console.log(`${processName} is not running`);
+        //console.log(`${processName} is not running`);
         return false;
       }
     }
@@ -417,7 +365,7 @@ class WarControl extends Global {
     }
     mouse.config.mouseSpeed = parseInt(targetRes) * 2;
     if (this.isPackaged) {
-      screen.config.resourceDirectory = join(__dirname, "images", targetRes);
+      screen.config.resourceDirectory = join(__dirname, "..\\images", targetRes);
     } else {
       screen.config.resourceDirectory = join(this.appPath, "\\src\\images", targetRes);
     }

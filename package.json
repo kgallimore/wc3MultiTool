@@ -1,6 +1,6 @@
 {
   "name": "wc3multitool",
-  "version": "1.0.0-alpha",
+  "version": "2.0.5-alpha",
   "description": "A multi-tool for Warcraft 3",
   "repository": {
     "type": "git",
@@ -9,22 +9,49 @@
   "main": "src/app.js",
   "scripts": {
     "compile": "tsc -w",
-    "build": "tsc && npm run svelte-build",
-    "start": "concurrently \"npm:compile\" \"npm:svelte-dev\" \"electron-forge start\"",
+    "build": "tsc",
+    "start": "concurrently \"npm:compile\"  \"electron-forge start\"",
     "publish": "electron-builder --publish always",
-    "pack": "electron-builder --dir",
+    "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder",
     "rebuild": "electron-rebuild",
-    "svelte-build": "rollup -c",
-    "svelte-dev": "rollup -c -w",
-    "svelte-start": "sirv public",
     "postinstall": "electron-builder install-app-deps"
   },
   "build": {
     "appId": "wc3multitool",
     "productName": "WC3 Multi-Tool",
     "copyright": "Keith Gallimore",
+    "files": [
+      "**/*",
+      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
+      "!**/node_modules/*.d.ts",
+      "!**/node_modules/.bin",
+      "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}",
+      "!.editorconfig",
+      "!**/._*",
+      "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}",
+      "!**/{__pycache__,thumbs.db,.flowconfig,.idea,.vs,.nyc_output}",
+      "!**/{appveyor.yml,.travis.yml,circle.yml}",
+      "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}",
+      "prisma/**/*",
+      "!prisma/*.db"
+    ],
+    "extraResources": [
+      "node_modules/@prisma/engines/schema-engine-*",
+      "node_modules/@prisma/engines/query*",
+      "node_modules/@prisma/engines/libquery*",
+      "node_modules/prisma/build*"
+    ],
     "extraFiles": [
+      {
+        "from": "./prisma/schema.prisma",
+        "to": "./prisma/schema.prisma"
+      },
+      {
+        "from": "./prisma/migrations",
+        "to": "./prisma/migrations"
+      },
       {
         "from": "./src/webui.html",
         "to": "."
@@ -34,11 +61,7 @@
         "to": "."
       },
       {
-        "from": "./focusWar.js",
-        "to": "."
-      },
-      {
-        "from": "./GlueManagerAltered.js",
+        "from": "./src/webuiPerf.html",
         "to": "."
       },
       {
@@ -63,6 +86,7 @@
     "nsis": {
       "installerIcon": "src/images/wc3_auto_balancer_v1.ico",
       "uninstallerIcon": "src/images/wc3_auto_balancer_v1.ico",
+      "artifactName": "WC3-Multi-Tool-Setup-${version}.${ext}",
       "uninstallDisplayName": "WC3 Multi-Tool",
       "include": "src/installer.nsh",
       "oneClick": false,
@@ -76,8 +100,7 @@
       {
         "provider": "generic",
         "url": "https://war.trenchguns.com/publish"
-      },
-      "github"
+      }
     ],
     "protocols": [
       {
@@ -119,58 +142,54 @@
     }
   },
   "devDependencies": {
-    "@electron-forge/cli": "^6.0.0-beta.64",
-    "@rollup/plugin-commonjs": "^21.1.0",
-    "@rollup/plugin-json": "^4.1.0",
-    "@rollup/plugin-node-resolve": "^13.3.0",
-    "@rollup/plugin-typescript": "^8.3.3",
-    "@tsconfig/svelte": "^2.0.1",
-    "@types/better-sqlite3": "^7.5.0",
-    "@types/discord-rpc": "^4.0.3",
-    "@types/request": "^2.48.8",
+    "@electron-forge/cli": "^6.2.1",
+    "@types/discord-rpc": "^4.0.5",
+    "@types/node": "^20.4.1",
     "@types/sound-play": "^1.1.0",
-    "@types/ws": "^8.5.3",
-    "concurrently": "^6.5.1",
-    "electron": "^19.0.9",
-    "electron-builder": "^22.14.5",
+    "@types/validator": "^13.7.17",
+    "@types/ws": "^8.5.5",
+    "concurrently": "^8.2.0",
+    "electron": "^25.2.0",
+    "electron-builder": "^24.4.0",
     "electron-reload": "^2.0.0-alpha.1",
-    "rollup": "^2.77.0",
-    "rollup-plugin-css-only": "^3.1.0",
-    "rollup-plugin-livereload": "^2.0.5",
-    "rollup-plugin-svelte": "^7.1.0",
-    "rollup-plugin-terser": "^7.0.2",
-    "svelte": "^3.49.0",
-    "svelte-preprocess": "^4.10.7",
-    "typescript": "^4.7.4"
+    "tailwindcss": "^3.3.2",
+    "typescript": "^5.1.6"
   },
   "dependencies": {
-    "@discordjs/rest": "^0.2.0-canary.0",
-    "@nut-tree/nl-matcher": "^1.0.3-next.20220114002500",
-    "@nut-tree/nut-js": "^2.1.1",
-    "better-sqlite3": "^7.6.2",
-    "bufferutil": "^4.0.6",
-    "cross-fetch": "^3.1.4",
-    "discord-api-types": "^0.36.3",
+    "@discordjs/rest": "^1.7.1",
+    "@iamtraction/google-translate": "^2.0.1",
+    "@nut-tree/nl-matcher": "^2.2.0",
+    "@nut-tree/nut-js": "^3.1.2",
+    "@prisma/client": "^5.0.0",
+    "@types/audio-play": "^2.3.0",
+    "audio-loader": "^1.0.3",
+    "audio-play": "^2.3.1",
+    "bufferutil": "^4.0.7",
+    "discord-api-types": "^0.37.47",
     "discord-rpc": "^4.0.1",
-    "discord.js": "^13.9.0",
-    "electron-log": "^4.4.8",
-    "electron-store": "^8.0.2",
-    "electron-updater": "^4.6.5",
-    "esm": "^3.2.25",
-    "firebase": "^9.9.1",
-    "form-data": "^2.5.1",
-    "https": "^1.0.0",
+    "discord.js": "^14.11.0",
+    "electron-log": "^5.0.0-beta.24",
+    "electron-store": "^8.1.0",
+    "electron-updater": "^6.1.1",
+    "fast-geoip": "^1.1.88",
+    "firebase": "^9.19.1",
     "js-combinatorics": "^2.1.1",
     "languagedetect": "^2.0.0",
-    "nanoid": "^3.3.4",
-    "node-abi": "^3.22.0",
-    "obs-websocket-js": "^4.0.3",
-    "socket.io-client": "^2.5.0",
-    "sound-play": "^1.1.0",
-    "translate": "^1.4.1",
-    "translate-google": "^1.5.0",
+    "mariadb": "^3.2.0",
+    "mysql2": "^3.5.0",
+    "nanoid": "^4.0.2",
+    "node-abi": "^3.45.0",
+    "node-window-manager": "^2.2.4",
+    "obs-websocket-js": "^5.0.3",
+    "prisma": "^5.0.0",
+    "reflect-metadata": "^0.1.13",
+    "sequelize": "^6.32.1",
+    "sequelize-typescript": "^2.1.5",
+    "socket.io-client": "^4.6.1",
+    "sqlite3": "^5.1.6",
+    "translate": "^2.0.2",
     "w3gjs": "^2.5.0",
-    "wc3mt-lobby-container": "^1.1.0",
-    "ws": "^8.8.1"
+    "wc3mt-lobby-container": "^1.1.1",
+    "ws": "^8.13.0"
   }
 }

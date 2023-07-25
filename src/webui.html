@@ -16,7 +16,6 @@
 
     <script>
         var logCalls = [];
-        var w3cClientVersion = 1;
         console.origLog = console.log;
         console.log = (...args) => {
             logCalls.push(...args);
@@ -25,7 +24,7 @@
         }
     </script>
     <script src="index.js"></script>
-    <script src="GlueManagerAltered.js"></script>
+    <script src="gluemanager.js"></script>
 
 </body>
 

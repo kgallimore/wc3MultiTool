@@ -18,23 +18,69 @@ import {
   Point,
   straightTo,
 } from "@nut-tree/nut-js";
-import { GameState } from "./../globals/gameState";
-import { LobbyUpdatesExtended } from "./lobbyControl";
 require("@nut-tree/nl-matcher");
+import { GameState } from "./../globals/gameState";
+import { LobbyUpdatesExtended, statsToString } from "./lobbyControl";
+import type { Regions } from "wc3mt-lobby-container";
+const exec = require("child_process").exec;
 
 class AutoHost extends ModuleBase {
   voteStartVotes: Array<string> = [];
   wc3mtTargetFile = `${app.getPath("documents")}\\Warcraft III\\CustomMapData\\wc3mt.txt`;
-  gameNumber = 0;
+  gameNumber = 1;
   voteTimer: NodeJS.Timeout | null = null;
+  creatingGame: { status: boolean; targetName: string; tryCount: number } = {
+    status: false,
+    targetName: "",
+    tryCount: 0,
+  };
   private lastAnnounceTime: number = 0;
+
   constructor() {
     super("AutoHost", {
       listeners: ["gameSocketEvent", "gameStateUpdates", "lobbyUpdate"],
     });
+    this.disconnectVPN().then(() => {
+      this.setVPNState();
+    });
   }
 
   protected onLobbyUpdate(updates: LobbyUpdatesExtended): void {
+    // TODO: this works w/o Autohost on. Move to elo module?
+    if (
+      updates.playerData?.extraData &&
+      this.settings.values.elo.type !== "off" &&
+      this.settings.values.elo.announce
+    ) {
+      let statsString = statsToString(
+        updates.playerData.extraData,
+        this.settings.values.elo.hideElo
+      );
+      this.gameSocket.sendChatMessage(
+        updates.playerData.name + " " + statsString || "None available"
+      );
+    }
+    if (updates.newLobby) {
+      if (this.lobby.microLobby?.lobbyStatic.lobbyName && this.creatingGame.targetName) {
+        if (
+          this.lobby.microLobby.lobbyStatic.lobbyName === this.creatingGame.targetName
+        ) {
+          this.info("Game successfully created: " + this.creatingGame.targetName);
+          this.gameNumber += 1;
+        } else if (
+          this.lobby.microLobby.lobbyStatic.lobbyName.includes(
+            this.settings.values.autoHost.gameName
+          )
+        ) {
+          this.info(
+            "Game created with incorrect increment: " +
+              this.lobby.microLobby.lobbyStatic.lobbyName
+          );
+        }
+        this.resetCreatingGame();
+      }
+    }
+
     if (
       this.settings.values.autoHost.type === "off" ||
       this.settings.values.autoHost.type === "lobbyHost"
@@ -56,7 +102,10 @@ class AutoHost extends ModuleBase {
       if (!this.lobby.isLobbyReady()) {
         return;
       }
-      let teams = this.lobby.exportDataStructure(true);
+      let teams = this.lobby.exportDataStructure("Autohost 1", true);
+      if (!teams) {
+        return;
+      }
       if (this.settings.values.autoHost.minPlayers !== 0) {
         if (
           this.lobby.microLobby.nonSpecPlayers.length <
@@ -100,42 +149,22 @@ class AutoHost extends ModuleBase {
         this.lobby.startGame(this.settings.values.autoHost.delayStart);
       }
       if (this.settings.values.autoHost.sounds) {
-        this.playSound("ready.wav");
+        this.playSound("ready2.wav");
       }
       this.clientState.updateClientState({
         currentStep: "Starting Game",
         currentStepProgress: 100,
       });
     }
-    if (
-      updates.playerData?.extraData &&
-      this.settings.values.elo.type !== "off" &&
-      this.settings.values.elo.announce
-    ) {
-      this.gameSocket.sendChatMessage(
-        updates.playerData.name +
-          " ELO: " +
-          updates.playerData.extraData.rating +
-          ", Rank: " +
-          updates.playerData.extraData.rank +
-          ", Played: " +
-          updates.playerData.extraData.played +
-          ", Wins: " +
-          updates.playerData.extraData.wins +
-          ", Losses: " +
-          updates.playerData.extraData.losses +
-          ", Last Change: " +
-          updates.playerData.extraData.lastChange
-      );
-    }
   }
 
   protected onGameSocketEvent(events: GameSocketEvents): void {
-    if (events.OnNetProviderInitialized && this.settings.values.client.performanceMode) {
+    if (
+      (events.OnNetProviderInitialized ||
+        events.OnChannelJoin?.channel?.channelType == 0) &&
+      this.settings.values.client.performanceMode
+    ) {
       setTimeout(this.autoHostGame.bind(this), 1000);
-    }
-    if (events.UpdateScoreInfo) {
-      this.autoHostGame();
     }
     if (events.SetOverlayScreen?.screen) {
       if (events.SetOverlayScreen.screen === "AUTHENTICATION_OVERLAY") {
@@ -144,50 +173,78 @@ class AutoHost extends ModuleBase {
     }
     if (events.nonAdminChat) {
       if (events.nonAdminChat.content.match(/^\?votestart$/i)) {
-        if (
-          this.settings.values.autoHost.voteStart &&
-          this.lobby.microLobby?.lobbyStatic.isHost &&
-          ["rapidHost", "smartHost"].includes(this.settings.values.autoHost.type)
-        ) {
-          if (!this.lobby.microLobby.allPlayers.includes(events.nonAdminChat.sender)) {
-            this.gameSocket.sendChatMessage("Only players may vote start.");
-            return;
-          }
-          if (this.voteStartVotes.length === 0) {
-            if (
-              (this.settings.values.autoHost.voteStartTeamFill &&
-                this.lobby.allPlayerTeamsContainPlayers()) ||
-              !this.settings.values.autoHost.voteStartTeamFill
-            ) {
-              this.voteTimer = setTimeout(this.cancelVote.bind(this), 60000);
-              this.gameSocket.sendChatMessage("You have 60 seconds to ?votestart.");
-            } else {
-              this.gameSocket.sendChatMessage("Unavailable. Not all teams have players.");
+        console.log("Vote start received");
+        if (["rapidHost", "smartHost"].includes(this.settings.values.autoHost.type)) {
+          if (
+            this.settings.values.autoHost.voteStart &&
+            this.lobby.microLobby?.lobbyStatic.isHost
+          ) {
+            if (!this.lobby.microLobby.allPlayers.includes(events.nonAdminChat.sender)) {
+              this.gameSocket.sendChatMessage("Only players may vote start.");
               return;
             }
-          }
-          if (
-            !this.voteStartVotes.includes(events.nonAdminChat.sender) &&
-            this.voteTimer
-          ) {
-            this.voteStartVotes.push(events.nonAdminChat.sender);
-            if (
-              this.voteStartVotes.length >=
-              this.lobby.microLobby?.nonSpecPlayers.length *
-                (this.settings.values.autoHost.voteStartPercent / 100)
-            ) {
-              this.info("Vote start succeeded");
-              this.lobby.startGame();
-            } else {
-              this.gameSocket.sendChatMessage(
-                Math.ceil(
-                  this.lobby.microLobby?.nonSpecPlayers.length *
-                    (this.settings.values.autoHost.voteStartPercent / 100) -
-                    this.voteStartVotes.length
-                ).toString() + " more vote(s) required."
-              );
+            if (this.voteStartVotes.length === 0) {
+              let numPlayers = Object.values(
+                this.lobby.exportDataStructure("Autohost 2", true)
+              )
+                .flatMap((team) => team)
+                .filter((player) => player.realPlayer).length;
+              if (numPlayers < 2) {
+                this.gameSocket.sendChatMessage("Unavailable. Not enough players.");
+                return;
+              }
+              if (
+                (this.settings.values.autoHost.voteStartTeamFill &&
+                  this.lobby.allPlayerTeamsContainPlayers()) ||
+                !this.settings.values.autoHost.voteStartTeamFill
+              ) {
+                this.voteTimer = setTimeout(this.cancelVote.bind(this), 60000);
+                this.gameSocket.sendChatMessage("You have 60 seconds to ?votestart.");
+              } else {
+                this.gameSocket.sendChatMessage(
+                  "Unavailable. Not all teams have players."
+                );
+                return;
+              }
             }
+            if (
+              !this.voteStartVotes.includes(events.nonAdminChat.sender) &&
+              this.voteTimer
+            ) {
+              this.voteStartVotes.push(events.nonAdminChat.sender);
+              if (
+                this.voteStartVotes.length >=
+                this.lobby.microLobby?.nonSpecPlayers.length *
+                  (this.settings.values.autoHost.voteStartPercent / 100)
+              ) {
+                this.info("Vote start succeeded");
+                this.lobby.startGame();
+              } else {
+                this.gameSocket.sendChatMessage(
+                  Math.ceil(
+                    this.lobby.microLobby?.nonSpecPlayers.length *
+                      (this.settings.values.autoHost.voteStartPercent / 100) -
+                      this.voteStartVotes.length
+                  ).toString() + " more vote(s) required."
+                );
+              }
+            }
+          } else {
+            this.gameSocket.sendChatMessage("Unavailable. Vote start is disabled.");
           }
+        }
+      }
+    }
+    if (events.MultiplayerGameCreateResult && this.creatingGame.status) {
+      if (events.MultiplayerGameCreateResult.details.success == false) {
+        this.warn("Failed to create game. Attempt: " + this.creatingGame.tryCount);
+        if (this.creatingGame.tryCount < 50) {
+          this.creatingGame.status = false;
+          this.creatingGame.tryCount += 1;
+          setTimeout(() => this.createGame(), 100);
+        } else {
+          this.resetCreatingGame();
+          this.error("Failed to create game.");
         }
       }
     }
@@ -195,55 +252,84 @@ class AutoHost extends ModuleBase {
 
   protected onGameStateUpdate(updates: Partial<GameState>): void {
     if (updates.inGame) {
+      if (
+        this.settings.values.autoHost.type === "smartHost" ||
+        (this.settings.values.discord.sendInGameChat &&
+          this.settings.values.discord.enabled)
+      ) {
+        screen.height().then((screenHeight) => {
+          screen.width().then((screenWidth) => {
+            let safeZone = new Point(screenWidth / 2, screenHeight - screenHeight / 4);
+            mouse.move(straightTo(safeZone)).then(() => {
+              this.warControl.sendInGameChat("");
+            });
+          });
+        });
+      }
       if (this.settings.values.autoHost.type === "smartHost") {
         this.info("Setting up smart host.");
         setTimeout(() => autoHost.smartQuit(), 15000);
-      } else if (
-        this.settings.values.autoHost.type === "rapidHost" &&
-        this.settings.values.autoHost.rapidHostTimer > 0
-      ) {
-        this.info(
-          "Setting rapid host timer to " + this.settings.values.autoHost.rapidHostTimer
-        );
-        setTimeout(
-          () => this.lobby.leaveGame,
-          this.settings.values.autoHost.rapidHostTimer * 1000 * 60
-        );
+      } else if (this.settings.values.autoHost.type === "rapidHost") {
+        if (this.settings.values.autoHost.rapidHostTimer > 0) {
+          this.info(
+            "Setting rapid host timer to " + this.settings.values.autoHost.rapidHostTimer
+          );
+          setTimeout(
+            () => this.lobby.leaveGame,
+            this.settings.values.autoHost.rapidHostTimer * 1000 * 60
+          );
+        } else {
+          this.lobby.leaveGame();
+        }
       }
-      screen.height().then((screenHeight) => {
-        screen.width().then((screenWidth) => {
-          let safeZone = new Point(screenWidth / 2, screenHeight - screenHeight / 4);
-          mouse.move(straightTo(safeZone)).then(() => {
-            this.warControl.sendInGameChat("");
-          });
-        });
-      });
     }
     if (updates.menuState) {
       if (updates.menuState === "LOADING_SCREEN") {
         if (this.settings.values.autoHost.type === "rapidHost") {
-          if (this.settings.values.autoHost.rapidHostTimer === 0) {
-            this.info("Rapid Host leave game immediately");
-            this.lobby.leaveGame();
-          } else if (this.settings.values.autoHost.rapidHostTimer === -1) {
+          if (this.settings.values.autoHost.rapidHostTimer === -1) {
             this.info("Rapid Host exit game immediately");
             this.warControl.forceQuitWar().then(() => {
-              this.warControl.openWarcraft();
+              this.openWarcraftRegion();
             });
           }
         }
-      } else if (["CUSTOM_LOBBIES", "MAIN_MENU"].includes(updates.menuState)) {
+      } else if (
+        ["CUSTOM_LOBBIES", "MAIN_MENU", "SCORE_SCREEN"].includes(updates.menuState)
+      ) {
         if (this.gameState.values.openLobbyParams.lobbyName) {
           this.verbose("Skipping autohost since a lobby is being joined.");
         } else {
-          setTimeout(this.autoHostGame.bind(this), 250);
+          setTimeout(this.autoHostGame.bind(this), 1000);
         }
       }
     }
   }
 
+  async openWarcraftRegion() {
+    this.verbose("Opening warcraft with region settings.");
+    if (
+      this.settings.values.autoHost.regionChangeType === "openVPN" ||
+      this.settings.values.autoHost.regionChangeType === "both"
+    ) {
+      if (await this.setVPNState()) {
+        this.verbose("Correct region VPN set.");
+      }
+    }
+    let targetRegion: undefined | Regions;
+    if (
+      this.settings.values.autoHost.regionChangeType === "both" ||
+      this.settings.values.autoHost.regionChangeType === "realm"
+    ) {
+      targetRegion = getTargetRegion(
+        this.settings.values.autoHost.regionChangeTimeEU,
+        this.settings.values.autoHost.regionChangeTimeNA
+      );
+    }
+    this.warControl.openWarcraft(targetRegion);
+  }
+
   async autoHostGame(override: boolean = false) {
-    if (this.settings.values.autoHost.type === "off") {
+    if (this.settings.values.autoHost.type === "off" || this.creatingGame.status) {
       return false;
     }
     if (this.settings.values.client.commAddress || override) {
@@ -255,28 +341,40 @@ class AutoHost extends ModuleBase {
       return false;
     }
     {
-      let targetRegion = this.gameState.values.selfRegion;
-      if (this.settings.values.autoHost.regionChange) {
-        targetRegion = getTargetRegion(
+      if (this.settings.values.autoHost.regionChangeType !== "off") {
+        let newRegion = getTargetRegion(
           this.settings.values.autoHost.regionChangeTimeEU,
           this.settings.values.autoHost.regionChangeTimeNA
         );
-      }
-      if (
-        this.gameState.values.selfRegion &&
-        targetRegion &&
-        this.gameState.values.selfRegion !== targetRegion
-      ) {
-        this.info(`Changing region to ${targetRegion}`);
-        await this.warControl.exitGame();
-        this.warControl.openWarcraft(targetRegion);
-        return true;
-      } else {
-        if (this.settings.values.autoHost.increment) {
-          this.gameNumber += 1;
+        if (
+          ["realm", "both"].includes(this.settings.values.autoHost.regionChangeType) &&
+          this.gameState.values.selfRegion !== newRegion.toLowerCase()
+        ) {
+          this.info(
+            `Changing realm region to ${newRegion} from ${this.gameState.values.selfRegion}`
+          );
+          await this.warControl.exitGame();
+          this.openWarcraftRegion();
+          return true;
+        } else if (
+          ["openVPN", "both"].includes(this.settings.values.autoHost.regionChangeType) &&
+          newRegion !== this.clientState.values.vpnActive
+        ) {
+          if (
+            this.clientState.values.vpnActive ||
+            (!this.clientState.values.vpnActive &&
+              ((newRegion === "eu" &&
+                this.settings.values.autoHost.regionChangeOpenVPNConfigEU) ||
+                (newRegion === "us" &&
+                  this.settings.values.autoHost.regionChangeOpenVPNConfigNA)))
+          ) {
+            this.info(`Changing VPN region to ${newRegion}`);
+            await this.warControl.exitGame();
+            return this.openWarcraftRegion();
+          }
         }
-        return await this.createGame();
       }
+      return await this.createGame();
     }
   }
 
@@ -309,12 +407,21 @@ class AutoHost extends ModuleBase {
       this.gameState.values.inGame ||
       this.gameState.values.menuState === "LOADING_SCREEN"
     ) {
-      if (await this.warControl.activeWindowWar()) {
+      let warWindow = await this.warControl.activeWindowWar();
+      if (warWindow) {
+        let region = await warWindow.region;
+        region.left += 0.25 * region.width;
+        region.top += 0.25 * region.height;
+        region.width -= 0.5 * region.width;
+        region.height -= 0.5 * region.height;
         let foundTarget = false;
         let searchFiles = ["quitNormal.png", "quitHLW.png"];
         for (const file of searchFiles) {
           try {
-            const foundImage = await screen.find(imageResource(file));
+            const foundImage = await screen.find(imageResource(file), {
+              searchRegion: region,
+              confidence: 0.95,
+            });
             if (foundImage) {
               foundTarget = true;
               this.info("Found " + file + ", leaving game.");
@@ -377,98 +484,94 @@ class AutoHost extends ModuleBase {
     }
   }
 
+  resetCreatingGame() {
+    this.creatingGame = { status: false, targetName: "", tryCount: 0 };
+  }
+
   async createGame(
     customGameData: CreateLobbyPayload | false = false,
-    callCount: number = 0,
     lobbyName: string = ""
   ): Promise<boolean> {
+    if (this.creatingGame.status === true) {
+      return false;
+    }
+
     if (!this.gameState.values.connected) {
       this.warn("Tried to create game when no connection exists.");
+      this.resetCreatingGame();
       return false;
     }
+
     if (this.gameState.values.inGame) {
       this.info("Cancelling lobby creation: Already in game.");
+      this.resetCreatingGame();
       return false;
     }
+
     if (this.lobby.microLobby?.lobbyStatic.lobbyName) {
-      if (this.lobby.microLobby.lobbyStatic.lobbyName === lobbyName) {
-        this.info("Game successfully created: " + lobbyName);
-        return true;
-      }
-      if (
-        this.lobby.microLobby.lobbyStatic.lobbyName.includes(
-          this.settings.values.autoHost.gameName
-        )
-      ) {
-        this.info(
-          "Game created with incorrect increment: " +
-            this.lobby.microLobby.lobbyStatic.lobbyName
-        );
-        return true;
-      }
-    }
-    if (
-      ["CUSTOM_GAME_LOBBY", "LOADING_SCREEN", "GAME_LOBBY"].includes(
-        this.gameState.values.menuState
-      )
-    ) {
       this.info("Cancelling lobby creation: Already in lobby.");
+      this.resetCreatingGame();
       return false;
     }
+
+    this.creatingGame.status = true;
     this.gameState.updateGameState({ action: "creatingLobby" });
-    if ((callCount + 5) % 10 === 0) {
+
+    if ((this.creatingGame.tryCount + 5) % 10 === 0) {
       if (this.settings.values.autoHost.increment) {
-        if (callCount > 45) {
+        if (this.creatingGame.tryCount > 45) {
+          this.resetCreatingGame();
           return false;
         }
         this.gameNumber += 1;
         this.warn("Failed to create game. Incrementing game name");
       } else {
         this.warn("Failed to create game. Stopping attempts.");
+        this.resetCreatingGame();
         return false;
       }
     }
-    if (callCount % 10 === 0) {
-      lobbyName =
-        lobbyName ||
-        this.settings.values.autoHost.gameName +
-          (this.settings.values.autoHost.increment ? ` #${this.gameNumber}` : "");
-      const payloadData: CreateLobbyPayload = customGameData || {
-        filename: this.settings.values.autoHost.mapPath.replace(/\\/g, "/"),
-        gameSpeed: 2,
-        gameName: lobbyName,
-        mapSettings: {
-          flagLockTeams: this.settings.values.autoHost.advancedMapOptions
-            ? this.settings.values.autoHost.flagLockTeams
-            : true,
-          flagPlaceTeamsTogether: this.settings.values.autoHost.advancedMapOptions
-            ? this.settings.values.autoHost.flagPlaceTeamsTogether
-            : true,
-          flagFullSharedUnitControl: this.settings.values.autoHost.advancedMapOptions
-            ? this.settings.values.autoHost.flagFullSharedUnitControl
-            : false,
-          flagRandomRaces: this.settings.values.autoHost.advancedMapOptions
-            ? this.settings.values.autoHost.flagRandomRaces
-            : false,
-          flagRandomHero: this.settings.values.autoHost.advancedMapOptions
-            ? this.settings.values.autoHost.flagRandomHero
-            : false,
-          settingObservers: parseInt(this.settings.values.autoHost.observers) as
-            | 0
-            | 1
-            | 2
-            | 3,
-          settingVisibility: this.settings.values.autoHost.advancedMapOptions
-            ? (parseInt(this.settings.values.autoHost.settingVisibility) as 0 | 1 | 2 | 3)
-            : 0,
-        },
-        privateGame: this.settings.values.autoHost.private,
-      };
-      this.info("Sending autoHost payload", payloadData);
-      this.gameSocket.sendMessage({ CreateLobby: payloadData });
-    }
-    await sleep(1000);
-    return await this.createGame(false, callCount + 1, lobbyName);
+
+    lobbyName =
+      lobbyName ||
+      this.settings.values.autoHost.gameName +
+        (this.settings.values.autoHost.increment ? ` #${this.gameNumber}` : "");
+    const payloadData: CreateLobbyPayload = customGameData || {
+      filename: this.settings.values.autoHost.mapPath.replace(/\\/g, "/"),
+      gameSpeed: 2,
+      gameName: lobbyName,
+      mapSettings: {
+        flagLockTeams: this.settings.values.autoHost.advancedMapOptions
+          ? this.settings.values.autoHost.flagLockTeams
+          : true,
+        flagPlaceTeamsTogether: this.settings.values.autoHost.advancedMapOptions
+          ? this.settings.values.autoHost.flagPlaceTeamsTogether
+          : true,
+        flagFullSharedUnitControl: this.settings.values.autoHost.advancedMapOptions
+          ? this.settings.values.autoHost.flagFullSharedUnitControl
+          : false,
+        flagRandomRaces: this.settings.values.autoHost.advancedMapOptions
+          ? this.settings.values.autoHost.flagRandomRaces
+          : false,
+        flagRandomHero: this.settings.values.autoHost.advancedMapOptions
+          ? this.settings.values.autoHost.flagRandomHero
+          : false,
+        settingObservers: parseInt(this.settings.values.autoHost.observers) as
+          | 0
+          | 1
+          | 2
+          | 3,
+        settingVisibility: this.settings.values.autoHost.advancedMapOptions
+          ? (parseInt(this.settings.values.autoHost.settingVisibility) as 0 | 1 | 2 | 3)
+          : 0,
+      },
+      privateGame: this.settings.values.autoHost.private,
+    };
+    this.creatingGame.targetName = lobbyName;
+    this.info("Sending autoHost payload", JSON.stringify(payloadData));
+    this.gameSocket.sendMessage({ CreateLobby: payloadData });
+
+    return true;
   }
 
   cancelVote() {
@@ -482,6 +585,113 @@ class AutoHost extends ModuleBase {
       this.info("Vote timed out");
     }
     this.voteStartVotes = [];
+  }
+
+  async disconnectVPN(): Promise<boolean> {
+    if (!this.settings.values.autoHost.openVPNPath) {
+      return false;
+    }
+    this.verbose("Turning off all OpenVPN connections");
+    exec(`"${this.settings.values.autoHost.openVPNPath}" --command disconnect_all`);
+    this.clientState.values.vpnActive = false;
+    // Only allow 5 seconds since no vpn may be active anyways.
+    return await this.checkForIPChange(20);
+  }
+
+  async setVPNState(): Promise<boolean> {
+    if (
+      this.settings.values.autoHost.type === "off" ||
+      (this.settings.values.autoHost.regionChangeType !== "both" &&
+        this.settings.values.autoHost.regionChangeType !== "openVPN")
+    ) {
+      return false;
+    }
+    if (!this.settings.values.autoHost.openVPNPath) {
+      this.warn("Please set a path for openvpn.exe");
+      return false;
+    }
+    let region = getTargetRegion(
+      this.settings.values.autoHost.regionChangeTimeEU,
+      this.settings.values.autoHost.regionChangeTimeNA
+    );
+    if (region !== this.clientState.values.vpnActive) {
+      if (this.clientState.values.vpnActive) {
+        this.info("Turning off " + this.clientState.values.vpnActive + " OpenVPN");
+        await this.disconnectVPN();
+        return await this.enableVPN(region);
+      } else {
+        this.verbose("No OpenVPN currently active.");
+        return await this.enableVPN(region);
+      }
+    } else {
+      return true;
+    }
+  }
+
+  async enableVPN(region: "eu" | "us"): Promise<boolean> {
+    if (region === "eu") {
+      if (this.settings.values.autoHost.regionChangeOpenVPNConfigEU) {
+        this.info("Turning on EU OpenVPN");
+        exec(
+          `"${this.settings.values.autoHost.openVPNPath}" --command connect ${this.settings.values.autoHost.regionChangeOpenVPNConfigEU} --silent_connection 1`
+        );
+        if (await this.checkForIPChange()) {
+          this.clientState.values.vpnActive = "eu";
+          this.info("EU VPN successfully enabled");
+          return true;
+        } else {
+          if (this.clientState.values.ipIsEU) {
+            this.warn(
+              "Something went wrong setting up OpenVPN EU, but current IP seems to be in EU."
+            );
+            return true;
+          } else {
+            this.error("Something went wrong setting up OpenVPN EU.");
+            return false;
+          }
+        }
+      } else {
+        return true;
+      }
+    } else if (region === "us") {
+      if (this.settings.values.autoHost.regionChangeOpenVPNConfigNA) {
+        this.info("Turning on US OpenVPN");
+        exec(
+          `"${this.settings.values.autoHost.openVPNPath}" --command connect ${this.settings.values.autoHost.regionChangeOpenVPNConfigNA} --silent_connection 1`
+        );
+        if (await this.checkForIPChange()) {
+          this.clientState.values.vpnActive = "us";
+          this.info("US VPN successfully enabled");
+          return true;
+        } else {
+          if (!this.clientState.values.ipIsEU) {
+            this.warn(
+              "Something went wrong setting up OpenVPN US, but current IP seems to NOT be in EU."
+            );
+            return true;
+          } else {
+            this.error("Something went wrong setting up OpenVPN US.");
+            return false;
+          }
+        }
+      } else {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  async checkForIPChange(callNumber: number = 0): Promise<boolean> {
+    let newIP = await this.clientState.getPublicIP();
+    if (newIP.old) {
+      return true;
+    } else if (callNumber > 30) {
+      return false;
+    } else {
+      await sleep(500);
+      callNumber++;
+      return await this.checkForIPChange(callNumber);
+    }
   }
 
   announcement() {
@@ -517,12 +727,16 @@ class AutoHost extends ModuleBase {
               text += " I will shuffle players before we start.";
             }
             if (["smartHost", "rapidHost".includes(this.settings.values.autoHost.type)]) {
-              text += " I will start when slots are full.";
+              if (this.settings.values.autoHost.minPlayers > 0) {
+                text += ` I will start with ${this.settings.values.autoHost.minPlayers} players.`;
+              } else {
+                text += " I will start when slots are full.";
+              }
             }
             if (this.settings.values.autoHost.voteStart) {
               text += " You can vote start with ?votestart";
             }
-            if (this.settings.values.autoHost.regionChange) {
+            if (this.settings.values.autoHost.regionChangeType != "off") {
               text += " I switch regions.";
             }
             this.gameSocket.sendChatMessage(text);

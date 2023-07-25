@@ -14,11 +14,11 @@
         FileClose $1
     ${EndIf}
     CopyFiles /SILENT "$INSTDIR\webui.html" "$0\_retail_\webui\index.html"
+    CopyFiles /SILENT "$INSTDIR\webuiPerf.html" "$0\_retail_\webui\indexPerf.html"
     CopyFiles /SILENT "$INSTDIR\webui.js" "$0\_retail_\webui\index.js"
-    CopyFiles /SILENT "$INSTDIR\GlueManagerAltered.js" "$0\_retail_\webui\GlueManagerAltered.js"
     Delete "$INSTDIR\webui.html"
+    Delete "$INSTDIR\webuiPerf.html"
     Delete "$INSTDIR\webui.js"
-    Delete "$INSTDIR\GlueManagerAltered.js"
 !macroend
 
 !macro customUnInstall
@@ -27,5 +27,5 @@
     DeleteRegKey /ifempty HKCU "SOFTWARE\Blizzard Entertainment\Warcraft III"
     Delete "$0\_retail_\webui\index.html"
     Delete "$0\_retail_\webui\index.js"
-    Delete "$0\_retail_\webui\GlueManagerAltered.js"
+    Delete "$0\_retail_\webui\indexPerf.js"
  !macroend

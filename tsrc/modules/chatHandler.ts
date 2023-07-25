@@ -1,7 +1,7 @@
 import { GameSocketEvents } from "../globals/gameSocket";
 import { ModuleBase } from "../moduleBase";
 
-const translate = require("translate-google");
+import translate from "@iamtraction/google-translate";
 import LanguageDetect from "languagedetect";
 let detectLang = new LanguageDetect();
 detectLang.setLanguageType("iso2");
@@ -107,9 +107,11 @@ class ChatHandler extends ModuleBase {
             ) {
               this.verbose("Translating '" + events.ChatMessage.message.content);
               try {
-                translatedMessage = await translate(events.ChatMessage.message.content, {
-                  to: this.settings.values.client.language,
-                });
+                translatedMessage = (
+                  await translate(events.ChatMessage.message.content, {
+                    to: this.settings.values.client.language,
+                  })
+                ).text;
                 if (
                   translatedMessage.toLowerCase() ===
                   events.ChatMessage.message.content.toLowerCase()
@@ -117,7 +119,7 @@ class ChatHandler extends ModuleBase {
                   translatedMessage = "";
                 }
               } catch (e) {
-                this.error(e);
+                this.error("Translation error:", e);
               }
             }
           }
