@@ -1,6 +1,5 @@
 import { Module } from "../moduleBasePre";
 
-import fetch from "cross-fetch";
 import {
   MicroLobby,
   PlayerData,
@@ -214,10 +213,12 @@ export class LobbyControl extends Module {
           } else {
             this.isTargetMap = true;
           }
-          this.settings.values.autoHost.closeSlots.forEach((slot) => {
-            this.closeSlot(slot);
-          });
-          setTimeout(() => this.moveToSpec(), 150);
+          if (this.settings.values.autoHost.type !== "off") {
+            this.settings.values.autoHost.closeSlots.forEach((slot) => {
+              this.closeSlot(slot);
+            });
+            setTimeout(() => this.moveToSpec(), 150);
+          }
           this.emitLobbyUpdate({ newLobby: this.microLobby.exportMin() });
         } catch (e) {
           // @ts-ignore
@@ -270,7 +271,7 @@ export class LobbyControl extends Module {
         }
         this.staleTimer = setInterval(() => {
           this.staleLobby();
-        }, 1000 * 1 * 15);
+        }, 1000 * 60 * 15);
         if (!metExpectedSwap) {
           this.bestCombo = [];
           if (this.isLobbyReady()) {

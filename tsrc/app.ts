@@ -13,6 +13,7 @@ import {
 } from "electron";
 import { autoUpdater } from "electron-updater";
 import * as log from "electron-log";
+import { checkMigration } from "./prismaClient";
 import { join } from "path";
 import Store from "electron-store";
 import {
@@ -23,12 +24,12 @@ import {
   mkdirSync,
   writeFileSync,
 } from "fs";
-import { play } from "sound-play";
+// @ts-expect-error
+import audioLoader from "audio-loader";
+import playAudio from "audio-play";
 
 import { settings, SettingsUpdates } from "./globals/settings";
 import { gameState, GameState } from "./globals/gameState";
-import { gameSocket } from "./globals/gameSocket";
-import { logger } from "./globals/logger";
 import { clientState, ClientState } from "./globals/clientState";
 import { warControl } from "./globals/warControl";
 
@@ -55,21 +56,23 @@ if (!app.isPackaged) {
     awaitWriteFinish: true,
   });
 }
-import { WindowSend, WindowReceive, BanWhiteList } from "./utility";
+import { WindowSend, WindowReceive, BanWhiteSingle } from "./utility";
 import { LobbyUpdatesExtended } from "./modules/lobbyControl";
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
+  checkMigration();
   if (app.getVersion().includes("beta")) {
     settings.updateSettings({ client: { releaseChannel: "beta" } });
   } else if (app.getVersion().includes("alpha")) {
     settings.updateSettings({ client: { releaseChannel: "alpha" } });
   }
+
   autoUpdater.channel = settings.values.client.releaseChannel;
   autoUpdater.logger = log;
-  log.catchErrors();
+  log.errorHandler.startCatching();
 
   screen.config.confidence = 0.8;
   keyboard.config.autoDelayMs = 25;
@@ -237,7 +240,8 @@ if (!gotLock) {
     }
   });
 
-  const createWindow = () => {
+  function createWindow() {
+    log.info("Creating Window");
     win = new BrowserWindow({
       transparent: true,
       width: 1100,
@@ -278,6 +282,7 @@ if (!gotLock) {
           settings: settings.values,
           gameState: gameState.values,
           clientState: clientState.values,
+          appVersion: app.getVersion(),
         },
       });
       win.show();
@@ -295,9 +300,10 @@ if (!gotLock) {
       win.hide();
     });
     win.loadFile(join(__dirname, "../public/index.html"));
-  };
+  }
 
-  app.on("ready", function () {
+  app.on("ready", async () => {
+    log.info("App ready");
     if (app.isPackaged) {
       setInterval(() => {
         if (settings.values.client.checkForUpdates) {
@@ -315,6 +321,7 @@ if (!gotLock) {
     initModules();
 
     globalShortcut.register("Alt+CommandOrControl+O", () => {});
+    log.info("Global shortcut registered");
     createWindow();
 
     if (settings.values.client.checkForUpdates) {
@@ -339,6 +346,7 @@ if (!gotLock) {
   });
 
   app.on("activate", () => {
+    log.info("App activated");
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
     }
@@ -346,9 +354,10 @@ if (!gotLock) {
 
   function playSound(file: string) {
     if (!app.isPackaged) {
-      play(join(__dirname, "sounds\\" + file));
+      audioLoader(join(__dirname, "sounds\\" + file)).then(playAudio);
+      //play(join(__dirname, "sounds\\" + file));
     } else {
-      play(join(app.getAppPath(), "\\src\\sounds\\" + file));
+      audioLoader(join(app.getAppPath(), "\\src\\sounds\\" + file)).then(playAudio);
     }
   }
 
@@ -358,8 +367,14 @@ if (!gotLock) {
     }
   }
 
-  function commandClient(args: WindowSend) {
+  async function commandClient(args: WindowSend) {
     switch (args.messageType) {
+      case "exit":
+        app.quit();
+        break;
+      case "minimize":
+        win.minimize();
+        break;
       case "changePerm":
         if (args.perm?.player) {
           if (args.perm.role === "moderator" || args.perm.role === "admin") {
@@ -405,6 +420,7 @@ if (!gotLock) {
             settings: settings.values,
             gameState: gameState.values,
             clientState: clientState.values,
+            appVersion: app.getVersion(),
           },
         });
         if (lobbyControl.microLobby) {
@@ -426,7 +442,7 @@ if (!gotLock) {
         break;
       case "fetchWhiteBanList":
         if (args.fetch) {
-          const whiteBanList = administration.fetchList(args.fetch);
+          const whiteBanList = await administration.fetchList(args.fetch);
           sendWindow({
             legacy: {
               messageType: "fetchedWhiteBanList",
@@ -520,12 +536,10 @@ if (!gotLock) {
           if (args.exportImport.type === "banList") {
             let path = app.getPath("documents") + "\\bans.json";
             writeFileSync(path, JSON.stringify(list));
-            console.log(path);
             shell.showItemInFolder(path);
           } else if (args.exportImport.type === "whiteList") {
             let path = app.getPath("documents") + "\\whiteList.json";
             writeFileSync(path, JSON.stringify(list));
-            console.log(path);
             shell.showItemInFolder(path);
           }
         }
@@ -542,7 +556,7 @@ if (!gotLock) {
             .then((result) => {
               result.filePaths.forEach((file) => {
                 let bans = JSON.parse(readFileSync(file).toString());
-                bans.forEach((ban: BanWhiteList) => {
+                bans.forEach((ban: BanWhiteSingle) => {
                   if (args.exportImport?.type === "banList") {
                     administration.banPlayer(
                       ban.username,

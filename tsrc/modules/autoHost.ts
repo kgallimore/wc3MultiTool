@@ -27,7 +27,7 @@ const exec = require("child_process").exec;
 class AutoHost extends ModuleBase {
   voteStartVotes: Array<string> = [];
   wc3mtTargetFile = `${app.getPath("documents")}\\Warcraft III\\CustomMapData\\wc3mt.txt`;
-  gameNumber = 0;
+  gameNumber = 1;
   voteTimer: NodeJS.Timeout | null = null;
   creatingGame: { status: boolean; targetName: string; tryCount: number } = {
     status: false,
@@ -149,7 +149,7 @@ class AutoHost extends ModuleBase {
         this.lobby.startGame(this.settings.values.autoHost.delayStart);
       }
       if (this.settings.values.autoHost.sounds) {
-        this.playSound("ready.wav");
+        this.playSound("ready2.wav");
       }
       this.clientState.updateClientState({
         currentStep: "Starting Game",
@@ -173,58 +173,64 @@ class AutoHost extends ModuleBase {
     }
     if (events.nonAdminChat) {
       if (events.nonAdminChat.content.match(/^\?votestart$/i)) {
-        if (
-          this.settings.values.autoHost.voteStart &&
-          this.lobby.microLobby?.lobbyStatic.isHost &&
-          ["rapidHost", "smartHost"].includes(this.settings.values.autoHost.type)
-        ) {
-          if (!this.lobby.microLobby.allPlayers.includes(events.nonAdminChat.sender)) {
-            this.gameSocket.sendChatMessage("Only players may vote start.");
-            return;
-          }
-          if (this.voteStartVotes.length === 0) {
-            let numPlayers = Object.values(
-              this.lobby.exportDataStructure("Autohost 2", true)
-            )
-              .flatMap((team) => team)
-              .filter((player) => player.realPlayer).length;
-            if (numPlayers < 2) {
-              this.gameSocket.sendChatMessage("Unavailable. Not enough players.");
-              return;
-            }
-            if (
-              (this.settings.values.autoHost.voteStartTeamFill &&
-                this.lobby.allPlayerTeamsContainPlayers()) ||
-              !this.settings.values.autoHost.voteStartTeamFill
-            ) {
-              this.voteTimer = setTimeout(this.cancelVote.bind(this), 60000);
-              this.gameSocket.sendChatMessage("You have 60 seconds to ?votestart.");
-            } else {
-              this.gameSocket.sendChatMessage("Unavailable. Not all teams have players.");
-              return;
-            }
-          }
+        console.log("Vote start received");
+        if (["rapidHost", "smartHost"].includes(this.settings.values.autoHost.type)) {
           if (
-            !this.voteStartVotes.includes(events.nonAdminChat.sender) &&
-            this.voteTimer
+            this.settings.values.autoHost.voteStart &&
+            this.lobby.microLobby?.lobbyStatic.isHost
           ) {
-            this.voteStartVotes.push(events.nonAdminChat.sender);
-            if (
-              this.voteStartVotes.length >=
-              this.lobby.microLobby?.nonSpecPlayers.length *
-                (this.settings.values.autoHost.voteStartPercent / 100)
-            ) {
-              this.info("Vote start succeeded");
-              this.lobby.startGame();
-            } else {
-              this.gameSocket.sendChatMessage(
-                Math.ceil(
-                  this.lobby.microLobby?.nonSpecPlayers.length *
-                    (this.settings.values.autoHost.voteStartPercent / 100) -
-                    this.voteStartVotes.length
-                ).toString() + " more vote(s) required."
-              );
+            if (!this.lobby.microLobby.allPlayers.includes(events.nonAdminChat.sender)) {
+              this.gameSocket.sendChatMessage("Only players may vote start.");
+              return;
             }
+            if (this.voteStartVotes.length === 0) {
+              let numPlayers = Object.values(
+                this.lobby.exportDataStructure("Autohost 2", true)
+              )
+                .flatMap((team) => team)
+                .filter((player) => player.realPlayer).length;
+              if (numPlayers < 2) {
+                this.gameSocket.sendChatMessage("Unavailable. Not enough players.");
+                return;
+              }
+              if (
+                (this.settings.values.autoHost.voteStartTeamFill &&
+                  this.lobby.allPlayerTeamsContainPlayers()) ||
+                !this.settings.values.autoHost.voteStartTeamFill
+              ) {
+                this.voteTimer = setTimeout(this.cancelVote.bind(this), 60000);
+                this.gameSocket.sendChatMessage("You have 60 seconds to ?votestart.");
+              } else {
+                this.gameSocket.sendChatMessage(
+                  "Unavailable. Not all teams have players."
+                );
+                return;
+              }
+            }
+            if (
+              !this.voteStartVotes.includes(events.nonAdminChat.sender) &&
+              this.voteTimer
+            ) {
+              this.voteStartVotes.push(events.nonAdminChat.sender);
+              if (
+                this.voteStartVotes.length >=
+                this.lobby.microLobby?.nonSpecPlayers.length *
+                  (this.settings.values.autoHost.voteStartPercent / 100)
+              ) {
+                this.info("Vote start succeeded");
+                this.lobby.startGame();
+              } else {
+                this.gameSocket.sendChatMessage(
+                  Math.ceil(
+                    this.lobby.microLobby?.nonSpecPlayers.length *
+                      (this.settings.values.autoHost.voteStartPercent / 100) -
+                      this.voteStartVotes.length
+                  ).toString() + " more vote(s) required."
+                );
+              }
+            }
+          } else {
+            this.gameSocket.sendChatMessage("Unavailable. Vote start is disabled.");
           }
         }
       }
@@ -246,6 +252,20 @@ class AutoHost extends ModuleBase {
 
   protected onGameStateUpdate(updates: Partial<GameState>): void {
     if (updates.inGame) {
+      if (
+        this.settings.values.autoHost.type === "smartHost" ||
+        (this.settings.values.discord.sendInGameChat &&
+          this.settings.values.discord.enabled)
+      ) {
+        screen.height().then((screenHeight) => {
+          screen.width().then((screenWidth) => {
+            let safeZone = new Point(screenWidth / 2, screenHeight - screenHeight / 4);
+            mouse.move(straightTo(safeZone)).then(() => {
+              this.warControl.sendInGameChat("");
+            });
+          });
+        });
+      }
       if (this.settings.values.autoHost.type === "smartHost") {
         this.info("Setting up smart host.");
         setTimeout(() => autoHost.smartQuit(), 15000);
@@ -262,14 +282,6 @@ class AutoHost extends ModuleBase {
           this.lobby.leaveGame();
         }
       }
-      screen.height().then((screenHeight) => {
-        screen.width().then((screenWidth) => {
-          let safeZone = new Point(screenWidth / 2, screenHeight - screenHeight / 4);
-          mouse.move(straightTo(safeZone)).then(() => {
-            this.warControl.sendInGameChat("");
-          });
-        });
-      });
     }
     if (updates.menuState) {
       if (updates.menuState === "LOADING_SCREEN") {
@@ -362,9 +374,6 @@ class AutoHost extends ModuleBase {
           }
         }
       }
-      if (this.settings.values.autoHost.increment) {
-        this.gameNumber += 1;
-      }
       return await this.createGame();
     }
   }
@@ -398,12 +407,21 @@ class AutoHost extends ModuleBase {
       this.gameState.values.inGame ||
       this.gameState.values.menuState === "LOADING_SCREEN"
     ) {
-      if (await this.warControl.activeWindowWar()) {
+      let warWindow = await this.warControl.activeWindowWar();
+      if (warWindow) {
+        let region = await warWindow.region;
+        region.left += 0.25 * region.width;
+        region.top += 0.25 * region.height;
+        region.width -= 0.5 * region.width;
+        region.height -= 0.5 * region.height;
         let foundTarget = false;
         let searchFiles = ["quitNormal.png", "quitHLW.png"];
         for (const file of searchFiles) {
           try {
-            const foundImage = await screen.find(imageResource(file));
+            const foundImage = await screen.find(imageResource(file), {
+              searchRegion: region,
+              confidence: 0.95,
+            });
             if (foundImage) {
               foundTarget = true;
               this.info("Found " + file + ", leaving game.");
@@ -474,37 +492,30 @@ class AutoHost extends ModuleBase {
     customGameData: CreateLobbyPayload | false = false,
     lobbyName: string = ""
   ): Promise<boolean> {
-    var hey = 1;
-    console.log("hey" + hey++);
     if (this.creatingGame.status === true) {
       return false;
     }
-    console.log("hey" + hey++);
 
     if (!this.gameState.values.connected) {
       this.warn("Tried to create game when no connection exists.");
       this.resetCreatingGame();
       return false;
     }
-    console.log("hey" + hey++);
 
     if (this.gameState.values.inGame) {
       this.info("Cancelling lobby creation: Already in game.");
       this.resetCreatingGame();
       return false;
     }
-    console.log("hey" + hey++);
 
     if (this.lobby.microLobby?.lobbyStatic.lobbyName) {
       this.info("Cancelling lobby creation: Already in lobby.");
       this.resetCreatingGame();
       return false;
     }
-    console.log("hey" + hey++);
 
     this.creatingGame.status = true;
     this.gameState.updateGameState({ action: "creatingLobby" });
-    console.log("hey" + hey++);
 
     if ((this.creatingGame.tryCount + 5) % 10 === 0) {
       if (this.settings.values.autoHost.increment) {
@@ -520,7 +531,6 @@ class AutoHost extends ModuleBase {
         return false;
       }
     }
-    console.log("hey" + hey++);
 
     lobbyName =
       lobbyName ||
@@ -560,7 +570,6 @@ class AutoHost extends ModuleBase {
     this.creatingGame.targetName = lobbyName;
     this.info("Sending autoHost payload", JSON.stringify(payloadData));
     this.gameSocket.sendMessage({ CreateLobby: payloadData });
-    console.log("hey" + hey++);
 
     return true;
   }
@@ -727,7 +736,7 @@ class AutoHost extends ModuleBase {
             if (this.settings.values.autoHost.voteStart) {
               text += " You can vote start with ?votestart";
             }
-            if (this.settings.values.autoHost.regionChangeType) {
+            if (this.settings.values.autoHost.regionChangeType != "off") {
               text += " I switch regions.";
             }
             this.gameSocket.sendChatMessage(text);

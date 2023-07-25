@@ -2,8 +2,8 @@ import { Global } from "../globalBase";
 import Store from "electron-store";
 
 import type { PickByValue } from "./../utility";
-import { v4 as publicIP } from "public-ip";
 import { lookup } from "fast-geoip";
+import { request } from "http";
 
 export interface ClientState {
   tableVersion: number;
@@ -55,7 +55,28 @@ class ClientStateSingle extends Global {
     old?: string;
   }> {
     let retVal: { current: string; country: string; isEU: boolean; old?: string };
-    let ip = await publicIP();
+
+    let ip: string = "";
+    const req = request(
+      {
+        host: "api.ipify.org",
+        port: 80,
+        path: "/?format=json",
+      },
+      (res) => {
+        res.setEncoding("utf8");
+
+        let body = "";
+        res.on("data", (chunk) => {
+          body += chunk;
+        });
+        res.on("end", () => {
+          const data = JSON.parse(body);
+          ip = data.ip;
+        });
+      }
+    );
+    req.end();
     let oldVal: string = "";
     if (ip !== this._values.currentIP) {
       oldVal = this._values.currentIP;

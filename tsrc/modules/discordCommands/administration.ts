@@ -110,7 +110,7 @@ module.exports = {
       let content: string = "There was an error executing this command";
       if (command === "ban") {
         let reason = interaction.options.getString("reason");
-        let success = administration.banPlayer(
+        let success = await administration.banPlayer(
           targetUser,
           ranUser,
           "client",
@@ -124,7 +124,7 @@ module.exports = {
           content = "Failed to ban " + targetUser + ". " + success.reason;
         }
       } else if (command === "unban") {
-        let success = administration.unBanPlayer(targetUser, ranUser);
+        let success = await administration.unBanPlayer(targetUser, ranUser);
         content = success
           ? "Unbanned " + targetUser + " by " + ranUser
           : "Failed to unban " + targetUser;
@@ -135,18 +135,24 @@ module.exports = {
             | "moderator"
             | "swapper"
             | null) ?? "moderator";
-        let success = administration.addAdmin(targetUser, ranUser, "client", role, true);
+        let success = await administration.addAdmin(
+          targetUser,
+          ranUser,
+          "client",
+          role,
+          true
+        );
         content = success
           ? "Set " + targetUser + " to " + role + " by " + ranUser
           : "Failed to set role of " + targetUser;
       } else if (command === "unperm") {
-        let success = administration.removeAdmin(targetUser, ranUser, true);
+        let success = await administration.removeAdmin(targetUser, ranUser, true);
         content = success
           ? "Removed " + targetUser + " permissions "
           : "Failed to remove permissions of " + targetUser;
       } else if (command === "checkuser") {
-        let status = administration.checkPlayer(targetUser);
-        let role = administration.getRole(targetUser);
+        let status = await administration.checkPlayer(targetUser);
+        let role = await administration.getRole(targetUser);
         if (role) {
           content = targetUser + " has the " + role + " role. ";
         } else {

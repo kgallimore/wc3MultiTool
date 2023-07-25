@@ -1,13 +1,13 @@
-import Store from "electron-store";
+// import Store from "electron-store";
 
-const store = new Store();
+// const store = new Store();
 
-import { nanoid } from "nanoid";
+// import { nanoid } from "nanoid";
 
-var id: string = store.get("anonymousIdentifier") as string;
-if (!id || id.length !== 21) {
-  id = nanoid();
-  store.set("anonymousIdentifier", id);
-}
+// var id: string = store.get("anonymousIdentifier") as string;
+// if (!id || id.length !== 21) {
+//   id = nanoid();
+//   store.set("anonymousIdentifier", id);
+// }
 
-export const identifier = id;
+export const identifier = "test";

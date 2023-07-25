@@ -3,12 +3,10 @@ import { ModuleBase } from "./../moduleBase";
 import { app } from "electron";
 import Store from "electron-store";
 const store = new Store();
-const FormData = require("form-data");
 import parser from "w3gjs";
-import { readFileSync, readdirSync, existsSync, statSync, createReadStream } from "fs";
+import { readFileSync, readdirSync, existsSync, statSync } from "fs";
 import type { GameState } from "./../globals/gameState";
 import { join } from "path";
-import fetch from "cross-fetch";
 
 export interface mmdResults {
   list: {
@@ -49,16 +47,15 @@ class ReplayHandler extends ModuleBase {
         mostModified.file &&
         mostModified.mtime > this.clientState.values.latestUploadedReplay
       ) {
+        console.log("Found new replay:", mostModified.file);
         this.analyzeGame(mostModified.file).then((mmdResults) => {
           this.emitEvent({ mmdResults });
         });
-        this.clientState.updateClientState({
-          latestUploadedReplay: mostModified.mtime,
-        });
-        store.set("latestUploadedReplay", this.clientState.values.latestUploadedReplay);
+
         if (this.settings.values.elo.type === "wc3stats") {
+          this.info("Uploading replay to wc3stats");
           let form = new FormData();
-          form.append("replay", createReadStream(mostModified.file));
+          form.append("replay", new Blob([readFileSync(mostModified.file)]));
           fetch(
             `https://api.wc3stats.com/upload${
               this.settings.values.elo.privateKey
@@ -68,14 +65,12 @@ class ReplayHandler extends ModuleBase {
             {
               method: "POST",
               body: form,
-              headers: {
-                ...form.getHeaders(),
-              },
             }
           ).then(
             (response) => {
-              if (response.status !== 200) {
-                this.info(response.statusText);
+              if (!response.ok) {
+                console.log(JSON.stringify(response));
+                this.error(response.statusText);
                 this.sendWindow({
                   legacy: {
                     messageType: "error",
@@ -88,6 +83,13 @@ class ReplayHandler extends ModuleBase {
                   currentStep: "Uploaded replay",
                   currentStepProgress: 0,
                 });
+                this.clientState.updateClientState({
+                  latestUploadedReplay: mostModified.mtime,
+                });
+                store.set(
+                  "latestUploadedReplay",
+                  this.clientState.values.latestUploadedReplay
+                );
               }
             },
             (error) => {

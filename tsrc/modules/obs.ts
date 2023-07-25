@@ -2,7 +2,7 @@ import { ModuleBase } from "../moduleBase";
 
 import type { SettingsUpdates } from "./../globals/settings";
 
-import OBSWebSocket from "obs-websocket-js";
+import OBSWebSocket, { EventSubscription } from "obs-websocket-js";
 import type { GameState } from "./../globals/gameState";
 import { Key, keyboard } from "@nut-tree/nut-js";
 import type { LobbyUpdatesExtended } from "./lobbyControl";
@@ -71,24 +71,19 @@ class OBSSocket extends ModuleBase {
     }
     this.socket = new OBSWebSocket();
     this.socket
-      .connect({ address, password })
+      .connect(address, password, undefined)
       .then(() => {
         console.log("OBS connection started");
       })
       .catch((e) => console.error(e));
-    this.socket.on("ConnectionOpened", (data) => console.log("OBS connection opened"));
+    this.socket.on("ConnectionOpened", () => console.log("OBS connection opened"));
     this.socket.on("ConnectionClosed", (data) => console.warn("OBS connection closed"));
-    this.socket.on("AuthenticationSuccess", (data) =>
-      console.log("OBS authentication succeeded")
-    );
-    this.socket.on("AuthenticationFailure", (data) =>
-      console.warn("OBS authentication failure")
-    );
-    this.socket.on("error", (err) => {
+    this.socket.on("Identified", (data) => console.log("OBS authentication succeeded"));
+    this.socket.on("ConnectionError", (err) => {
       console.error("socket error:", err);
     });
-    this.socket.on("SwitchScenes", (data) => {
-      console.log(`New Active Scene: ${data["scene-name"]}`);
+    this.socket.on("CurrentProgramSceneChanged", (data) => {
+      console.log(`New Active Scene: ${data.sceneName}`);
     });
   }
 
@@ -117,8 +112,8 @@ class OBSSocket extends ModuleBase {
         this.settings.values.obs.outOfGameWSScene
       ) {
         this.info("Triggering OBS Websocket Out of Game");
-        this.socket.send("SetCurrentScene", {
-          "scene-name": this.settings.values.obs.outOfGameWSScene,
+        this.socket.call("SetCurrentProgramScene", {
+          sceneName: this.settings.values.obs.outOfGameWSScene,
         });
       } else if (
         this.settings.values.obs.sceneSwitchType === "hotkeys" &&
@@ -144,8 +139,8 @@ class OBSSocket extends ModuleBase {
         this.settings.values.obs.inGameWSScene
       ) {
         this.info("Triggering OBS Websocket In Game");
-        this.socket.send("SetCurrentScene", {
-          "scene-name": this.settings.values.obs.inGameWSScene,
+        this.socket.call("SetCurrentProgramScene", {
+          sceneName: this.settings.values.obs.inGameWSScene,
         });
       } else if (
         this.settings.values.obs.sceneSwitchType === "hotkeys" &&
