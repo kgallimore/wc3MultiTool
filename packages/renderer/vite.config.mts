@@ -1,19 +1,16 @@
 /* eslint-env node */
 
 import {chrome} from '../../.electron-vendors.cache.json';
-import {svelte} from '@sveltejs/vite-plugin-svelte';
+import {svelte, vitePreprocess} from '@sveltejs/vite-plugin-svelte';
 import {renderer} from 'unplugin-auto-expose';
 import {join} from 'node:path';
 import {injectAppVersion} from '../../version/inject-app-version-plugin.mjs';
+import type {UserConfig} from 'vite';
 
 const PACKAGE_ROOT = __dirname;
 const PROJECT_ROOT = join(PACKAGE_ROOT, '../..');
 
-/**
- * @type {import('vite').UserConfig}
- * @see https://vitejs.dev/config/
- */
-const config = {
+const config: UserConfig = {
   mode: process.env.MODE,
   root: PACKAGE_ROOT,
   envDir: PROJECT_ROOT,
@@ -39,10 +36,8 @@ const config = {
     emptyOutDir: true,
     reportCompressedSize: false,
   },
-  test: {
-    environment: 'happy-dom',
-  },
   plugins: [
+    vitePreprocess(),
     svelte(),
     renderer.vite({
       preloadEntry: join(PACKAGE_ROOT, '../preload/src/index.ts'),

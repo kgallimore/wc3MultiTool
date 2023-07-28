@@ -1,9 +1,9 @@
 <script lang="ts">
-  import TitleDeco from "./../../assets/keepitmoving/title-deco.png";
+  import TitleDeco from '../../title-deco.png';
 
-  import SettingsCheckbox from "./../SettingsCheckbox.svelte";
-  import SettingsTextInput from "./../SettingsTextInput.svelte";
-  import { appSettings } from "./../../stores/page";
+  import SettingsCheckbox from './../SettingsCheckbox.svelte';
+  import SettingsTextInput from './../SettingsTextInput.svelte';
+  import {appSettings} from './../../stores/page';
   export let onInputChange: (
     e:
       | (Event & {
@@ -11,14 +11,20 @@
         })
       | (Event & {
           currentTarget: EventTarget & HTMLInputElement;
-        })
+        }),
   ) => void;
 </script>
 
-<form name="discord" class="p-2">
+<form
+  name="discord"
+  class="p-2"
+>
   <div class="d-flex justify-content-center text-4xl text-active-text">
     <!-- svelte-ignore a11y-missing-attribute -->
-    <img class="float-left p-2" src={TitleDeco} />
+    <img
+      class="float-left p-2"
+      src={TitleDeco}
+    />
     <span class="flex-1">Discord</span>
   </div>
   <div class="row">
@@ -41,9 +47,7 @@
           <div class="col d-flex justify-content-center">1 Discord bot per client</div>
         </div>
         <div class="row">
-          <div class="col d-flex justify-content-center">
-            (If not, slash cmds will break.)
-          </div>
+          <div class="col d-flex justify-content-center"> (If not, slash cmds will break.) </div>
         </div>
 
         <div class="row">
@@ -130,7 +134,10 @@
                 value={$appSettings.discord.logLevel}
                 on:change={onInputChange}
               >
-                <option value="off" selected>Disabled</option>
+                <option
+                  value="off"
+                  selected>Disabled</option
+                >
                 <option value="warn">Warnings</option>
                 <option value="error">Errors</option>
               </select>
@@ -150,7 +157,10 @@
       <div class="row">
         <div class="col">
           <div class="d-flex justify-content-center">
-            <div class="btn-group btn-group-sm w-100 py-1" role="group">
+            <div
+              class="btn-group btn-group-sm w-100 py-1"
+              role="group"
+            >
               <SettingsCheckbox
                 frontFacingName="Bidirectional Chat"
                 key="bidirectionalChat"
@@ -158,7 +168,7 @@
                 tooltipContent="Users may send messages to the to the lobby from the Discord channel."
                 on:change={onInputChange}
               />
-              {#if $appSettings.discord.bidirectionalChat && ($appSettings.autoHost.type !== "smartHost" || $appSettings.autoHost.leaveAlternate === false)}
+              {#if $appSettings.discord.bidirectionalChat && ($appSettings.autoHost.type !== 'smartHost' || $appSettings.autoHost.leaveAlternate === false)}
                 <SettingsCheckbox
                   frontFacingName="Send Chat in Game"
                   key="sendInGameChat"

@@ -3,6 +3,13 @@ import {join, resolve} from 'node:path';
 
 async function createWindow() {
   const browserWindow = new BrowserWindow({
+    transparent: true,
+    width: 1100,
+    height: 900,
+    title: 'WC3 MultiTool v' + app.getVersion(),
+    resizable: false,
+    frame: false,
+    icon: join(__dirname, 'images/wc3_auto_balancer_v2.png'),
     show: false, // Use the 'ready-to-show' event to show the instantiated BrowserWindow.
     webPreferences: {
       nodeIntegration: false,
@@ -12,6 +19,7 @@ async function createWindow() {
       preload: join(app.getAppPath(), 'packages/preload/dist/index.cjs'),
     },
   });
+  browserWindow.setMenuBarVisibility(false);
 
   /**
    * If the 'show' property of the BrowserWindow's constructor is omitted from the initialization options,

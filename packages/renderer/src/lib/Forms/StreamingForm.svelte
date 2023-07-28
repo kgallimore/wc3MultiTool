@@ -1,8 +1,8 @@
 <script lang="ts">
-  import TitleDeco from "./../../assets/keepitmoving/title-deco.png";
+  import TitleDeco from '../../title-deco.png';
 
-  import SettingsCheckbox from "../SettingsCheckbox.svelte";
-  import { appSettings } from "../../stores/page";
+  import SettingsCheckbox from '../SettingsCheckbox.svelte';
+  import {appSettings} from '../../stores/page';
   export let onInputChange: (
     e:
       | (Event & {
@@ -10,7 +10,7 @@
         })
       | (Event & {
           currentTarget: EventTarget & HTMLInputElement;
-        })
+        }),
   ) => void;
   export let updateNumber: (
     e:
@@ -20,14 +20,20 @@
       | (Event & {
           currentTarget: EventTarget & HTMLSelectElement;
         }),
-    min: number
+    min: number,
   ) => void;
 </script>
 
-<form name="streaming" class="p-2">
+<form
+  name="streaming"
+  class="p-2"
+>
   <div class="d-flex justify-content-center">
     <!-- svelte-ignore a11y-missing-attribute -->
-    <img class="float-left p-2" src={TitleDeco} />
+    <img
+      class="float-left p-2"
+      src={TitleDeco}
+    />
     <span class="flex-1 text-4xl text-active-text">Streaming</span>
     <span class="flex-1 m-auto">
       <SettingsCheckbox
@@ -55,7 +61,10 @@
       </div>
       <div class="row">
         <div class="col">
-          <div class="btn-group btn-group-sm w-100 py-1" role="group">
+          <div
+            class="btn-group btn-group-sm w-100 py-1"
+            role="group"
+          >
             <SettingsCheckbox
               key="sendDonationsInGame"
               frontFacingName="Send Tips in Game"
@@ -83,14 +92,17 @@
       <div class="row">
         <div class="col">
           {#if $appSettings.streaming.sendTipsInGame || $appSettings.streaming.sendTipsInLobby || $appSettings.streaming.sendTipsInDiscord}
-            <label for="minInGameTip" class="form-label">Min for Tip Announce</label>
+            <label
+              for="minInGameTip"
+              class="form-label">Min for Tip Announce</label
+            >
             <input
               type="number"
               id="minInGameTip"
               class="form-control"
               min="1"
               value={$appSettings.streaming.minInGameTip}
-              on:change={(e) => updateNumber(e, 1)}
+              on:change={e => updateNumber(e, 1)}
             />
           {/if}
         </div>

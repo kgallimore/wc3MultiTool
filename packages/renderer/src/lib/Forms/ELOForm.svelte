@@ -1,9 +1,9 @@
 <script lang="ts">
-  import TitleDeco from "./../../assets/keepitmoving/title-deco.png";
+  import TitleDeco from '../../title-deco.png';
 
-  import SettingsCheckbox from "./../SettingsCheckbox.svelte";
-  import SettingsTextInput from "./../SettingsTextInput.svelte";
-  import { appSettings } from "./../../stores/page";
+  import SettingsCheckbox from './../SettingsCheckbox.svelte';
+  import SettingsTextInput from './../SettingsTextInput.svelte';
+  import {appSettings} from './../../stores/page';
   export let onInputChange: (
     e:
       | (Event & {
@@ -11,7 +11,7 @@
         })
       | (Event & {
           currentTarget: EventTarget & HTMLInputElement;
-        })
+        }),
   ) => void;
   export let updateNumber: (
     e:
@@ -21,16 +21,16 @@
       | (Event & {
           currentTarget: EventTarget & HTMLSelectElement;
         }),
-    min?: number
+    min?: number,
   ) => void;
 
   let wc3statsOptions = wc3EloModes($appSettings.elo.lookupName);
   async function wc3EloModes(lookupName: string): Promise<
     Array<{
-      key: { mode: string; season: string; round: string; ladder: string };
+      key: {mode: string; season: string; round: string; ladder: string};
     }>
   > {
-    let stats = await fetch("https://api.wc3stats.com/maps/" + lookupName);
+    let stats = await fetch('https://api.wc3stats.com/maps/' + lookupName);
     let data = await stats.json();
     if (data.body.variants) {
       return data.body.variants[0].stats;
@@ -39,15 +39,26 @@
   }
 </script>
 
-<form name="elo" class="p-2">
+<form
+  name="elo"
+  class="p-2"
+>
   <div class="d-flex justify-content-center text-4xl text-active-text">
     <!-- svelte-ignore a11y-missing-attribute -->
-    <img class="float-left p-2" src={TitleDeco} />
+    <img
+      class="float-left p-2"
+      src={TitleDeco}
+    />
     <span class="flex-1">ELO</span>
   </div>
   <div class="row">
     <div class="col">
-      <label for="eloType" class="form-label"> ELO Lookup</label>
+      <label
+        for="eloType"
+        class="form-label"
+      >
+        ELO Lookup</label
+      >
       <select
         id="eloType"
         class="form-select"
@@ -63,11 +74,14 @@
       </select>
     </div>
   </div>
-  {#if $appSettings.elo.type !== "off"}
-    <div id="eloSettings" class="border p-2">
+  {#if $appSettings.elo.type !== 'off'}
+    <div
+      id="eloSettings"
+      class="border p-2"
+    >
       <div class="row">
         <div class="col">
-          {#if ["mysql", "mariadb"].includes($appSettings.elo.type)}
+          {#if ['mysql', 'mariadb'].includes($appSettings.elo.type)}
             <div class="row">
               <div class="col">
                 <label for="dbIP">Database Address</label>
@@ -89,7 +103,7 @@
                   min="20"
                   max="25565"
                   value={$appSettings.elo.dbPort}
-                  on:change={(e) => updateNumber(e, 20)}
+                  on:change={e => updateNumber(e, 20)}
                 />
               </div>
             </div>
@@ -116,7 +130,7 @@
                 on:change={onInputChange}
               />
             </div>
-          {:else if $appSettings.elo.type === "sqlite"}
+          {:else if $appSettings.elo.type === 'sqlite'}
             <div class="row">
               <SettingsTextInput
                 frontFacingName="Sqlite Path"
@@ -127,7 +141,7 @@
               />
             </div>
           {/if}
-          {#if ["mysql", "mariadb", "sqlite"].includes($appSettings.elo.type)}
+          {#if ['mysql', 'mariadb', 'sqlite'].includes($appSettings.elo.type)}
             <div class="row">
               <div class="col">
                 <label for="dbDefaultElo">Default Elo</label>
@@ -247,11 +261,11 @@
               </div>
             </div>
           {/if}
-          {#if $appSettings.autoHost.type !== "off"}
+          {#if $appSettings.autoHost.type !== 'off'}
             <div class="d-flex justify-content-center">
               {#if $appSettings.elo.available}
                 <div class="badge bg-success">
-                  {#if $appSettings.elo.type === "wc3stats"}
+                  {#if $appSettings.elo.type === 'wc3stats'}
                     <a href="https://api.wc3stats.com/maps/{$appSettings.elo.lookupName}"
                       >ELO Available!</a
                     >
@@ -260,12 +274,10 @@
                   {/if}
                 </div>
               {:else}
-                <div class="badge bg-danger">
-                  ELO not found! Reach out to me on discord
-                </div>
+                <div class="badge bg-danger"> ELO not found! Reach out to me on discord </div>
               {/if}
             </div>
-            {#if $appSettings.elo.type === "wc3stats" && $appSettings.elo.available}
+            {#if $appSettings.elo.type === 'wc3stats' && $appSettings.elo.available}
               <div class="d-flex justify-content-center">
                 <label for="wc3statsOptions">Wc3stats Variant</label>
                 <select
@@ -277,16 +289,16 @@
                   {#await wc3statsOptions}
                     <option>Fetching options...</option>
                   {:then value}
-                    <option value="" selected={"" === $appSettings.elo.wc3StatsVariant}
-                      >Select a value</option
+                    <option
+                      value=""
+                      selected={'' === $appSettings.elo.wc3StatsVariant}>Select a value</option
                     >
                     {#each value as option}
                       <option
-                        selected={JSON.stringify(option.key) ===
-                          $appSettings.elo.wc3StatsVariant}
+                        selected={JSON.stringify(option.key) === $appSettings.elo.wc3StatsVariant}
                         value={JSON.stringify(option.key)}
-                        >{option.key.ladder}, {option.key.mode}, {option.key.round}, {option
-                          .key.season}</option
+                        >{option.key.ladder}, {option.key.mode}, {option.key.round}, {option.key
+                          .season}</option
                       >
                     {/each}
                   {/await}
@@ -310,7 +322,11 @@
             {/if}
           {/if}
 
-          <div class="grid grid-cols-4" style="flex-wrap: wrap;" role="group">
+          <div
+            class="grid grid-cols-4"
+            style="flex-wrap: wrap;"
+            role="group"
+          >
             <SettingsCheckbox
               key="balanceTeams"
               frontFacingName="Balance teams"
@@ -325,7 +341,7 @@
               tooltipContent="Will not swap the local user during auto balancing."
               on:change={onInputChange}
             />
-            {#if $appSettings.elo.type === "wc3stats"}
+            {#if $appSettings.elo.type === 'wc3stats'}
               <SettingsCheckbox
                 key="handleReplays"
                 frontFacingName="Handle Replays"

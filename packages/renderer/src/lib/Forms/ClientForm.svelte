@@ -1,9 +1,9 @@
 <script lang="ts">
-  import TitleDeco from "./../../assets/keepitmoving/title-deco.png";
-  import SettingsCheckbox from "./../SettingsCheckbox.svelte";
-  import { appSettings } from "./../../stores/page";
-  import { isValidUrl } from "../../../../tsrc/utility";
-  import type { AppSettings, SettingsKeys } from "../../../../tsrc/globals/settings";
+  import TitleDeco from '../../title-deco.png';
+  import SettingsCheckbox from './../SettingsCheckbox.svelte';
+  import {appSettings} from './../../stores/page';
+  import {isValidUrl} from '../../../../main/src/utility';
+  import type {AppSettings, SettingsKeys} from '../../../../main/src/globals/settings';
 
   export let onInputChange: (
     e:
@@ -12,26 +12,37 @@
         })
       | (Event & {
           currentTarget: EventTarget & HTMLInputElement;
-        })
+        }),
   ) => void;
   export let updateSettingSingle: (
     setting: keyof AppSettings,
     key: SettingsKeys,
     value: boolean | string | number,
-    slot?: number | null
+    slot?: number | null,
   ) => void;
 </script>
 
-<form id="clientForm" name="client" class="p-2">
+<form
+  id="clientForm"
+  name="client"
+  class="p-2"
+>
   <div class="d-flex justify-content-center text-4xl text-active-text">
     <!-- svelte-ignore a11y-missing-attribute -->
-    <img class="float-left p-2" src={TitleDeco} />
+    <img
+      class="float-left p-2"
+      src={TitleDeco}
+    />
     <span class="flex-1">Client</span>
   </div>
   <div class="border">
     <div class="row m-2">
       <div class="col p-2">
-        <div class="grid grid-cols-4" style="flex-wrap: wrap;" role="group">
+        <div
+          class="grid grid-cols-4"
+          style="flex-wrap: wrap;"
+          role="group"
+        >
           <SettingsCheckbox
             frontFacingName="Restart on update"
             key="restartOnUpdate"
@@ -79,18 +90,18 @@
             key="alternateLaunch"
             tooltipContent="Launches Warcraft directly without OCR"
             checked={$appSettings.client.alternateLaunch}
-            on:change={(e) => {
+            on:change={e => {
               // @ts-ignore
               if (!e.target.checked) {
-                updateSettingSingle("client", "bnetUsername", "");
-                updateSettingSingle("client", "bnetPassword", "");
+                updateSettingSingle('client', 'bnetUsername', '');
+                updateSettingSingle('client', 'bnetPassword', '');
               }
               // @ts-ignore
               updateSettingSingle(
-                "client",
-                "alternateLaunch",
+                'client',
+                'alternateLaunch',
                 // @ts-ignore
-                e.target.checked
+                e.target.checked,
               );
             }}
           />
@@ -105,7 +116,10 @@
       </div>
       <div class="row">
         <div class="col">
-          <label for="releaseChannel" class="form-label">Release Channel</label>
+          <label
+            for="releaseChannel"
+            class="form-label">Release Channel</label
+          >
           <select
             id="releaseChannel"
             class="form-select"
@@ -128,12 +142,12 @@
           id="commAddress"
           placeholder="WebSocket Address"
           value={$appSettings.client.commAddress}
-          on:change={(e) => {
+          on:change={e => {
             let value = e.currentTarget.value;
-            if (isValidUrl(value) || value === "") {
+            if (isValidUrl(value) || value === '') {
               onInputChange(e);
             } else {
-              alert("Invalid Comm URL");
+              alert('Invalid Comm URL');
             }
           }}
         />
@@ -168,8 +182,8 @@
       <div class="border border-dashed p-1 m-1">
         <div class="row">
           <div class="col text-center m-auto text-warning">
-            Please don't actually use this. Your information is stored insecurely, and
-            malicious actors may steal this data. Would you trust me with your password?
+            Please don't actually use this. Your information is stored insecurely, and malicious
+            actors may steal this data. Would you trust me with your password?
           </div>
         </div>
         <div class="row">

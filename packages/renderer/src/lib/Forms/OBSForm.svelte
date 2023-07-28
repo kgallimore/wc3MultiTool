@@ -1,9 +1,9 @@
 <script lang="ts">
-  import TitleDeco from "./../../assets/keepitmoving/title-deco.png";
+  import TitleDeco from '../../title-deco.png';
 
-  import SettingsCheckbox from "./../SettingsCheckbox.svelte";
-  import { appSettings } from "./../../stores/page";
-  import type { WindowSend } from "../../../../tsrc/utility";
+  import SettingsCheckbox from './../SettingsCheckbox.svelte';
+  import {appSettings} from './../../stores/page';
+  import type {WindowSend} from '../../../../main/src/utility';
   export let onInputChange: (
     e:
       | (Event & {
@@ -11,27 +11,26 @@
         })
       | (Event & {
           currentTarget: EventTarget & HTMLInputElement;
-        })
+        }),
   ) => void;
   export let toMain: (args: WindowSend) => void;
 
   function generateHotkeys(e: KeyboardEvent, key: string) {
     e.preventDefault();
-    let newValue:
-      | { key: string; shiftKey: boolean; ctrlKey: boolean; altKey: boolean }
-      | boolean = false;
-    if (e.key.toLowerCase() !== "backspace") {
+    let newValue: {key: string; shiftKey: boolean; ctrlKey: boolean; altKey: boolean} | boolean =
+      false;
+    if (e.key.toLowerCase() !== 'backspace') {
       if (
-        e.key !== "Control" &&
-        e.key !== "Meta" &&
-        e.key !== "Alt" &&
-        e.key !== "Shift" &&
-        e.key !== "Tab"
+        e.key !== 'Control' &&
+        e.key !== 'Meta' &&
+        e.key !== 'Alt' &&
+        e.key !== 'Shift' &&
+        e.key !== 'Tab'
       ) {
         (e.target as HTMLInputElement).value =
-          (e.shiftKey ? "Shift + " : "") +
-          (e.ctrlKey ? "Ctrl + " : "") +
-          (e.altKey ? "Alt + " : "") +
+          (e.shiftKey ? 'Shift + ' : '') +
+          (e.ctrlKey ? 'Ctrl + ' : '') +
+          (e.altKey ? 'Alt + ' : '') +
           e.key.toUpperCase();
         newValue = {
           shiftKey: e.shiftKey,
@@ -41,14 +40,14 @@
         };
       }
     } else {
-      (e.target as HTMLInputElement).value = "";
+      (e.target as HTMLInputElement).value = '';
     }
     if (newValue) {
       toMain({
-        messageType: "updateSettingSingle",
+        messageType: 'updateSettingSingle',
         update: {
           obs: {
-            [key as "inGameHotkey" | "outOfGameHotkey"]: newValue,
+            [key as 'inGameHotkey' | 'outOfGameHotkey']: newValue,
           },
         },
       });
@@ -56,10 +55,16 @@
   }
 </script>
 
-<form name="obs" class="p-2">
+<form
+  name="obs"
+  class="p-2"
+>
   <div class="d-flex justify-content-center">
     <!-- svelte-ignore a11y-missing-attribute -->
-    <img class="float-left p-2" src={TitleDeco} />
+    <img
+      class="float-left p-2"
+      src={TitleDeco}
+    />
     <span class="flex-1 text-4xl text-active-text">OBS</span>
     <span class="flex-1 m-auto">
       <SettingsCheckbox
@@ -79,8 +84,11 @@
     <div class="border m-2 p-2">
       <div class="row">
         <div class="col">
-          <div class="btn-group btn-group-sm w-100 py-1" role="group">
-            {#if $appSettings.autoHost.type !== "smartHost" || $appSettings.autoHost.leaveAlternate === false}
+          <div
+            class="btn-group btn-group-sm w-100 py-1"
+            role="group"
+          >
+            {#if $appSettings.autoHost.type !== 'smartHost' || $appSettings.autoHost.leaveAlternate === false}
               <SettingsCheckbox
                 key="autoStream"
                 frontFacingName="Auto Stream (Beta)"
@@ -100,29 +108,34 @@
         </div>
         <div class="row">
           <div class="col">
-            <strong>Auto Stream:</strong> Presses SpaceBar in slightly randomized
-            intervals to jump to POIs. Incompatible with intrusive check.<br /><strong
-              >Text source:</strong
-            > Outputs loby data to Documents/wc3mt.txt.
+            <strong>Auto Stream:</strong> Presses SpaceBar in slightly randomized intervals to jump
+            to POIs. Incompatible with intrusive check.<br /><strong>Text source:</strong> Outputs loby
+            data to Documents/wc3mt.txt.
           </div>
         </div>
       </div>
       <div class="row">
         <div class="col">
-          <label for="obsSelect" class="form-label">Scene Switch Type</label>
+          <label
+            for="obsSelect"
+            class="form-label">Scene Switch Type</label
+          >
           <select
             id="obsSelect"
             class="form-select"
             value={$appSettings.obs.sceneSwitchType}
             on:change={onInputChange}
           >
-            <option value="off" selected>Disabled</option>
+            <option
+              value="off"
+              selected>Disabled</option
+            >
             <option value="hotkeys">Simulate Hotkeys</option>
             <option value="websockets">OBS Websockets(Recommended)</option>
           </select>
         </div>
       </div>
-      {#if $appSettings.obs.sceneSwitchType === "hotkeys"}
+      {#if $appSettings.obs.sceneSwitchType === 'hotkeys'}
         <div class="row">
           <div class="col d-flex justify-content-center">OBS Hotkeys Settings</div>
           <div class="row">
@@ -133,13 +146,13 @@
                 class="form-control"
                 id="inGameHotkey"
                 placeholder="In game hotkey"
-                on:keydown={(event) => generateHotkeys(event, "inGameHotkey")}
+                on:keydown={event => generateHotkeys(event, 'inGameHotkey')}
                 value={$appSettings.obs.inGameHotkey
-                  ? ($appSettings.obs.inGameHotkey.shiftKey ? "Shift + " : "") +
-                    ($appSettings.obs.inGameHotkey.ctrlKey ? "Ctrl + " : "") +
-                    ($appSettings.obs.inGameHotkey.altKey ? "Alt + " : "") +
+                  ? ($appSettings.obs.inGameHotkey.shiftKey ? 'Shift + ' : '') +
+                    ($appSettings.obs.inGameHotkey.ctrlKey ? 'Ctrl + ' : '') +
+                    ($appSettings.obs.inGameHotkey.altKey ? 'Alt + ' : '') +
                     $appSettings.obs.inGameHotkey.key
-                  : ""}
+                  : ''}
               />
             </div>
           </div>
@@ -151,18 +164,18 @@
                 class="form-control"
                 id="outOfGameHotkey"
                 placeholder="Out of game hotkey"
-                on:keydown={(e) => generateHotkeys(e, "outOfGameHotkey")}
+                on:keydown={e => generateHotkeys(e, 'outOfGameHotkey')}
                 value={$appSettings.obs.outOfGameHotkey
-                  ? ($appSettings.obs.outOfGameHotkey.shiftKey ? "Shift + " : "") +
-                    ($appSettings.obs.outOfGameHotkey.ctrlKey ? "Ctrl + " : "") +
-                    ($appSettings.obs.outOfGameHotkey.altKey ? "Alt + " : "") +
+                  ? ($appSettings.obs.outOfGameHotkey.shiftKey ? 'Shift + ' : '') +
+                    ($appSettings.obs.outOfGameHotkey.ctrlKey ? 'Ctrl + ' : '') +
+                    ($appSettings.obs.outOfGameHotkey.altKey ? 'Alt + ' : '') +
                     $appSettings.obs.outOfGameHotkey.key
-                  : ""}
+                  : ''}
               />
             </div>
           </div>
         </div>
-      {:else if $appSettings.obs.sceneSwitchType === "websockets"}
+      {:else if $appSettings.obs.sceneSwitchType === 'websockets'}
         <div class="border m-2">
           <div class="row">
             <div class="col">
