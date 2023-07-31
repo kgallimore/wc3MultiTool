@@ -726,7 +726,7 @@ class AutoHost extends ModuleBase {
             ) {
               text += " I will shuffle players before we start.";
             }
-            if (["smartHost", "rapidHost".includes(this.settings.values.autoHost.type)]) {
+            if (["smartHost", "rapidHost"].includes(this.settings.values.autoHost.type)) {
               if (this.settings.values.autoHost.minPlayers > 0) {
                 text += ` I will start with ${this.settings.values.autoHost.minPlayers} players.`;
               } else {
