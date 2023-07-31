@@ -1,6 +1,6 @@
-import {ModuleBase} from '../moduleBase';
+import {ModuleBase} from '/~/moduleBase';
 
-import type {SettingsUpdates} from '../globals/settings';
+import type {SettingsUpdates} from '/~/globals/settings';
 
 import Discord, {Collection} from 'discord.js';
 import {EmbedBuilder, InteractionType, IntentsBitField} from 'discord.js';
@@ -9,10 +9,10 @@ import {REST} from '@discordjs/rest';
 import type {mmdResults} from './replayHandler';
 import type {PlayerTeamsData} from 'wc3mt-lobby-container';
 import type {LobbyUpdatesExtended} from './lobbyControl';
-import {DeColorName, type AdminCommands} from '../utility';
+import {DeColorName, type AdminCommands} from '/~/utility';
 import {app} from 'electron';
-import type {GameState} from '../globals/gameState';
-import type {GameSocketEvents} from '../globals/gameSocket';
+import type {GameState} from '/~/globals/gameState';
+import type {GameSocketEvents} from '/~/globals/gameSocket';
 import {readdir} from 'fs';
 import {join} from 'path';
 

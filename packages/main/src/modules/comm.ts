@@ -1,11 +1,11 @@
-import {ModuleBase} from '../moduleBase';
+import {ModuleBase} from '/~/moduleBase';
 
-import type {SettingsUpdates} from './../globals/settings';
-import type {GameState} from './../globals/gameState';
+import type {SettingsUpdates} from '/~/globals/settings';
+import type {GameState} from '/~/globals/gameState';
 
 import {WebSocket} from 'ws';
-import type {HubReceive} from '../utility';
-import {isValidUrl} from '../utility';
+import type {HubReceive} from '/~/utility';
+import {isValidUrl} from '/~/utility';
 import type {LobbyUpdatesExtended} from './lobbyControl';
 
 export class Comm extends ModuleBase {

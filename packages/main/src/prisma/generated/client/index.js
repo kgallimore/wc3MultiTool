@@ -144,7 +144,7 @@ const config = {
       "value": "prisma-client-js"
     },
     "output": {
-      "value": "C:\\Users\\Trenchguns\\Documents\\coding\\electron\\wc3multitool\\app\\prisma\\generated\\client",
+      "value": "C:\\Users\\Trenchguns\\Documents\\coding\\electron\\wc3multitool\\app\\packages\\main\\src\\prisma\\generated\\client",
       "fromEnvVar": null
     },
     "config": {
@@ -161,8 +161,7 @@ const config = {
     "isCustomOutput": true
   },
   "relativeEnvPaths": {
-    "rootEnvPath": "../../../.env",
-    "schemaEnvPath": "../../../.env"
+    "rootEnvPath": null
   },
   "relativePath": "../..",
   "clientVersion": "5.0.0",
@@ -179,7 +178,7 @@ const fs = require('fs')
 
 config.dirname = __dirname
 if (!fs.existsSync(path.join(__dirname, 'schema.prisma'))) {
-  config.dirname = path.join(process.cwd(), "prisma/generated/client")
+  config.dirname = path.join(process.cwd(), "packages/main/src/prisma/generated/client")
   config.isBundled = true
 }
 
@@ -202,6 +201,6 @@ exports.PrismaClient = PrismaClient
 Object.assign(exports, Prisma)
 
 path.join(__dirname, "query_engine-windows.dll.node");
-path.join(process.cwd(), "prisma/generated/client/query_engine-windows.dll.node")
+path.join(process.cwd(), "packages/main/src/prisma/generated/client/query_engine-windows.dll.node")
 path.join(__dirname, "schema.prisma");
-path.join(process.cwd(), "prisma/generated/client/schema.prisma")
+path.join(process.cwd(), "packages/main/src/prisma/generated/client/schema.prisma")

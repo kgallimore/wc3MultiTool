@@ -1,9 +1,9 @@
 import type {ChatInputCommandInteraction} from 'discord.js';
 import {SlashCommandBuilder} from 'discord.js';
-import type {ChatChannelMatch} from './../discordBot';
-import {checkAdminRequired} from './../discordUtility/utility';
+import type {ChatChannelMatch} from '/~/modules/discordBot';
+import {checkAdminRequired} from '/~/modules/discordUtility/utility';
 
-import {warControl} from './../../globals/warControl';
+import {warControl} from '/~/globals/warControl';
 
 import type {Regions} from 'wc3mt-lobby-container';
 

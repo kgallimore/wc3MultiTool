@@ -1,6 +1,6 @@
-import {ModuleBase} from '../moduleBase';
+import {ModuleBase} from '/~/moduleBase';
 
-import type {GameState} from './../globals/gameState';
+import type {GameState} from '/~/globals/gameState';
 
 import type {Presence} from 'discord-rpc';
 import {Client, register} from 'discord-rpc';

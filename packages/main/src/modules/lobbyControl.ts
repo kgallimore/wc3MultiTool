@@ -1,4 +1,4 @@
-import {Module} from '../moduleBasePre';
+import {Module} from '/~/moduleBasePre';
 
 import type {
   PlayerData,
@@ -12,11 +12,11 @@ import type {
 import {MicroLobby} from 'wc3mt-lobby-container';
 import {generateAutoBalance} from './autoBalancer';
 import {ensureInt} from '../utility';
-import type {GameSocketEvents, AvailableHandicaps} from './../globals/gameSocket';
+import type {GameSocketEvents, AvailableHandicaps} from '/~/globals/gameSocket';
 import {sleep} from '@nut-tree/nut-js';
-import type {EloSettings, SettingsUpdates} from './../globals/settings';
+import type {EloSettings, SettingsUpdates} from '/~/globals/settings';
 
-import type {GameState} from './../globals/gameState';
+import type {GameState} from '/~/globals/gameState';
 
 import {Sequelize, QueryTypes} from 'sequelize';
 

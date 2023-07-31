@@ -1,10 +1,10 @@
-import {ModuleBase} from './../moduleBase';
+import {ModuleBase} from '/~/moduleBase';
 
-import type {CreateLobbyPayload, GameSocketEvents} from './../globals/gameSocket';
+import type {CreateLobbyPayload, GameSocketEvents} from '/~/globals/gameSocket';
 
 import {app} from 'electron';
 
-import {getTargetRegion} from './../utility';
+import {getTargetRegion} from '/~/utility';
 import {existsSync, readFileSync, rmSync} from 'fs';
 
 import {
@@ -19,7 +19,7 @@ import {
   straightTo,
 } from '@nut-tree/nut-js';
 require('@nut-tree/nl-matcher');
-import type {GameState} from './../globals/gameState';
+import type {GameState} from '/~/globals/gameState';
 import type {LobbyUpdatesExtended} from './lobbyControl';
 import {statsToString} from './lobbyControl';
 import type {Regions} from 'wc3mt-lobby-container';

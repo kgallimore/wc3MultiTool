@@ -27,7 +27,8 @@
     "typecheck:renderer": "tsc --noEmit -p packages/renderer/tsconfig.json",
     "typecheck": "npm run typecheck:main && npm run typecheck:preload && npm run typecheck:renderer",
     "postinstall": "cross-env ELECTRON_RUN_AS_NODE=1 electron scripts/update-electron-vendors.mjs",
-    "format": "npx prettier --write \"**/*.{js,mjs,cjs,ts,mts,cts,svelte,json}\""
+    "format": "npx prettier --write \"**/*.{js,mjs,cjs,ts,mts,cts,svelte,json}\"",
+    "prisma": "prisma generate --schema=./packages/main/src/prisma/schema.prisma"
   },
   "devDependencies": {
     "@svelte-plugins/tooltips": "^0.1.6",

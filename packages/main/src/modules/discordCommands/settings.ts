@@ -1,10 +1,10 @@
 import type {ChatInputCommandInteraction, AutocompleteInteraction} from 'discord.js';
 import {SlashCommandBuilder, EmbedBuilder} from 'discord.js';
-import type {ChatChannelMatch} from './../discordBot';
-import {checkAdminRequired} from './../discordUtility/utility';
+import type {ChatChannelMatch} from '/~/modules/discordBot';
+import {checkAdminRequired} from '/~/modules/discordUtility/utility';
 
-import type {AppSettings, SettingsKeys} from './../../globals/settings';
-import {settings} from './../../globals/settings';
+import type {AppSettings, SettingsKeys} from '/~/globals/settings';
+import {settings} from '/~/globals/settings';
 import {app} from 'electron';
 import {createWriteStream} from 'fs';
 import {get} from 'https';

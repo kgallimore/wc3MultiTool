@@ -1,4 +1,4 @@
-import {PrismaClient} from './../prisma/generated/client';
+import {PrismaClient} from './prisma/generated/client';
 import {app} from 'electron';
 import {fork} from 'child_process';
 import path from 'path';

@@ -1,9 +1,9 @@
 import type {ChatInputCommandInteraction} from 'discord.js';
 import {SlashCommandBuilder, EmbedBuilder} from 'discord.js';
-import type {ChatChannelMatch} from './../discordBot';
-import {clientState} from './../../globals/clientState';
-import {gameState} from './../../globals/gameState';
-import {checkAdminRequired} from './../discordUtility/utility';
+import type {ChatChannelMatch} from '/~/modules/discordBot';
+import {clientState} from '/~/globals/clientState';
+import {gameState} from '/~/globals/gameState';
+import {checkAdminRequired} from '/~/modules/discordUtility/utility';
 
 module.exports = {
   data: new SlashCommandBuilder().setName('state').setDescription('Get current status.'),

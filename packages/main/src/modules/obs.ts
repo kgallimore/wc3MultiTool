@@ -1,9 +1,9 @@
-import {ModuleBase} from '../moduleBase';
+import {ModuleBase} from '/~/moduleBase';
 
-import type {SettingsUpdates} from './../globals/settings';
+import type {SettingsUpdates} from '/~/globals/settings';
 
 import OBSWebSocket from 'obs-websocket-js';
-import type {GameState} from './../globals/gameState';
+import type {GameState} from '/~/globals/gameState';
 import {Key, keyboard} from '@nut-tree/nut-js';
 import type {LobbyUpdatesExtended} from './lobbyControl';
 import {writeFileSync} from 'fs';

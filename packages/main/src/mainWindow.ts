@@ -1,4 +1,4 @@
-import {app, BrowserWindow} from 'electron';
+import {app, BrowserWindow, Tray, Menu, Notification} from 'electron';
 import {join, resolve} from 'node:path';
 
 async function createWindow() {
@@ -9,7 +9,7 @@ async function createWindow() {
     title: 'WC3 MultiTool v' + app.getVersion(),
     resizable: false,
     frame: false,
-    icon: join(__dirname, 'images/wc3_auto_balancer_v2.png'),
+    icon: join(app.getAppPath(), 'packages/main/images/wc3_auto_balancer_v2.png'),
     show: false, // Use the 'ready-to-show' event to show the instantiated BrowserWindow.
     webPreferences: {
       nodeIntegration: false,
@@ -35,6 +35,38 @@ async function createWindow() {
     if (import.meta.env.DEV) {
       browserWindow?.webContents.openDevTools();
     }
+  });
+
+  browserWindow.on('minimize', function (event: Event) {
+    event.preventDefault();
+    let appIcon: Tray | null = new Tray(join(__dirname, 'images/wc3_auto_balancer_v2.png'));
+
+    appIcon.setContextMenu(
+      Menu.buildFromTemplate([
+        {
+          label: 'Show App',
+          click: function () {
+            if (appIcon) {
+              appIcon.destroy();
+              appIcon = null;
+              browserWindow.show();
+            }
+          },
+        },
+        {
+          label: 'Quit',
+          click: function () {
+            app.quit();
+          },
+        },
+      ]),
+    );
+
+    new Notification({
+      title: 'Still Running',
+      body: 'WC3 MultiTool will keep running in your taskbar',
+    }).show();
+    browserWindow.hide();
   });
 
   /**

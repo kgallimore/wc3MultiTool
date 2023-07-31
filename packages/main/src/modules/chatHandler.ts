@@ -1,5 +1,5 @@
-import type {GameSocketEvents} from '../globals/gameSocket';
-import {ModuleBase} from '../moduleBase';
+import type {GameSocketEvents} from '/~/globals/gameSocket';
+import {ModuleBase} from '/~/moduleBase';
 
 import translate from '@iamtraction/google-translate';
 import LanguageDetect from 'languagedetect';

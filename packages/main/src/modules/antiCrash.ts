@@ -1,6 +1,6 @@
-import {ModuleBase} from './../moduleBase';
+import {ModuleBase} from '/~/moduleBase';
 
-import type {GameSocketEvents} from './../globals/gameSocket';
+import type {GameSocketEvents} from '/~/globals/gameSocket';
 
 class Monitor extends ModuleBase {
   constructor() {

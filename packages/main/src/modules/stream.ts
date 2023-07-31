@@ -1,6 +1,6 @@
-import {ModuleBase} from '../moduleBase';
+import {ModuleBase} from '/~/moduleBase';
 
-import type {SettingsUpdates} from './../globals/settings';
+import type {SettingsUpdates} from '/~/globals/settings';
 
 import io from 'socket.io-client';
 import type {Socket} from 'socket.io-client';

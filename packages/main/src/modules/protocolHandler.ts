@@ -1,6 +1,6 @@
-import {ModuleBase} from '../moduleBase';
+import {ModuleBase} from '/~/moduleBase';
 
-import type {GameSocketEvents, GameList} from './../globals/gameSocket';
+import type {GameSocketEvents, GameList} from '/~/globals/gameSocket';
 
 class ProtocolHandler extends ModuleBase {
   constructor() {

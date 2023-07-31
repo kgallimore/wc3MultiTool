@@ -1,9 +1,9 @@
-import {ModuleBase} from '../moduleBase';
+import {ModuleBase} from '/~/moduleBase';
 
 import {existsSync, rename} from 'fs';
 import Store from 'electron-store';
-import type {SettingsUpdates} from './../globals/settings';
-import type {GameState} from './../globals/gameState';
+import type {SettingsUpdates} from '/~/globals/settings';
+import type {GameState} from '/~/globals/gameState';
 const store = new Store();
 
 class PerformanceMode extends ModuleBase {

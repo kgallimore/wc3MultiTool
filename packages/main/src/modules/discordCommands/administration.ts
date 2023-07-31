@@ -1,9 +1,9 @@
 import type {ChatInputCommandInteraction, AutocompleteInteraction} from 'discord.js';
 import {SlashCommandBuilder} from 'discord.js';
-import type {ChatChannelMatch} from './../discordBot';
-import {administration} from './../administration';
-import {checkAdminRequired} from './../discordUtility/utility';
-import {lobbyControl} from './../lobbyControl';
+import type {ChatChannelMatch} from '/~/modules/discordBot';
+import {administration} from '/~/modules/administration';
+import {checkAdminRequired} from '/~/modules/discordUtility/utility';
+import {lobbyControl} from '/~/modules/lobbyControl';
 
 module.exports = {
   data: new SlashCommandBuilder()

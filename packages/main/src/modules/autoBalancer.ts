@@ -1,4 +1,4 @@
-import {ensureInt} from '../utility';
+import {ensureInt} from '/~/utility';
 import type {
   MicroLobbyData,
   PlayerData,

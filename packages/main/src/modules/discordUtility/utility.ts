@@ -1,6 +1,6 @@
 import type {ChatInputCommandInteraction, AutocompleteInteraction} from 'discord.js';
-import type {ChatChannelMatch} from './../discordBot';
-import {settings} from './../../globals/settings';
+import type {ChatChannelMatch} from '/~/modules/discordBot';
+import {settings} from '/~/globals/settings';
 
 export function checkAdminRequired(
   interaction: ChatInputCommandInteraction<'cached'> | AutocompleteInteraction<'cached'>,

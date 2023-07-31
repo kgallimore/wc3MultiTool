@@ -1,9 +1,9 @@
 import type {ChatInputCommandInteraction} from 'discord.js';
 import {SlashCommandBuilder, AttachmentBuilder} from 'discord.js';
-import type {ChatChannelMatch} from './../discordBot';
-import {checkAdminRequired} from './../discordUtility/utility';
+import type {ChatChannelMatch} from '/~/modules/discordBot';
+import {checkAdminRequired} from '/~/modules/discordUtility/utility';
 import {app} from 'electron';
-import {logger} from './../../globals/logger';
+import {logger} from '/~/globals/logger';
 import {screen, getActiveWindow} from '@nut-tree/nut-js';
 import type {Window} from 'node-window-manager';
 import {windowManager} from 'node-window-manager';

@@ -303,7 +303,6 @@ app.on('ready', async () => {
       }
     }, 30 * 60 * 1000);
   }
-  log.info('App ready');
 
   if (existsSync(wc3mtTargetFile)) {
     log.info('Removing leftover file');

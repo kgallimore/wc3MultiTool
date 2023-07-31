@@ -1,15 +1,15 @@
-import {ModuleBase} from '../moduleBase';
-import prisma from '../prismaClient';
+import {ModuleBase} from '/~/moduleBase';
+import prisma from '/~/prismaClient';
 
-import type {BanList, WhiteList} from './../../prisma/generated/client';
+import type {BanList, WhiteList} from '/~/prisma/generated/client';
 
 import type {MicroLobby, Regions, SlotNumbers} from 'wc3mt-lobby-container';
 import type {LobbyUpdatesExtended} from './lobbyControl';
 
-import type {GameSocketEvents, AvailableHandicaps} from './../globals/gameSocket';
-import type {AdminCommands, AdminRoles} from './../utility';
-import {isInt, ensureInt, commands, commandArray, hierarchy} from './../utility';
-import type {AutoHostSettings} from './../globals/settings';
+import type {GameSocketEvents, AvailableHandicaps} from '/~/globals/gameSocket';
+import type {AdminCommands, AdminRoles} from '/~/utility';
+import {isInt, ensureInt, commands, commandArray, hierarchy} from '/~/utility';
+import type {AutoHostSettings} from '/~/globals/settings';
 
 export type FetchWhiteBanListSortOptions = 'id' | 'username' | 'admin' | 'region' | 'reason';
 
