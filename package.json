@@ -1,195 +1,45 @@
 {
-  "name": "wc3multitool",
-  "version": "2.0.5-alpha",
-  "description": "A multi-tool for Warcraft 3",
-  "repository": {
-    "type": "git",
-    "url": "git://github.com/kgallimore/wc3multitool.git"
-  },
-  "main": "src/app.js",
+  "name": "new-app",
+  "productName": "new-app",
+  "version": "1.0.0",
+  "description": "My Electron application description",
+  "main": ".webpack/main",
   "scripts": {
-    "compile": "tsc -w",
-    "build": "tsc",
-    "start": "concurrently \"npm:compile\"  \"electron-forge start\"",
-    "publish": "electron-builder --publish always",
-    "pack": "npm run build && electron-builder --dir",
-    "dist": "npm run build && electron-builder",
-    "rebuild": "electron-rebuild",
-    "postinstall": "electron-builder install-app-deps"
+    "start": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
+    "publish": "electron-forge publish",
+    "lint": "eslint --ext .ts,.tsx ."
   },
-  "build": {
-    "appId": "wc3multitool",
-    "productName": "WC3 Multi-Tool",
-    "copyright": "Keith Gallimore",
-    "files": [
-      "**/*",
-      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
-      "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
-      "!**/node_modules/*.d.ts",
-      "!**/node_modules/.bin",
-      "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}",
-      "!.editorconfig",
-      "!**/._*",
-      "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}",
-      "!**/{__pycache__,thumbs.db,.flowconfig,.idea,.vs,.nyc_output}",
-      "!**/{appveyor.yml,.travis.yml,circle.yml}",
-      "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}",
-      "prisma/**/*",
-      "!prisma/*.db"
-    ],
-    "extraResources": [
-      "node_modules/@prisma/engines/schema-engine-*",
-      "node_modules/@prisma/engines/query*",
-      "node_modules/@prisma/engines/libquery*",
-      "node_modules/prisma/build*"
-    ],
-    "extraFiles": [
-      {
-        "from": "./prisma/schema.prisma",
-        "to": "./prisma/schema.prisma"
-      },
-      {
-        "from": "./prisma/migrations",
-        "to": "./prisma/migrations"
-      },
-      {
-        "from": "./src/webui.html",
-        "to": "."
-      },
-      {
-        "from": "./src/webui.js",
-        "to": "."
-      },
-      {
-        "from": "./src/webuiPerf.html",
-        "to": "."
-      },
-      {
-        "from": "./public",
-        "to": "./public"
-      },
-      {
-        "from": "./src/images",
-        "to": "./images"
-      },
-      {
-        "from": "./src/sounds",
-        "to": "./sounds"
-      }
-    ],
-    "win": {
-      "target": [
-        "nsis"
-      ],
-      "icon": "src/images/wc3_auto_balancer_v2.png"
-    },
-    "nsis": {
-      "installerIcon": "src/images/wc3_auto_balancer_v1.ico",
-      "uninstallerIcon": "src/images/wc3_auto_balancer_v1.ico",
-      "artifactName": "WC3-Multi-Tool-Setup-${version}.${ext}",
-      "uninstallDisplayName": "WC3 Multi-Tool",
-      "include": "src/installer.nsh",
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
-    },
-    "portable": {
-      "artifactName": "WC3_Multi-Tool_Setup_portable.exe",
-      "unpackDirName": "wc3MultiTool_portable"
-    },
-    "publish": [
-      {
-        "provider": "generic",
-        "url": "https://war.trenchguns.com/publish"
-      }
-    ],
-    "protocols": [
-      {
-        "name": "wc3mt",
-        "role": "Viewer",
-        "schemes": [
-          "wc3mt"
-        ]
-      }
-    ]
+  "keywords": [],
+  "author": {
+    "name": "kgallimore",
+    "email": "72752967+kgallimore@users.noreply.github.com"
   },
-  "author": "Trenchguns",
-  "license": "UNLICENSED",
-  "config": {
-    "forge": {
-      "packagerConfig": {},
-      "makers": [
-        {
-          "name": "@electron-forge/maker-squirrel",
-          "config": {
-            "name": "WC3 Multi Tool"
-          }
-        },
-        {
-          "name": "@electron-forge/maker-zip",
-          "platforms": [
-            "darwin"
-          ]
-        },
-        {
-          "name": "@electron-forge/maker-deb",
-          "config": {}
-        },
-        {
-          "name": "@electron-forge/maker-rpm",
-          "config": {}
-        }
-      ]
-    }
-  },
+  "license": "MIT",
   "devDependencies": {
     "@electron-forge/cli": "^6.2.1",
-    "@types/discord-rpc": "^4.0.5",
-    "@types/node": "^20.4.1",
-    "@types/sound-play": "^1.1.0",
-    "@types/validator": "^13.7.17",
-    "@types/ws": "^8.5.5",
-    "concurrently": "^8.2.0",
-    "electron": "^25.2.0",
-    "electron-builder": "^24.4.0",
-    "electron-reload": "^2.0.0-alpha.1",
-    "tailwindcss": "^3.3.2",
-    "typescript": "^5.1.6"
+    "@electron-forge/maker-deb": "^6.2.1",
+    "@electron-forge/maker-rpm": "^6.2.1",
+    "@electron-forge/maker-squirrel": "^6.2.1",
+    "@electron-forge/maker-zip": "^6.2.1",
+    "@electron-forge/plugin-auto-unpack-natives": "^6.2.1",
+    "@electron-forge/plugin-webpack": "^6.2.1",
+    "@typescript-eslint/eslint-plugin": "^5.62.0",
+    "@typescript-eslint/parser": "^5.62.0",
+    "@vercel/webpack-asset-relocator-loader": "^1.7.3",
+    "css-loader": "^6.8.1",
+    "electron": "25.3.2",
+    "eslint": "^8.46.0",
+    "eslint-plugin-import": "^2.28.0",
+    "fork-ts-checker-webpack-plugin": "^7.3.0",
+    "node-loader": "^2.0.0",
+    "style-loader": "^3.3.3",
+    "ts-loader": "^9.4.4",
+    "ts-node": "^10.9.1",
+    "typescript": "~4.5.4"
   },
   "dependencies": {
-    "@discordjs/rest": "^1.7.1",
-    "@iamtraction/google-translate": "^2.0.1",
-    "@nut-tree/nl-matcher": "^2.2.0",
-    "@nut-tree/nut-js": "^3.1.2",
-    "@prisma/client": "^5.0.0",
-    "@types/audio-play": "^2.3.0",
-    "audio-loader": "^1.0.3",
-    "audio-play": "^2.3.1",
-    "bufferutil": "^4.0.7",
-    "discord-api-types": "^0.37.47",
-    "discord-rpc": "^4.0.1",
-    "discord.js": "^14.11.0",
-    "electron-log": "^5.0.0-beta.24",
-    "electron-store": "^8.1.0",
-    "electron-updater": "^6.1.1",
-    "fast-geoip": "^1.1.88",
-    "firebase": "^9.19.1",
-    "js-combinatorics": "^2.1.1",
-    "languagedetect": "^2.0.0",
-    "mariadb": "^3.2.0",
-    "mysql2": "^3.5.0",
-    "nanoid": "^4.0.2",
-    "node-abi": "^3.45.0",
-    "node-window-manager": "^2.2.4",
-    "obs-websocket-js": "^5.0.3",
-    "prisma": "^5.0.0",
-    "reflect-metadata": "^0.1.13",
-    "sequelize": "^6.32.1",
-    "sequelize-typescript": "^2.1.5",
-    "socket.io-client": "^4.6.1",
-    "sqlite3": "^5.1.6",
-    "translate": "^2.0.2",
-    "w3gjs": "^2.5.0",
-    "wc3mt-lobby-container": "^1.1.1",
-    "ws": "^8.13.0"
+    "electron-squirrel-startup": "^1.0.0"
   }
 }

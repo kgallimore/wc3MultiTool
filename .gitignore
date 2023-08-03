@@ -85,38 +85,10 @@ typings/
 # Webpack
 .webpack/
 
+# Vite
+.vite/
+
 # Electron-Forge
 out/
 
-# Electron-Builder
-dist/
-
-# Random Testing Files
-tempTest/
-
-# vscode settings
-.vscode/
-src/tempresolve.png
-
-# Logs
-src/logs
-
-#Other Material
-screenshots
-
-public/build
-
-src/**/*.js
-src/**/*.map
-warpi
-move.bat
-
-GlueManagerAltered.js
-
-needle.png
-haystack.png
-DesktopCapture.png
-
-prisma/generated
-prisma/*.db
-src/wc3mtv2.db
+old

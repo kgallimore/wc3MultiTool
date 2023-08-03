@@ -1,35 +1,19 @@
 {
-    "compilerOptions": {
-        "target": "ES2019",         // Specify ECMAScript target version: 'ES5' (default), 'ES2015', 'ES2016', 'ES2017', 'ES2018', 'ES2019' or 'ESNEXT'.
-        "module": "commonjs",
-        "moduleResolution": "node",
-        "strict": true,          
-        "esModuleInterop": true,    
-        "noImplicitAny": true,
-        "sourceMap": true,
-        "strictPropertyInitialization": false,
-        "baseUrl": ".",
-        "experimentalDecorators": true,
-        "emitDecoratorMetadata": true,
-        "paths": {
-            "*": ["node_modules/*"]
-          },
-        "outDir": "./src"
-    },
-    "include": [
-        "tsrc/**/*"
-      ],
-      "watchOptions": {
-        // Use native file system events for files and directories
-        "watchFile": "useFsEvents",
-        "watchDirectory": "useFsEvents",
-        // Poll files for updates more frequently
-        // when they're updated a lot.
-        "fallbackPolling": "dynamicPriority",
-        // Don't coalesce watch notification
-        "synchronousWatchDirectory": true,
-        // Finally, two additional settings for reducing the amount of possible
-        // files to track  work from these directories
-        "excludeDirectories": ["**/node_modules", "_build", "svelte", "src", "dist", "public"],
-      }
+  "compilerOptions": {
+    "target": "ES6",
+    "allowJs": true,
+    "module": "commonjs",
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "noImplicitAny": true,
+    "sourceMap": true,
+    "baseUrl": ".",
+    "outDir": "dist",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "paths": {
+      "*": ["node_modules/*"]
+    }
+  },
+  "include": ["src/**/*"]
 }
