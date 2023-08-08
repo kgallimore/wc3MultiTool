@@ -3,6 +3,7 @@ import { app } from "electron";
 import { fork } from "child_process";
 import path from "path";
 import { logger } from "./globals/logger";
+import fs from "fs";
 export interface Migration {
   id: string;
   checksum: string;
@@ -28,8 +29,7 @@ export const mePath = path.join(
   extraResourcesPath,
   "node_modules/@prisma/engines/schema-engine-windows.exe"
 );
-export const dbPath = path.join(app.getPath("userData"), "wc3mtv2.db");
-
+export const dbPath = path.join(app.getPath("userData"), "wc3mtv3.db");
 export async function runPrismaCommand({
   command,
   dbUrl,
@@ -91,7 +91,16 @@ export async function checkMigration() {
   try {
     const latest: Migration[] =
       await prisma.$queryRaw`select * from _prisma_migrations order by finished_at`;
-    needsMigration = latest[latest.length - 1]?.migration_name !== "20230709165606_init";
+    const latestMigration = fs
+      .readdirSync(path.join(__dirname, "..", "prisma", "migrations"), {
+        withFileTypes: true,
+      })
+      .filter((file) => file.isDirectory())
+      .sort(
+        (a, b) => parseInt(b.name.split("_")[0]) - parseInt(a.name.split("_")[0])
+      )[0].name;
+    console.log("~~~~~~~~~~~~~~~~~~~" + latestMigration + "~~~~~~~~~~~~~~~~~~~");
+    needsMigration = latest[latest.length - 1]?.migration_name !== latestMigration;
   } catch (e) {
     needsMigration = true;
   }

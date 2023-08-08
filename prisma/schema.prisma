@@ -14,6 +14,7 @@ datasource db {
 model BanList {
   id           Int       @id @default(autoincrement())
   username     String
+  user         UserList  @relation(fields: [username], references: [name])
   admin        String
   region       String
   reason       String?
@@ -25,6 +26,7 @@ model BanList {
 model WhiteList {
   id           Int       @id @default(autoincrement())
   username     String
+  user         UserList  @relation(fields: [username], references: [name])
   admin        String
   region       String
   reason       String?
@@ -36,10 +38,40 @@ model WhiteList {
 model AdminList {
   id           Int       @id @default(autoincrement())
   username     String
+  user         UserList  @relation(fields: [username], references: [name])
   admin        String
   region       String
   role         String
   removal_date DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+}
+
+model UserList {
+  id        Int         @id @default(autoincrement())
+  name      String      @unique
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  UserStats UserStats[]
+  BanList   BanList[]
+  WhiteList WhiteList[]
+  AdminList AdminList[]
+}
+
+model UserStats {
+  id          Int      @id @default(autoincrement())
+  username    String
+  user        UserList @relation(fields: [username], references: [name])
+  gameName    String
+  mapName     String
+  gamesPlayed Int      @default(0)
+}
+
+model Logs {
+  id        Int      @id @default(autoincrement())
+  source    String
+  message   String
+  priority  String   @default("verbose")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

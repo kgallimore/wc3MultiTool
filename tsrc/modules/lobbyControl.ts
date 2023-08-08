@@ -397,6 +397,8 @@ export class LobbyControl extends Module {
         return { name: "Battleships%20Crossfire", elo: true };
       } else if (mapName.match(/Risk.*Europe/i)) {
         return { name: "Risk%20Europe", elo: true };
+      } else if (mapName.match(/(WMW|Wintermaul Wars).*X/i)) {
+        return { name: "Wintermaul%20Wars", elo: true };
       } else {
         let name = encodeURI(
           mapName.trim().replace(/\s*v?\.?(\d+\.)?(\*|\d+)\w*\s*$/gi, "")
@@ -447,7 +449,10 @@ export class LobbyControl extends Module {
               jsonData = { body: [] };
             }
             let elo = 500;
-            if (this.eloName === "Footmen%20Vs%20Grunts") {
+            if (
+              this.eloName === "Footmen%20Vs%20Grunts" ||
+              this.eloName === "Wintermaul%20Wars"
+            ) {
               elo = 1000;
             } else if (this.eloName === "Reforged%20Footmen%20Frenzy") {
               elo = 1500;

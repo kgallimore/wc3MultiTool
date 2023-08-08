@@ -1,6 +1,6 @@
 {
   "name": "wc3multitool",
-  "version": "2.0.5-alpha",
+  "version": "2.0.6-alpha",
   "description": "A multi-tool for Warcraft 3",
   "repository": {
     "type": "git",
@@ -15,7 +15,9 @@
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder",
     "rebuild": "electron-rebuild",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "electron-builder install-app-deps",
+    "prisma": "prisma generate",
+    "prisma-migrate": "prisma migrate dev --name \"$(date +%s)\""
   },
   "build": {
     "appId": "wc3multitool",
@@ -160,7 +162,7 @@
     "@iamtraction/google-translate": "^2.0.1",
     "@nut-tree/nl-matcher": "^2.2.0",
     "@nut-tree/nut-js": "^3.1.2",
-    "@prisma/client": "^5.0.0",
+    "@prisma/client": "^5.1.1",
     "@types/audio-play": "^2.3.0",
     "audio-loader": "^1.0.3",
     "audio-play": "^2.3.1",
@@ -181,7 +183,7 @@
     "node-abi": "^3.45.0",
     "node-window-manager": "^2.2.4",
     "obs-websocket-js": "^5.0.3",
-    "prisma": "^5.0.0",
+    "prisma": "^5.1.1",
     "reflect-metadata": "^0.1.13",
     "sequelize": "^6.32.1",
     "sequelize-typescript": "^2.1.5",
