@@ -99,7 +99,6 @@ export async function checkMigration() {
       .sort(
         (a, b) => parseInt(b.name.split("_")[0]) - parseInt(a.name.split("_")[0])
       )[0].name;
-    console.log("~~~~~~~~~~~~~~~~~~~" + latestMigration + "~~~~~~~~~~~~~~~~~~~");
     needsMigration = latest[latest.length - 1]?.migration_name !== latestMigration;
   } catch (e) {
     needsMigration = true;

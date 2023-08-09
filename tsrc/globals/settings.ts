@@ -140,6 +140,7 @@ export interface EloSettings {
   minRating: number;
   minGames: number;
   minWins: number;
+  eloMapNameLookupURL: string;
 }
 export type SettingsKeys =
   | keyof ObsSettings
@@ -264,6 +265,9 @@ class AppSettingsContainer extends Global {
         minWins: store.get("elo.minWins") ?? 0,
         minRank: store.get("elo.minRank") ?? 0,
         minRating: store.get("elo.minRating") ?? 0,
+        eloMapNameLookupURL:
+          store.get("elo.eloMapNameLookupURL") ??
+          "https://war.trenchguns.com/eloMapnameLookups.json",
       },
       discord: {
         enabled: store.get("discord.enabled") ?? false,

@@ -56,8 +56,10 @@ if (!app.isPackaged) {
     awaitWriteFinish: true,
   });
 }
-import { WindowSend, WindowReceive, BanWhiteSingle } from "./utility";
+import type { BanList, WhiteList } from "./../prisma/generated/client";
+import { WindowSend, WindowReceive } from "./utility";
 import { LobbyUpdatesExtended } from "./modules/lobbyControl";
+import { Regions } from "wc3mt-lobby-container";
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -532,7 +534,10 @@ if (!gotLock) {
         break;
       case "exportWhitesBans":
         if (args.exportImport) {
-          let list = administration.fetchList({ type: args.exportImport.type });
+          let list = await administration.fetchList({
+            type: args.exportImport.type,
+            activeOnly: true,
+          });
           if (args.exportImport.type === "banList") {
             let path = app.getPath("documents") + "\\bans.json";
             writeFileSync(path, JSON.stringify(list));
@@ -556,20 +561,20 @@ if (!gotLock) {
             .then((result) => {
               result.filePaths.forEach((file) => {
                 let bans = JSON.parse(readFileSync(file).toString());
-                bans.forEach((ban: BanWhiteSingle) => {
+                bans.forEach(async (ban: BanList | WhiteList) => {
                   if (args.exportImport?.type === "banList") {
-                    administration.banPlayer(
+                    await administration.banPlayer(
                       ban.username,
                       "client",
-                      ban.region || "client",
-                      ban.reason
+                      (ban.region as Regions) || "client",
+                      ban.reason as string
                     );
                   } else if (args.exportImport?.type === "whiteList") {
-                    administration.whitePlayer(
+                    await administration.whitePlayer(
                       ban.username,
                       "client",
-                      ban.region || "client",
-                      ban.reason
+                      (ban.region as Regions) || "client",
+                      ban.reason as string
                     );
                   }
                 });

@@ -44,16 +44,6 @@ export interface WindowReceive {
   };
 }
 
-export interface BanWhiteSingle {
-  id: number;
-  username: string;
-  admin: string;
-  region: Regions;
-  reason: string;
-  add_date: string;
-  removal_date: string;
-}
-
 export type BanWhiteList = BanList[] | WhiteList[] | undefined;
 
 export interface ClientCommands {

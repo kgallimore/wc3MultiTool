@@ -42,12 +42,9 @@ class Administration extends ModuleBase {
     if (events.processedChat) {
       let sender = events.processedChat.sender;
       let firstArg = events.processedChat.content.split(" ")[0];
-      console.log(firstArg);
       if (firstArg.match(/^\?/)) {
-        console.log("Is command");
         firstArg = firstArg.slice(1).toLowerCase();
         if (firstArg in commands) {
-          console.log("Is known command");
           var command = firstArg as AdminCommands;
           if (command.match(/^(help)|(commands)/i)) {
             if (this.lobby.microLobby?.lobbyStatic.isHost) {
@@ -522,6 +519,7 @@ class Administration extends ModuleBase {
       }
     }
     if (updates.newLobby) {
+      this.info("Entered new lobby");
       Object.values(updates.newLobby.slots)
         .filter((slot) => slot.slotStatus === 2 && (slot.playerRegion || slot.isSelf))
         .forEach((slot) => {
@@ -532,9 +530,15 @@ class Administration extends ModuleBase {
 
   async clearPlayer(data: { name: string; slot: number; [key: string]: any }) {
     this.verbose("Checking if player is clear: " + data.name);
+    await prisma.userList.upsert({
+      create: { name: data.name },
+      update: {},
+      where: { name: data.name },
+    });
     let isClear = await this.checkPlayer(data.name);
     if (!isClear.type) {
       this.lobby.clearPlayer(data.name, true);
+      this.info("Cleared " + data.name);
       return;
     }
     this.lobby.banSlot(data.slot);
@@ -555,7 +559,6 @@ class Administration extends ModuleBase {
       this.info("Kicked " + data.name + " for not being whitelisted");
       return;
     }
-    this.info("Player cleared: " + data.name);
   }
 
   async checkPlayer(
@@ -582,7 +585,6 @@ class Administration extends ModuleBase {
     reason = "",
     bypassCheck: boolean = false
   ): Promise<true | { reason: string }> {
-    console.log("ban");
     if ((await this.checkRole(admin, "moderator")) || bypassCheck) {
       if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
         if (await this.checkRole(player, "admin")) {
@@ -592,6 +594,11 @@ class Administration extends ModuleBase {
           return { reason: "Can not ban an admin without removing permissions first." };
         }
         //const newBan = new BanList({ username: player, admin, region, reason });
+        await prisma.userList.upsert({
+          create: { name: player },
+          update: {},
+          where: { name: player },
+        });
         await prisma.banList.create({
           data: { username: player, admin, region, reason },
         });
@@ -634,6 +641,11 @@ class Administration extends ModuleBase {
   ): Promise<true | { reason: string }> {
     if ((await this.checkRole(admin, "moderator")) || bypassCheck) {
       if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
+        await prisma.userList.upsert({
+          create: { name: player },
+          update: {},
+          where: { name: player },
+        });
         await prisma.whiteList.create({
           data: { username: player, admin, region, reason },
         });
@@ -726,6 +738,11 @@ class Administration extends ModuleBase {
         if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
           if (await this.checkRole(player, "moderator")) {
             try {
+              await prisma.userList.upsert({
+                create: { name: player },
+                update: {},
+                where: { name: player },
+              });
               await prisma.adminList.updateMany({
                 where: { username: player },
                 data: { role, admin, region },

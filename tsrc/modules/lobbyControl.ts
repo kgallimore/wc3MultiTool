@@ -14,11 +14,88 @@ import { generateAutoBalance } from "./autoBalancer";
 import { ensureInt } from "../utility";
 import type { GameSocketEvents, AvailableHandicaps } from "./../globals/gameSocket";
 import { sleep } from "@nut-tree/nut-js";
+import { existsSync, readFile, readFileSync, writeFileSync } from "fs";
+import { app } from "electron";
 import type { EloSettings, SettingsUpdates } from "./../globals/settings";
 
 import type { GameState } from "./../globals/gameState";
 
 import { Sequelize, QueryTypes } from "sequelize";
+import { join } from "path";
+
+interface EloMapNameLookups {
+  [key: string]: EloMapNameData;
+}
+
+interface EloMapNameData {
+  regex: string;
+  elo: boolean;
+  defaultElo: Partial<Record<EloSettings["type"], number>>;
+}
+
+export const EloMapNameLookups: EloMapNameLookups = {
+  HLW: { regex: "HLW", elo: true, defaultElo: { wc3stats: 500 } },
+  "Pyro TD": {
+    regex: "pyro\\s*td\\s*league",
+    elo: true,
+    defaultElo: { wc3stats: 500 },
+  },
+  "Vampirism Fire": {
+    regex: "Vampirism\\s*Fire",
+    elo: true,
+    defaultElo: { wc3stats: 1500 },
+  },
+  "Footmen VsGrunts": {
+    regex: "footmen.*vs.*grunts",
+    elo: true,
+    defaultElo: { wc3stats: 1000 },
+  },
+  "Broken Alliances": {
+    regex: "Broken.*Alliances",
+    elo: true,
+    defaultElo: { wc3stats: 500 },
+  },
+  "Reforged Footmen Frenzy": {
+    regex: "Reforged.*Footmen",
+    elo: true,
+    defaultElo: { wc3stats: 1500 },
+  },
+  "Direct Strike": {
+    regex: "Direct.*Strike.*Reforged",
+    elo: true,
+    defaultElo: { wc3stats: 500 },
+  },
+  "WW3 Diplomacy": {
+    regex: "WW3.*Diplomacy",
+    elo: true,
+    defaultElo: { wc3stats: 500 },
+  },
+  "Legion TD": {
+    regex: "Legion.*TD",
+    elo: true,
+    defaultElo: { wc3stats: 500 },
+  },
+  "Tree Tag": {
+    regex: "Tree.*Tag",
+    elo: true,
+    defaultElo: { wc3stats: 500 },
+  },
+  "Battleships Crossfire": {
+    regex: "Battleships.*Crossfire",
+    elo: true,
+    defaultElo: { wc3stats: 500 },
+  },
+  "Risk Europe": {
+    regex: "Risk.*Europe",
+    elo: true,
+    defaultElo: { wc3stats: 500 },
+  },
+  "Wintermaul Wars": {
+    regex: "(WMW|Wintermaul Wars).*X",
+    elo: true,
+    defaultElo: { wc3stats: 1000 },
+  },
+};
 
 export interface LobbyUpdatesExtended extends LobbyUpdates {
   playerCleared?: string;
@@ -74,17 +151,105 @@ export class LobbyControl extends Module {
   fetchingStats: Array<string> = [];
   leftGame: boolean = false;
 
+  public eloMapNameLookups: EloMapNameLookups = EloMapNameLookups;
+
   private isTargetMap: boolean = false;
 
   private startTimer: NodeJS.Timeout | null = null;
 
   private expectedSwaps: Array<{ swaps: [string, string]; forBalance: boolean }> = [];
 
+  eloJsonLocation = join(app.getPath("appData"), "eloMapNameLookups.json");
+
   constructor() {
     super("Lobby Control", {
       listeners: ["gameSocketEvent", "gameStateUpdates", "settingsUpdate"],
     });
     this.initDatabase();
+    if (existsSync(this.eloJsonLocation)) {
+      readFile(this.eloJsonLocation, (err, data) => {
+        if (err) {
+          this.warn("Could not load elo map name lookups from file. Error: " + err);
+        } else if (data) {
+          this.eloMapNameLookups = JSON.parse(data.toString());
+          this.verbose("Loaded elo map name lookups from file");
+        } else {
+          this.warn("Could not load elo map name lookups from file, file may be empty.");
+        }
+        this.fetchEloMapNameLookups();
+      });
+    } else {
+      this.fetchEloMapNameLookups();
+    }
+    setInterval(() => this.fetchEloMapNameLookups(), 1000 * 60 * 60 * 24);
+  }
+
+  fetchEloMapNameLookups() {
+    if (this.settings.values.elo.eloMapNameLookupURL) {
+      this.verbose(
+        "Fetching elo map name lookups from: " +
+          this.settings.values.elo.eloMapNameLookupURL
+      );
+      fetch(this.settings.values.elo.eloMapNameLookupURL, {
+        method: "GET",
+        cache: "no-store",
+      }).then((res) => {
+        if (res.status !== 200) {
+          this.error(
+            "Could not fetch elo map name lookups from: " +
+              this.settings.values.elo.eloMapNameLookupURL +
+              " Error: " +
+              res.statusText
+          );
+          return;
+        }
+        (res.json() as Promise<EloMapNameLookups>).then((data) => {
+          let oldEntryKeys = Object.keys(this.eloMapNameLookups);
+          let newEntries = Object.entries(data);
+          if (oldEntryKeys.length !== newEntries.length) {
+            this.updateEloMapNameLookups(data, "New length");
+            return;
+          }
+          for (let [key, value] of newEntries) {
+            if (!this.eloMapNameLookups[key]) {
+              this.updateEloMapNameLookups(data, "New map: " + key);
+              return;
+            }
+            for (let [key2, value2] of Object.entries(value)) {
+              if (typeof this.eloMapNameLookups[key] !== "object") {
+                if (
+                  this.eloMapNameLookups[key][key2 as keyof EloMapNameData] !== value2
+                ) {
+                  this.updateEloMapNameLookups(
+                    data,
+                    `New value: ${key} ${key2} ${value2}`
+                  );
+                  return;
+                }
+              } else {
+                if (
+                  JSON.stringify(
+                    this.eloMapNameLookups[key][key2 as keyof EloMapNameData]
+                  ) !== JSON.stringify(value2)
+                ) {
+                  this.updateEloMapNameLookups(
+                    data,
+                    `New object value: ${key} ${key2} ${JSON.stringify(value2)}`
+                  );
+                  return;
+                }
+              }
+            }
+          }
+        });
+      });
+    }
+  }
+
+  updateEloMapNameLookups(newData: EloMapNameLookups, reason?: string) {
+    writeFileSync(this.eloJsonLocation, JSON.stringify(newData));
+    this.info("Elo map name lookups updated" + (reason ? ": " + reason : ""));
+    this.eloMapNameLookups = newData;
   }
 
   onSettingsUpdate(updates: SettingsUpdates) {
@@ -227,6 +392,7 @@ export class LobbyControl extends Module {
       }
     } else {
       let changedValues = this.microLobby.updateLobbySlots(payload.players);
+      this.verbose("MicroLobby changed values", JSON.stringify(changedValues));
       if (changedValues.playerUpdates.length > 0) {
         this.emitLobbyUpdate({ playerPayload: changedValues.playerUpdates });
       }
@@ -237,8 +403,10 @@ export class LobbyControl extends Module {
           this.emitLobbyUpdate(event);
           if (event.playerMoved || event.playerJoined) {
             // TODO: only affect player teams
+            this.verbose("Player moved or joined");
             this.clearStartTimer();
           } else if (event.playerLeft) {
+            this.verbose("Player left");
             this.clearStartTimer();
             let player = event.playerLeft;
             let expectedSwapsCheck = this.expectedSwaps.findIndex((swaps) =>
@@ -372,45 +540,32 @@ export class LobbyControl extends Module {
     mapName: string,
     type: EloSettings["type"]
   ): Promise<{ name: string; elo: boolean }> {
-    if (type === "wc3stats") {
-      if (mapName.match(/(HLW)/i)) {
-        return { name: "HLW", elo: true };
-      } else if (mapName.match(/(pyro\s*td\s*league)/i)) {
-        return { name: "Pyro%20TD", elo: true };
-      } else if (mapName.match(/(vampirism\s*fire)/i)) {
-        return { name: "Vampirism%20Fire", elo: true };
-      } else if (mapName.match(/(footmen.*vs.*grunts)/i)) {
-        return { name: "Footmen%20Vs%20Grunts", elo: true };
-      } else if (mapName.match(/Broken.*Alliances/i)) {
-        return { name: "Broken%20Alliances", elo: true };
-      } else if (mapName.match(/Reforged.*Footmen/i)) {
-        return { name: "Reforged%20Footmen%20Frenzy", elo: true };
-      } else if (mapName.match(/Direct.*Strike.*Reforged/i)) {
-        return { name: "Direct%20Strike", elo: true };
-      } else if (mapName.match(/WW3.*Diplomacy/i)) {
-        return { name: "WW3%20Diplomacy", elo: true };
-      } else if (mapName.match(/Legion.*TD/i)) {
-        return { name: "Legion%20TD", elo: true };
-      } else if (mapName.match(/Tree.*Tag/i)) {
-        return { name: "Tree%20Tag", elo: true };
-      } else if (mapName.match(/Battleships.*Crossfire/i)) {
-        return { name: "Battleships%20Crossfire", elo: true };
-      } else if (mapName.match(/Risk.*Europe/i)) {
-        return { name: "Risk%20Europe", elo: true };
-      } else if (mapName.match(/(WMW|Wintermaul Wars).*X/i)) {
-        return { name: "Wintermaul%20Wars", elo: true };
-      } else {
-        let name = encodeURI(
-          mapName.trim().replace(/\s*v?\.?(\d+\.)?(\*|\d+)\w*\s*$/gi, "")
-        );
-        let test = await (await fetch(`https://api.wc3stats.com/maps/${name}`)).json();
-        return { name, elo: test.status === "ok" };
+    let retValue: { name: string; elo: boolean } | undefined;
+    for (let [name, data] of Object.entries(this.eloMapNameLookups)) {
+      if (mapName.match(new RegExp(data.regex, "i"))) {
+        this.verbose(`Found elo map name match: ${name}`);
+        retValue = { name: name, elo: data.elo };
+        break;
       }
-    } else
-      return {
-        name: encodeURI(mapName.trim().replace(/\s*v?\.?(\d+\.)?(\*|\d+)\w*\s*$/gi, "")),
-        elo: ["mariadb", "mysql", "sqlite", "random"].includes(type),
-      };
+    }
+    if (type === "wc3stats") {
+      if (retValue) {
+        retValue.name = encodeURI(retValue.name);
+        return retValue;
+      }
+      let name = encodeURI(
+        mapName.trim().replace(/\s*v?\.?(\d+\.)?(\*|\d+)\w*\s*$/gi, "")
+      );
+      let test = await (await fetch(`https://api.wc3stats.com/maps/${name}`)).json();
+      return { name, elo: test.status === "ok" };
+    }
+    if (retValue) {
+      return retValue;
+    }
+    return {
+      name: encodeURI(mapName.trim().replace(/\s*v?\.?(\d+\.)?(\*|\d+)\w*\s*$/gi, "")),
+      elo: ["mariadb", "mysql", "sqlite", "random"].includes(type),
+    };
   }
 
   async fetchStats(name: string) {
@@ -448,15 +603,8 @@ export class LobbyControl extends Module {
               this.error("Failed to fetch wc3stats data:", e as string);
               jsonData = { body: [] };
             }
-            let elo = 500;
-            if (
-              this.eloName === "Footmen%20Vs%20Grunts" ||
-              this.eloName === "Wintermaul%20Wars"
-            ) {
-              elo = 1000;
-            } else if (this.eloName === "Reforged%20Footmen%20Frenzy") {
-              elo = 1500;
-            }
+            let elo =
+              this.eloMapNameLookups[decodeURI(this.eloName)]?.defaultElo.wc3stats ?? 500;
             if (jsonData.body.length > 0) {
               let { name, ...desiredData } = jsonData.body[0];
               data = { ...desiredData };
@@ -936,6 +1084,7 @@ export class LobbyControl extends Module {
         }
       }
     }
+    this.verbose("Lobby ready");
     return true;
   }
 
