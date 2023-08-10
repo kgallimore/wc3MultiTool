@@ -406,7 +406,7 @@ export class LobbyControl extends Module {
             this.verbose("Player moved or joined");
             this.clearStartTimer();
           } else if (event.playerLeft) {
-            this.verbose("Player left");
+            this.verbose("Player left: " + event.playerLeft);
             this.clearStartTimer();
             let player = event.playerLeft;
             let expectedSwapsCheck = this.expectedSwaps.findIndex((swaps) =>

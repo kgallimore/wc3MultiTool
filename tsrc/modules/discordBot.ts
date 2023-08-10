@@ -638,7 +638,6 @@ class DiscordBot extends ModuleBase {
     } else if (channel === "thread" && this._currentThread) {
       return this._currentThread?.send(message);
     } else {
-      console.log("Channel is not defined");
       return null;
     }
   }

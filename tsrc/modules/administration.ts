@@ -530,11 +530,10 @@ class Administration extends ModuleBase {
 
   async clearPlayer(data: { name: string; slot: number; [key: string]: any }) {
     this.verbose("Checking if player is clear: " + data.name);
-    await prisma.userList.upsert({
-      create: { name: data.name },
-      update: {},
-      where: { name: data.name },
-    });
+    if ((await prisma.userList.findUnique({ where: { name: data.name } })) == null)
+      await prisma.userList.create({
+        data: { name: data.name },
+      });
     let isClear = await this.checkPlayer(data.name);
     if (!isClear.type) {
       this.lobby.clearPlayer(data.name, true);
@@ -594,11 +593,10 @@ class Administration extends ModuleBase {
           return { reason: "Can not ban an admin without removing permissions first." };
         }
         //const newBan = new BanList({ username: player, admin, region, reason });
-        await prisma.userList.upsert({
-          create: { name: player },
-          update: {},
-          where: { name: player },
-        });
+        if ((await prisma.userList.findUnique({ where: { name: player } })) == null)
+          await prisma.userList.create({
+            data: { name: player },
+          });
         await prisma.banList.create({
           data: { username: player, admin, region, reason },
         });
@@ -641,11 +639,10 @@ class Administration extends ModuleBase {
   ): Promise<true | { reason: string }> {
     if ((await this.checkRole(admin, "moderator")) || bypassCheck) {
       if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
-        await prisma.userList.upsert({
-          create: { name: player },
-          update: {},
-          where: { name: player },
-        });
+        if ((await prisma.userList.findUnique({ where: { name: player } })) == null)
+          await prisma.userList.create({
+            data: { name: player },
+          });
         await prisma.whiteList.create({
           data: { username: player, admin, region, reason },
         });
@@ -738,11 +735,10 @@ class Administration extends ModuleBase {
         if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
           if (await this.checkRole(player, "moderator")) {
             try {
-              await prisma.userList.upsert({
-                create: { name: player },
-                update: {},
-                where: { name: player },
-              });
+              if ((await prisma.userList.findUnique({ where: { name: player } })) == null)
+                await prisma.userList.create({
+                  data: { name: player },
+                });
               await prisma.adminList.updateMany({
                 where: { username: player },
                 data: { role, admin, region },

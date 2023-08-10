@@ -47,7 +47,7 @@ class ReplayHandler extends ModuleBase {
         mostModified.file &&
         mostModified.mtime > this.clientState.values.latestUploadedReplay
       ) {
-        console.log("Found new replay:", mostModified.file);
+        this.info("Found new replay:", mostModified.file);
         this.analyzeGame(mostModified.file).then((mmdResults) => {
           this.emitEvent({ mmdResults });
         });
@@ -69,7 +69,6 @@ class ReplayHandler extends ModuleBase {
           ).then(
             (response) => {
               if (!response.ok) {
-                console.log(JSON.stringify(response));
                 this.error(response.statusText);
                 this.sendWindow({
                   legacy: {

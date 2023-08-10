@@ -73,17 +73,17 @@ class OBSSocket extends ModuleBase {
     this.socket
       .connect(address, password, undefined)
       .then(() => {
-        console.log("OBS connection started");
+        this.info("OBS connection started");
       })
       .catch((e) => console.error(e));
-    this.socket.on("ConnectionOpened", () => console.log("OBS connection opened"));
-    this.socket.on("ConnectionClosed", (data) => console.warn("OBS connection closed"));
-    this.socket.on("Identified", (data) => console.log("OBS authentication succeeded"));
+    this.socket.on("ConnectionOpened", () => this.info("OBS connection opened"));
+    this.socket.on("ConnectionClosed", (data) => this.warn("OBS connection closed"));
+    this.socket.on("Identified", (data) => this.info("OBS authentication succeeded"));
     this.socket.on("ConnectionError", (err) => {
       console.error("socket error:", err);
     });
     this.socket.on("CurrentProgramSceneChanged", (data) => {
-      console.log(`New Active Scene: ${data.sceneName}`);
+      this.info(`New Active Scene: ${data.sceneName}`);
     });
   }
 

@@ -100,7 +100,7 @@ class DiscordRPC extends ModuleBase {
       }
       this.client.setActivity(baseDetails);
     } else {
-      console.log("DiscRPC not yet ready.");
+      this.warn("DiscRPC not yet ready.");
     }
   }
 }

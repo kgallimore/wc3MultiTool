@@ -173,7 +173,6 @@ class AutoHost extends ModuleBase {
     }
     if (events.nonAdminChat) {
       if (events.nonAdminChat.content.match(/^\?votestart$/i)) {
-        console.log("Vote start received");
         if (["rapidHost", "smartHost"].includes(this.settings.values.autoHost.type)) {
           if (
             this.settings.values.autoHost.voteStart &&

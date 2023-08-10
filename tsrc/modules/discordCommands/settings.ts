@@ -112,7 +112,6 @@ module.exports = {
         res.pipe(filePath);
         filePath.on("finish", () => {
           filePath.close();
-          console.log("Download Completed");
           interaction.editReply({
             content: "Successfully downloaded " + file.name,
           });

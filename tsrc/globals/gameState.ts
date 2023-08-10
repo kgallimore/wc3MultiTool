@@ -97,7 +97,6 @@ class GameStateContainer extends Global {
       });
     }
     if (events.SetGlueScreen) {
-      console.log("setGlueScreen", events.SetGlueScreen);
       if (
         this.values.menuState === "LOADING_SCREEN" &&
         events.SetGlueScreen.screen === "DISABLED_SCREEN"
@@ -116,7 +115,6 @@ class GameStateContainer extends Global {
       (events.GameList?.games && events.GameList.games.length > 0) ||
       events.GameListClear
     ) {
-      console.log("Custom Lobbies");
       this.updateGameState({ menuState: "CUSTOM_LOBBIES" });
     }
   }
