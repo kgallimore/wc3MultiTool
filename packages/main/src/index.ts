@@ -53,7 +53,7 @@ if (!isSingleInstance) {
   app.quit();
   process.exit(0);
 }
-
+await checkMigration();
 autoUpdater.channel = settings.values.client.releaseChannel;
 autoUpdater.logger = log;
 log.initialize();
@@ -67,7 +67,7 @@ if (!app.isPackaged) {
   screen.config.highlightDurationMs = 1500;
   screen.config.highlightOpacity = 0.75;
 }
-checkMigration();
+
 
 if (app.getVersion().includes('beta')) {
   settings.updateSettings({client: {releaseChannel: 'beta'}});

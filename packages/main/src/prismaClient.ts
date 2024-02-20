@@ -1,10 +1,23 @@
 import './globalTS';
-import {PrismaClient} from '@prisma/client';
+
 import {app} from 'electron';
 import {fork} from 'child_process';
 import path from 'path';
 import {logger} from './globals/logger';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
+import type { PrismaClient as PClient } from '@prisma/client';
+// This works in DEV
+import * as Prisma from '@prisma/client';
+
+// This works in PROD
+import { default as ProdPrisma } from '@prisma/client';
+
+let { PrismaClient } = Prisma;
+if (!app.isPackaged) PrismaClient = ProdPrisma.PrismaClient;
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 export interface Migration {
   id: string;
   checksum: string;
@@ -16,11 +29,9 @@ export interface Migration {
   applied_steps_count: string;
 }
 declare global {
-  let prismaClient: PrismaClient;
+  let prismaClient: PClient;
 }
-const extraResourcesPath = app.isPackaged
-  ? app.getAppPath().replace('app.asar', '')
-  : app.getAppPath();
+const extraResourcesPath = '';
 export const qePath = path.join(
   extraResourcesPath,
   'node_modules/@prisma/engines/query_engine-windows.dll.node',
@@ -38,11 +49,13 @@ export async function runPrismaCommand({
   dbUrl: string;
 }): Promise<number> {
   try {
+    console.log(dbUrl, 'dbUrl');
     const exitCode = await new Promise((resolve, _) => {
-      const prismaPath = path.resolve(app.getAppPath(), 'node_modules/prisma/build/index.js');
+      const prismaPath = 'node_modules/prisma/build/index.js';
       const child = fork(prismaPath, command, {
         env: {
           ...process.env,
+          cwd: __dirname,
           DATABASE_URL: dbUrl,
           PRISMA_SCHEMA_ENGINE_BINARY: mePath,
           PRISMA_QUERY_ENGINE_LIBRARY: qePath,
@@ -87,7 +100,7 @@ export async function checkMigration() {
     const latest: Migration[] =
       await prismaClient.$queryRaw`select * from _prisma_migrations order by finished_at`;
     const latestMigration = fs
-      .readdirSync(path.join(app.getAppPath(), '..', 'prisma', 'migrations'), {
+      .readdirSync(path.join(__dirname, '..', 'prisma', 'migrations'), {
         withFileTypes: true,
       })
       .filter(file => file.isDirectory())
@@ -99,26 +112,25 @@ export async function checkMigration() {
 
   if (needsMigration) {
     try {
-      const schemaPath = app.isPackaged
-        ? path.join(process.resourcesPath, 'prisma', 'schema.prisma')
-        : path.join(app.getAppPath(), 'prisma', 'schema.prisma');
-      logger.info(app.getAppPath());
-      logger.info(`Needs a migration. Running prisma migrate with schema path ${schemaPath}`);
+      const schemaPath = path.join('prisma', 'schema.prisma');
 
       await runPrismaCommand({
-        command: ['migrate', 'deploy', '--schema', schemaPath],
+        command: ['migrate', 'deploy', '--schema',schemaPath],
         dbUrl: 'file:' + dbPath,
       });
+      logger.info(`Needed a migration. Ran prisma migrate with schema path ${schemaPath}`);
     } catch (e) {
+
       logger.error(e as string);
     }
   } else {
     logger.info('Does not need migration');
   }
 }
-
+// @ts-expect-error This does exist
 if (!global.prismaClient) {
   if (!app.isPackaged) {
+    // @ts-expect-error This does exist
     global.prismaClient = new PrismaClient({
       datasources: {
         db: {
@@ -127,12 +139,14 @@ if (!global.prismaClient) {
       },
     });
   } else {
+    // @ts-expect-error This does exist
     global.prismaClient = new PrismaClient({
       datasources: {
         db: {
           url: 'file:' + dbPath,
         },
       },
+      // @ts-expect-error This does exist
       __internal: {
         engine: {
           binaryPath: qePath,
@@ -141,4 +155,5 @@ if (!global.prismaClient) {
     });
   }
 }
+// @ts-expect-error This does exist
 export default global.prismaClient;
