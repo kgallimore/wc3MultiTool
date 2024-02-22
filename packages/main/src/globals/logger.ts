@@ -1,46 +1,30 @@
 import EventEmitter from 'events';
 import log from 'electron-log';
-import prisma from '../prismaClient';
-
+import {drizzleClient} from '../drizzle';
+import { logs } from '../../../../drizzle/schema';
 class Logger extends EventEmitter {
   constructor() {
     super();
   }
 
-  info(name: string, ...args: unknown[]) {
+  async info(name: string, ...args: unknown[]) {
     log.info(name + ': ' + args);
-    prisma.logs
-      .create({
-        data: {source: name, message: args.join(' | '), priority: 'info'},
-      })
-      .then(() => {});
+    await drizzleClient.insert(logs).values({source: name, message: args.join(' '), priority: 'info'});
     this.emit('info', name, args);
   }
-  warn(name: string, ...args: unknown[]) {
+  async warn(name: string, ...args: unknown[]) {
     log.warn(name + ': ' + args);
-    prisma.logs
-      .create({
-        data: {source: name, message: args.join(' | '), priority: 'warn'},
-      })
-      .then(() => {});
+    await drizzleClient.insert(logs).values({source: name, message: args.join(' '), priority: 'warn'});
     this.emit('warn', name, args);
   }
-  error(name: string, ...args: unknown[]) {
+  async error(name: string, ...args: unknown[]) {
     log.error(name + ': ' + args);
-    prisma.logs
-      .create({
-        data: {source: name, message: args.join(' | '), priority: 'error'},
-      })
-      .then(() => {});
+    await drizzleClient.insert(logs).values({source: name, message: args.join(' '), priority: 'error'});
     this.emit('error', name, args);
   }
-  verbose(name: string, ...args: unknown[]) {
+  async verbose(name: string, ...args: unknown[]) {
     log.verbose(name + ': ' + args);
-    prisma.logs
-      .create({
-        data: {source: name, message: args.join(' | '), priority: 'verbose'},
-      })
-      .then(() => {});
+    await drizzleClient.insert(logs).values({source: name, message: args.join(' '), priority: 'verbose'});
     this.emit('verbose', name, args);
   }
 }

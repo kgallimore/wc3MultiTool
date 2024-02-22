@@ -1,7 +1,7 @@
 import {ModuleBase} from '../moduleBase';
-import prisma from '../prismaClient';
+// import prisma from '../prismaClient';
 
-import type {BanList, WhiteList} from '@prisma/client';
+// import type {BanList, WhiteList} from '@prisma/client';
 
 import type {MicroLobby, Regions, SlotNumbers} from 'wc3mt-lobby-container';
 import type {LobbyUpdatesExtended} from './lobbyControl';

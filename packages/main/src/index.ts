@@ -5,12 +5,23 @@ import pkg from 'electron-updater';
 const {autoUpdater} = pkg;
 import log from 'electron-log/main';
 import {screen, keyboard} from '@nut-tree/nut-js';
-import {checkMigration} from './prismaClient';
 // require('@nut-tree/nl-matcher');
 import Store from 'electron-store';
 // @ts-expect-error Really old package
 import audioLoader from 'audio-loader';
 import playAudio from 'audio-play';
+
+import { migrateDB } from './migrate';
+
+/**
+ * Prevent electron from running multiple instances.
+ */
+const isSingleInstance = app.requestSingleInstanceLock();
+if (!isSingleInstance) {
+  app.quit();
+  process.exit(0);
+}
+migrateDB();
 
 import type {SettingsUpdates} from './globals/settings';
 import {settings} from './globals/settings';
@@ -45,15 +56,7 @@ import type {WindowSend, WindowReceive} from './utility';
 
 let browserWindow: BrowserWindow;
 
-/**
- * Prevent electron from running multiple instances.
- */
-const isSingleInstance = app.requestSingleInstanceLock();
-if (!isSingleInstance) {
-  app.quit();
-  process.exit(0);
-}
-await checkMigration();
+
 autoUpdater.channel = settings.values.client.releaseChannel;
 autoUpdater.logger = log;
 log.initialize();
