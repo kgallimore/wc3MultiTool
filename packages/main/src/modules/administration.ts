@@ -1,7 +1,8 @@
 import {ModuleBase} from '../moduleBase';
-// import prisma from '../prismaClient';
 
-// import type {BanList, WhiteList} from '@prisma/client';
+import type { InferSelectModel } from 'drizzle-orm';
+import { eq, sql, and, isNull } from 'drizzle-orm';
+import { drizzleClient } from '../drizzle';
 
 import type {MicroLobby, Regions, SlotNumbers} from 'wc3mt-lobby-container';
 import type {LobbyUpdatesExtended} from './lobbyControl';
@@ -10,6 +11,7 @@ import type {GameSocketEvents, AvailableHandicaps} from './../globals/gameSocket
 import type {AdminCommands, AdminRoles} from './../utility';
 import {isInt, ensureInt, commands, commandArray, hierarchy} from './../utility';
 import type {AutoHostSettings} from './../globals/settings';
+import { banList, userList, whiteList, adminList } from '../schema';
 
 export type FetchWhiteBanListSortOptions = 'id' | 'username' | 'admin' | 'region' | 'reason';
 
@@ -502,10 +504,10 @@ class Administration extends ModuleBase {
 
   async clearPlayer(data: {name: string; slot: number; [key: string]: unknown}) {
     this.verbose('Checking if player is clear: ' + data.name);
-    if ((await prisma.userList.findUnique({where: {name: data.name}})) == null)
-      await prisma.userList.create({
-        data: {name: data.name},
-      });
+    const findplayer = (await drizzleClient.query.userList.findFirst({where: (item)=> eq(item.name, data.name)}));
+    if (!findplayer){
+      await drizzleClient.insert(userList).values({name: data.name});
+    }
     const isClear = await this.checkPlayer(data.name);
     if (!isClear.type) {
       this.lobby.clearPlayer(data.name, true);
@@ -559,13 +561,11 @@ class Administration extends ModuleBase {
           return {reason: 'Can not ban an admin without removing permissions first.'};
         }
         //const newBan = new BanList({ username: player, admin, region, reason });
-        if ((await prisma.userList.findUnique({where: {name: player}})) == null)
-          await prisma.userList.create({
-            data: {name: player},
-          });
-        await prisma.banList.create({
-          data: {username: player, admin, region, reason},
-        });
+        const findUser = (await drizzleClient.query.banList.findFirst({where: (item)=> eq(item.username, player)}));
+        if (!findUser)
+          await drizzleClient.insert(userList).values({name: player});
+        await drizzleClient.insert(banList).values({username: player, admin, region, reason});
+
         this.info('Banned ' + player + ' by ' + admin + (reason ? ' for ' + reason : ''));
         this.sendWindow({
           legacy: {
@@ -600,13 +600,10 @@ class Administration extends ModuleBase {
   ): Promise<true | {reason: string}> {
     if ((await this.checkRole(admin, 'moderator')) || bypassCheck) {
       if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
-        if ((await prisma.userList.findUnique({where: {name: player}})) == null)
-          await prisma.userList.create({
-            data: {name: player},
-          });
-        await prisma.whiteList.create({
-          data: {username: player, admin, region, reason},
-        });
+        const findUser = (await drizzleClient.query.whiteList.findFirst({where: (item)=> eq(item.username, player)}));
+        if (!findUser)
+          await drizzleClient.insert(userList).values({name: player});
+        await drizzleClient.insert(whiteList).values({username: player, admin, region, reason});
         this.info('Whitelisted ' + player + ' by ' + admin + (reason ? ' for ' + reason : ''));
         this.sendWindow({
           legacy: {
@@ -635,10 +632,7 @@ class Administration extends ModuleBase {
       if (!(await this.checkRole(admin, 'moderator'))) {
         return {reason: 'Missing required permissions'};
       }
-      await prisma.whiteList.updateMany({
-        where: {username: player, removal_date: null},
-        data: {removal_date: new Date()},
-      });
+      await drizzleClient.update(whiteList).set({removalDate: sql`(CURRENT_TIMESTAMP)`}).where(eq(whiteList.username, player));
       this.info('Un-whitelisted ' + player + ' by ' + admin);
       this.sendWindow({
         legacy: {
@@ -658,10 +652,7 @@ class Administration extends ModuleBase {
       if (!(await this.checkRole(admin, 'moderator'))) {
         return {reason: 'Missing required permissions'};
       }
-      await prisma.banList.updateMany({
-        where: {username: player, removal_date: null},
-        data: {removal_date: new Date()},
-      });
+      await drizzleClient.update(banList).set({removalDate: sql`(CURRENT_TIMESTAMP)`}).where(and(eq(banList.username, player),isNull(banList.removalDate)));
 
       this.info('Unbanned ' + player + ' by ' + admin);
       this.sendWindow({
@@ -689,14 +680,11 @@ class Administration extends ModuleBase {
         if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
           if (await this.checkRole(player, 'moderator')) {
             try {
-              if ((await prisma.userList.findUnique({where: {name: player}})) == null)
-                await prisma.userList.create({
-                  data: {name: player},
-                });
-              await prisma.adminList.updateMany({
-                where: {username: player},
-                data: {role, admin, region},
-              });
+              const findUser = (await drizzleClient.query.userList.findFirst({where: (item)=> eq(item.name, player)}));
+              if (!findUser){
+                await drizzleClient.insert(userList).values({name: player});
+              }
+              await drizzleClient.update(adminList).set({role, admin, region}).where(eq(adminList.username, player));
               this.info('Updated ' + player + ' to ' + role + ' by ' + admin);
               this.sendWindow({
                 legacy: {
@@ -713,9 +701,7 @@ class Administration extends ModuleBase {
             }
           } else {
             try {
-              await prisma.adminList.create({
-                data: {username: player, admin, region, role},
-              });
+              await drizzleClient.insert(adminList).values({username: player, admin, region, role});
               this.info('Added ' + player + ' to ' + role + ' by ' + admin);
               this.sendWindow({
                 legacy: {
@@ -753,20 +739,14 @@ class Administration extends ModuleBase {
     if ((await this.checkRole(admin, 'admin')) || bypassCheck) {
       if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
         if (await this.checkRole(player, 'baswapper')) {
-          prisma.adminList
-            .deleteMany({where: {username: player}})
-            .then(() => {
-              this.info('Removed permissions from ' + player);
-              this.sendWindow({
-                legacy: {
-                  messageType: 'action',
-                  data: {value: 'Removed permissions from ' + player},
-                },
-              });
-            })
-            .catch((err: string) => {
-              this.error('Failed to remove permissions from ' + player, err);
-            });
+          await drizzleClient.delete(adminList).where(eq(adminList.username, player));
+          this.info('Removed permissions from ' + player);
+          this.sendWindow({
+            legacy: {
+              messageType: 'action',
+              data: {value: 'Removed permissions from ' + player},
+            },
+          });
         } else {
           this.info(player + ' is not a moderator');
           return {reason: 'Target has no roles.'};
@@ -786,7 +766,7 @@ class Administration extends ModuleBase {
       (player === 'Trenchguns#1800' && this.settings.values.client.debugAssistance)
     )
       return 'admin';
-    const row = await prisma.adminList.findFirst({where: {username: player}});
+    const row = await drizzleClient.query.adminList.findFirst({where: (item)=> eq(item.username, player)});
     return (row?.role as AdminRoles) ?? null;
   }
 
@@ -810,51 +790,21 @@ class Administration extends ModuleBase {
   }
 
   async isWhiteListed(player: string): Promise<boolean> {
-    const row = await prisma.whiteList.findFirst({
-      where: {username: player, removal_date: null},
-    });
+    const row = drizzleClient.query.whiteList.findFirst({where: (item)=> and(eq(item.username, player),isNull(item.removalDate))});
     return !!row;
   }
 
-  async isBanned(player: string): Promise<BanList | null> {
-    const row = await prisma.banList.findFirst({
-      where: {username: player, removal_date: null},
-    });
+  async isBanned(player: string): Promise<InferSelectModel<typeof banList> | undefined> {
+    const row = drizzleClient.query.banList.findFirst({where: (item)=> and(eq(item.username, player),isNull(item.removalDate))});
     return row;
   }
 
-  async fetchList(options: FetchListOptions): Promise<BanList[] | WhiteList[] | undefined> {
-    if (options.type === 'whiteList') {
-      if (options.activeOnly) {
-        return await prisma.whiteList.findMany({
-          where: {removal_date: null},
-          orderBy: [{id: options.sortOrder}],
-          take: 10,
-          skip: options.page !== undefined ? options.page * 10 : 0,
-        });
-      } else {
-        return await prisma.whiteList.findMany({
-          orderBy: [{id: options.sortOrder}],
-          take: 10,
-          skip: options.page !== undefined ? options.page * 10 : 0,
-        });
-      }
-    } else if (options.type === 'banList') {
-      if (options.activeOnly) {
-        return await prisma.banList.findMany({
-          where: {removal_date: null},
-          orderBy: [{id: options.sortOrder}],
-          take: 10,
-          skip: options.page !== undefined ? options.page * 10 : 0,
-        });
-      } else {
-        return await prisma.banList.findMany({
-          orderBy: [{id: options.sortOrder}],
-          take: 10,
-          skip: options.page !== undefined ? options.page * 10 : 0,
-        });
-      }
+  async fetchList(options: FetchListOptions): Promise<InferSelectModel<typeof banList>[] | InferSelectModel<typeof whiteList>[] | undefined> {
+    const targetTable = options.type === 'banList' ? drizzleClient.query.banList : drizzleClient.query.whiteList;
+    if (options.activeOnly) {
+      return await targetTable.findMany({where: isNull(whiteList.removalDate),limit: 10, offset: options.page !== undefined ? options.page * 10 : 0, orderBy: (players, {asc, desc}) => [options.sortOrder == 'asc' ? asc(players.id): desc(players.id)]});
     }
+    return await targetTable.findMany({limit: 10, offset: options.page !== undefined ? options.page * 10 : 0, orderBy: (players, {asc, desc}) => [options.sortOrder == 'asc' ? asc(players.id): desc(players.id)]});
   }
 }
 

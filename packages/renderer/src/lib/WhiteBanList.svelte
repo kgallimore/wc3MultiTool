@@ -178,7 +178,7 @@
           <td>{player.admin}</td>
           <td>{player.reason}</td>
           <td>
-            {#if !player.removal_date}
+            {#if !player.removalDate}
               <StyledButton
                 color="red"
                 size="md"
@@ -193,7 +193,7 @@
                 Remove
               </StyledButton>
             {:else}
-              {new Date(player.removal_date).toLocaleString()}
+              {new Date(player.removalDate).toLocaleString()}
             {/if}</td
           >
         </tr>

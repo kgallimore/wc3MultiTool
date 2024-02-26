@@ -1,17 +1,6 @@
 import { sqliteTable, text, numeric, integer, uniqueIndex } from 'drizzle-orm/sqlite-core';
   import { sql } from 'drizzle-orm';
 
-export const prismaMigrations = sqliteTable('_prisma_migrations', {
-	id: text('id').primaryKey().notNull(),
-	checksum: text('checksum').notNull(),
-	finishedAt: numeric('finished_at'),
-	migrationName: text('migration_name').notNull(),
-	logs: text('logs'),
-	rolledBackAt: numeric('rolled_back_at'),
-	startedAt: numeric('started_at').default(sql`(current_timestamp)`).notNull(),
-	appliedStepsCount: numeric('applied_steps_count').notNull(),
-});
-
 export const banList = sqliteTable('BanList', {
 	id: integer('id').primaryKey({ autoIncrement: true }).notNull(),
 	username: text('username').notNull().references(() => userList.name, { onDelete: 'restrict', onUpdate: 'cascade' } ),

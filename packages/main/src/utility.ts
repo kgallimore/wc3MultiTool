@@ -7,7 +7,8 @@ import type {ClientState} from './globals/clientState';
 import type {SettingsUpdates} from './globals/settings';
 
 import type {FetchListOptions} from './modules/administration';
-import type {BanList, WhiteList} from '@prisma/client';
+import type { banList, whiteList } from './schema';
+import type { InferSelectModel } from 'drizzle-orm';
 
 export interface WindowReceive {
   globalUpdate?: {
@@ -38,13 +39,13 @@ export interface WindowReceive {
       fetched?: {
         type: 'banList' | 'whiteList';
         page: number;
-        list?: BanList[] | WhiteList[] | undefined;
+        list?: InferSelectModel<typeof banList>[] | InferSelectModel<typeof whiteList>[] | undefined;
       };
     };
   };
 }
 
-export type BanWhiteList = BanList[] | WhiteList[] | undefined;
+export type BanWhiteList = InferSelectModel<typeof banList>[] | InferSelectModel<typeof whiteList>[] | undefined;
 
 export interface ClientCommands {
   action:

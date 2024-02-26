@@ -1,7 +1,7 @@
 import EventEmitter from 'events';
 import log from 'electron-log';
 import {drizzleClient} from '../drizzle';
-import { logs } from '../../../../drizzle/schema';
+import { logs } from '../schema';
 class Logger extends EventEmitter {
   constructor() {
     super();

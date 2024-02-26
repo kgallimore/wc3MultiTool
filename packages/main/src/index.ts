@@ -51,8 +51,9 @@ import {monitor} from './modules/antiCrash';
 
 import type {EmitEvents} from './moduleBasePre';
 import type {Regions} from 'wc3mt-lobby-container';
-import type {BanList, WhiteList} from '@prisma/client';
 import type {WindowSend, WindowReceive} from './utility';
+import type { banList, whiteList } from './schema';
+import type { InferSelectModel } from 'drizzle-orm';
 
 let browserWindow: BrowserWindow;
 
@@ -528,7 +529,7 @@ async function commandClient(args: WindowSend) {
           .then(result => {
             result.filePaths.forEach(file => {
               const bans = JSON.parse(readFileSync(file).toString());
-              bans.forEach(async (ban: BanList | WhiteList) => {
+              bans.forEach(async (ban: InferSelectModel<typeof banList> | InferSelectModel<typeof whiteList>) => {
                 if (args.exportImport?.type === 'banList') {
                   await administration.banPlayer(
                     ban.username,
