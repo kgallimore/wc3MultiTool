@@ -1,9 +1,12 @@
 {
   "name": "wc3multitool",
-  "version": "2.0.0",
+  "version": "3.0.0",
+  "description": "A multi-tool for Warcraft 3",
   "private": true,
   "type": "module",
   "main": "packages/main/dist/index.js",
+  "author": "Keith Gallimore",
+
   "scripts": {
     "build": "npm run build:main && npm run build:preload && npm run build:renderer",
     "build:main": "cd ./packages/main && vite build",
@@ -42,9 +45,7 @@
       "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}",
       "!**/{__pycache__,thumbs.db,.flowconfig,.idea,.vs,.nyc_output}",
       "!**/{appveyor.yml,.travis.yml,circle.yml}",
-      "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}",
-      "prisma/**/*",
-      "!prisma/*.db"
+      "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}"
     ],
     "extraResources": [
       "node_modules/@prisma/engines/schema-engine-*",
@@ -52,14 +53,6 @@
       "node_modules/@prisma/engines/libquery*"
     ],
     "extraFiles": [
-      {
-        "from": "./prisma/schema.prisma",
-        "to": "./prisma/schema.prisma"
-      },
-      {
-        "from": "./prisma/migrations",
-        "to": "./prisma/migrations"
-      },
       {
         "from": "buildResources",
         "to": "."

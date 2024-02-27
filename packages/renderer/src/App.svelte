@@ -1,4 +1,16 @@
+<script lang="ts"  context="module"> 
+declare global {
+  interface Window {
+    api: {
+      getAppVersion: () => string;
+      receive: (channel: string, func: (data: WindowReceive) => void) => void;
+      send: (channel: string, data: WindowSend) => void;
+      shell: (url: string) => void;
+    };
+  }
+}</script>
 <script lang="ts">
+
   import {SvelteToast, toast} from '@zerodevx/svelte-toast';
   import type {BanWhiteList, WindowReceive, WindowSend} from '../../main/src/utility';
   import {onMount} from 'svelte';
@@ -10,6 +22,7 @@
   import {gameState, clientState, appSettings, windowData} from './stores/page';
   import UserLists from './lib/UserLists.svelte';
   import type {LobbyUpdatesExtended} from '../../main/src/modules/lobbyControl';
+
   let lobby: MicroLobby;
   let appVersion = '0.0.0';
   let banList: {
@@ -59,12 +72,10 @@
     document.body.addEventListener('click', event => {
       if ((event.target as HTMLElement).tagName.toLowerCase() === 'a') {
         event.preventDefault();
-        //@ts-expect-error - this is a valid call
         window.api.shell((event.target as HTMLAnchorElement).href);
       }
     });
   }
-  // @ts-expect-error - this is a valid call
   window.api.receive('fromMain', (data: WindowReceive) => {
     if (data.globalUpdate) {
       if (data.globalUpdate.clientState) {
@@ -165,7 +176,6 @@
   });
 
   function toMain(args: WindowSend) {
-    // @ts-expect-error - this is a valid call
     window.api.send('toMain', args);
   }
 </script>

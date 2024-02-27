@@ -1,5 +1,5 @@
 <script lang="ts">
-  import TitleDeco from '../../../assets/keepitmoving/title-deco.png';
+  import TitleDeco from '../../../assets/title-deco.png';
   import CloseSlot from '../CloseSlot.svelte';
   import SettingsCheckbox from '../SettingsCheckbox.svelte';
   import {appSettings} from '../../stores/page';

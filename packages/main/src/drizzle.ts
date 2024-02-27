@@ -11,7 +11,7 @@ declare global {
   let wc3mtdb: db;
 }
 
-export const dbPath = path.join(app.getPath('userData'), 'wc3mtv4.db');
+export const dbPath = path.join(app.getPath('documents'), 'wc3mtv4.db');
 
 export const dbConnection = new Database(dbPath);
 
