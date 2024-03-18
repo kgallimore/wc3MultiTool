@@ -181,3 +181,4 @@ prisma/*.db
 src/wc3mtv2.db
 
 old
+*.db

@@ -1,6 +1,13 @@
 !macro customInstall
     WriteRegDWORD HKCU "SOFTWARE\Blizzard Entertainment\Warcraft III" "Allow Local Files" 0x00000001
     ReadRegStr $0 HKLM "SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Warcraft III" "InstallLocation"
+    ${if} $0 == ""
+        ReadRegStr $1 HKLM "SOFTWARE\WOW6432Node\Blizzard Entertainment\Warcraft III\Capabilities" "ApplicationIcon"
+        StrCpy $0 $1 -36 1
+    ${EndIf}
+    ${if} $0 == ""
+        MessageBox MB_OK "Failed to get Warcraft III install location. You will not be able to connect to the webui."
+    ${EndIf}
     ${If} ${FileExists} "$0\_retail_\webui\*.*"
         ; file exists
     ${Else}
@@ -15,10 +22,10 @@
     ${EndIf}
     CopyFiles /SILENT "$INSTDIR\webui.html" "$0\_retail_\webui\index.html"
     CopyFiles /SILENT "$INSTDIR\webuiPerf.html" "$0\_retail_\webui\indexPerf.html"
-    CopyFiles /SILENT "$INSTDIR\webui.js" "$0\_retail_\webui\index.js"
+    CopyFiles /SILENT "$INSTDIR\index.js" "$0\_retail_\webui\index.js"
     Delete "$INSTDIR\webui.html"
     Delete "$INSTDIR\webuiPerf.html"
-    Delete "$INSTDIR\webui.js"
+    Delete "$INSTDIR\index.js"
 !macroend
 
 !macro customUnInstall

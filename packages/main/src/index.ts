@@ -72,10 +72,13 @@ if (!app.isPackaged) {
   screen.config.highlightOpacity = 0.75;
 }
 
+
 if (app.getVersion().includes('beta')) {
   settings.updateSettings({client: {releaseChannel: 'beta'}});
 } else if (app.getVersion().includes('alpha')) {
   settings.updateSettings({client: {releaseChannel: 'alpha'}});
+}else{
+  settings.updateSettings({client: {releaseChannel: 'latest'}});
 }
 
 const store = new Store();
@@ -258,6 +261,8 @@ app
 
 autoUpdater.on('update-available', _info => {
   log.info('Update available');
+  log.info(_info.version, app.getVersion());
+
 });
 autoUpdater.on('update-not-available', _info => {});
 autoUpdater.on('error', err => {
