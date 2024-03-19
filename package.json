@@ -126,8 +126,8 @@
   },
   "dependencies": {
     "@iamtraction/google-translate": "^2.0.1",
-    "@nut-tree/nl-matcher": "^2.2.0",
-    "@nut-tree/nut-js": "^3.1.2",
+    "@nut-tree/nl-matcher": "^3.0.0",
+    "@nut-tree/nut-js": "^4.0.0",
     "@prisma/client": "^5.9.1",
     "@prisma/migrate": "^5.9.1",
     "audio-loader": "^1.0.3",

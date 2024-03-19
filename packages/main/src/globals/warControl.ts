@@ -23,7 +23,7 @@ import {
 } from '@nut-tree/nut-js';
 
 import {join} from 'path';
-// require('@nut-tree/nl-matcher');
+import '@nut-tree/nl-matcher';
 import {clipboard} from 'electron';
 import {promisify} from 'util';
 import * as child from 'child_process';
@@ -92,7 +92,7 @@ class WarControl extends Global {
         await this.forceQuitProcess('Battle.net.exe');
         return await this.openWarcraft(region, callCount + 10, true);
       }
-      let battleNetWindow;
+      let battleNetWindow: Window | null = null;
       const windows = await getWindows();
       for (const window of windows) {
         const title = await window.title;
@@ -116,16 +116,13 @@ class WarControl extends Global {
         await sleep(3000);
         return await this.openWarcraft(region, callCount + 3, reopen);
       }
-      // TODO: Focus bnet and set to top
-      // battleNetWindow.restore();
-      // battleNetWindow.show();
-      // battleNetWindow.bringToTop();
-      // battleNetWindow.setBounds({x: 0, y: 0});
-      await sleep(500);
+      await battleNetWindow.focus();
+      await battleNetWindow.move({x: 0, y: 0});
+      await sleep(100);
       const activeWindow = await getActiveWindow();
       const activeWindowTitle = await activeWindow.title;
       if (activeWindowTitle !== 'Battle.net') {
-        this.verbose('Nut.js and NWM title mismatch.');
+        this.verbose('Something went wrong, trying again. Active window: ' + activeWindowTitle);
         await sleep(500);
         return await this.openWarcraft(region, callCount + 1, reopen);
       }
@@ -143,7 +140,7 @@ class WarControl extends Global {
             100,
             {
               searchRegion,
-              confidence: 0.85,
+              confidence: 0.65,
             },
           );
           const changeRegionPositionCenter = await centerOf(changeRegionPosition);
@@ -364,7 +361,7 @@ class WarControl extends Global {
     if (this.isPackaged) {
       screen.config.resourceDirectory = join(app.getAppPath(), '..\\images', targetRes);
     } else {
-      screen.config.resourceDirectory = join(this.appPath, '\\src\\images', targetRes);
+      screen.config.resourceDirectory = join(this.appPath, '\\buildResources\\images', targetRes);
     }
   }
 }
