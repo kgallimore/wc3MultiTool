@@ -9,7 +9,7 @@ import type {
   TeamTypes,
   LobbyUpdates,
 } from 'wc3mt-lobby-container';
-import {MicroLobby} from '../../../wc3mtlobby';
+import {MicroLobby} from 'wc3mt-lobby-container';
 import {generateAutoBalance} from './autoBalancer';
 import {ensureInt} from '../utility';
 import type {GameSocketEvents, AvailableHandicaps} from './../globals/gameSocket';
