@@ -50,7 +50,7 @@ class ReplayHandler extends ModuleBase {
           form.append('replay', new Blob([readFileSync(mostModified.file)]));
           fetch(
             `https://api.wc3stats.com/upload${
-              this.settings.values.elo.privateKey ? '/' + this.settings.values.elo.privateKey : ''
+              this.settings.values.elo._privateKey ? '/' + this.settings.values.elo._privateKey : ''
             }?auto=true`,
             {
               method: 'POST',

@@ -9,7 +9,7 @@ import type {
   TeamTypes,
   LobbyUpdates,
 } from 'wc3mt-lobby-container';
-import {MicroLobby} from 'wc3mt-lobby-container';
+import {MicroLobby} from '../../../wc3mtlobby';
 import {generateAutoBalance} from './autoBalancer';
 import {ensureInt} from '../utility';
 import type {GameSocketEvents, AvailableHandicaps} from './../globals/gameSocket';
@@ -179,7 +179,7 @@ export class LobbyControl extends Module {
     setInterval(() => this.fetchEloMapNameLookups(), 1000 * 60 * 60 * 24);
   }
 
-  fetchEloMapNameLookups() {
+  fetchEloMapNameLookups(): void {
     if (this.settings.values.elo.eloMapNameLookupURL) {
       this.verbose(
         'Fetching elo map name lookups from: ' + this.settings.values.elo.eloMapNameLookupURL,
@@ -244,7 +244,7 @@ export class LobbyControl extends Module {
     if (
       updates.elo?.dbIP !== undefined ||
       updates.elo?.dbName !== undefined ||
-      updates.elo?.dbPassword !== undefined ||
+      updates.elo?._dbPassword !== undefined ||
       updates.elo?.dbUser !== undefined ||
       updates.elo?.dbPort !== undefined
     ) {
@@ -267,6 +267,7 @@ export class LobbyControl extends Module {
 
   protected onGameSocketEvent(events: GameSocketEvents): void {
     if (events.GameLobbySetup && events.GameLobbySetup.teamData.playableSlots > 1) {
+      console.log(events.GameLobbySetup.playerHost);
       this.ingestLobby(events.GameLobbySetup, this.gameState.values.selfRegion as Regions);
     }
     if (
@@ -347,6 +348,7 @@ export class LobbyControl extends Module {
               },
             );
           }
+          console.log(payload.mapData.mapPath, this.settings.values.autoHost);
           if (
             payload.mapData.mapPath.split(/\/|\\/).slice(-1)[0] !==
             this.settings.values.autoHost.mapPath.split(/\/|\\/).slice(-1)[0]
@@ -482,7 +484,7 @@ export class LobbyControl extends Module {
           });
           if (this.settings.values.autoHost.closeSlots.includes(selfSlot)) {
             setTimeout(() => {
-              if (selfSlot !== false) this.closeSlot(selfSlot);
+              this.closeSlot(selfSlot);
             }, 250);
           }
         } else {
@@ -513,6 +515,7 @@ export class LobbyControl extends Module {
     let retValue: {name: string; elo: boolean} | undefined;
     for (const [name, data] of Object.entries(this.eloMapNameLookups)) {
       if (mapName.match(new RegExp(data.regex, 'i'))) {
+        console.log('running against: ' + data.regex);
         this.verbose(`Found elo map name match: ${name}`);
         retValue = {name: name, elo: data.elo};
         break;
@@ -941,7 +944,7 @@ export class LobbyControl extends Module {
         this.info('Missing DB username');
         return;
       }
-      const pass = this.settings.values.elo.dbPassword;
+      const pass = this.settings.values.elo._dbPassword;
       if (!pass) {
         this.info('Missing DB password');
         return;

@@ -45,7 +45,7 @@ class SEClient extends ModuleBase {
   }
 
   onSettingsUpdate(updates: SettingsUpdates) {
-    if (updates.streaming?.enabled !== undefined || updates.streaming?.seToken !== undefined) {
+    if (updates.streaming?.enabled !== undefined || updates.streaming?._seToken !== undefined) {
       this.initialize();
     }
   }
@@ -55,7 +55,7 @@ class SEClient extends ModuleBase {
       this.socket.disconnect();
     }
     this.socket = null;
-    if (!this.settings.values.streaming.enabled || !this.settings.values.streaming.seToken) {
+    if (!this.settings.values.streaming.enabled || !this.settings.values.streaming._seToken) {
       return;
     }
     this.socket = io('https://realtime.streamelements.com', {
@@ -91,7 +91,7 @@ class SEClient extends ModuleBase {
     this.info('Successfully connected to StreamElements websocket');
     this.socket.emit('authenticate', {
       method: 'jwt',
-      token: this.settings.values.streaming.seToken,
+      token: this.settings.values.streaming._seToken,
     });
   }
 

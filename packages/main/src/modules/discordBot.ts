@@ -88,7 +88,7 @@ class DiscordBot extends ModuleBase {
 
   protected onSettingsUpdate(updates: SettingsUpdates) {
     if (updates.discord) {
-      if (updates.discord.token !== undefined) {
+      if (updates.discord._token !== undefined) {
         this.initialize();
       }
       if (
@@ -157,7 +157,7 @@ class DiscordBot extends ModuleBase {
     if (!this.settings.values.discord.enabled) {
       return;
     }
-    if (!this.settings.values.discord.token) {
+    if (!this.settings.values.discord._token) {
       return;
     }
     this.client = new Discord.Client({
@@ -263,7 +263,7 @@ class DiscordBot extends ModuleBase {
       }
     });
 
-    this.client.login(this.settings.values.discord.token);
+    this.client.login(this.settings.values.discord._token);
   }
 
   matchChannel(channel: Discord.TextBasedChannel | null): ChatChannelMatch {
@@ -279,10 +279,10 @@ class DiscordBot extends ModuleBase {
   }
 
   async registerSlashCommands(guildId: string) {
-    if (!this.settings.values.discord.token || !this.client?.user?.id) {
+    if (!this.settings.values.discord._token || !this.client?.user?.id) {
       return;
     }
-    const rest = new REST({version: '10'}).setToken(this.settings.values.discord.token);
+    const rest = new REST({version: '10'}).setToken(this.settings.values.discord._token);
     try {
       await rest.put(Routes.applicationGuildCommands(this.client.user.id, guildId), {
         body: this.commands,

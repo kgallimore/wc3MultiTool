@@ -37,7 +37,7 @@ class OBSSocket extends ModuleBase {
   }
 
   onSettingsUpdate(updates: SettingsUpdates) {
-    if (updates.obs?.address !== undefined || updates.obs?.token !== undefined) {
+    if (updates.obs?.address !== undefined || updates.obs?._token !== undefined) {
       this.setup();
     }
   }
@@ -60,7 +60,7 @@ class OBSSocket extends ModuleBase {
       return;
     }
     const address = this.settings.values.obs.address;
-    const password = this.settings.values.obs.token;
+    const password = this.settings.values.obs._token;
     if (!address) {
       return;
     }

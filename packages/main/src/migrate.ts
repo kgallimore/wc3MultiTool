@@ -5,7 +5,7 @@ import { join } from 'path';
 export function migrateDB() {
     console.log('Migration started...');
     try{
-        migrate(drizzleClient, { migrationsFolder: join( app.getPath('documents'), 'drizzle') });
+        migrate(drizzleClient, { migrationsFolder: join( app.getAppPath(), 'drizzle') });
     }catch(e){
         console.error('Error migrating database:', e);
     }

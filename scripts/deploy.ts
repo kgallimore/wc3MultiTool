@@ -1,5 +1,5 @@
 import * as dot from 'dotenv';
-import { readdirSync,lstatSync } from 'fs';
+import { readdirSync,lstatSync, rmSync } from 'fs';
 dot.config();
 import { Client } from 'basic-ftp';
 
@@ -20,6 +20,7 @@ async function upload() {
             if(file.startsWith('builder')) continue;
             console.log('Uploading: ' + file);
             await client.uploadFrom(disFolder + file, process.env.UPLOAD_PATH + '/' + file);
+            rmSync(disFolder + file);
         }
     }
     catch(err) {

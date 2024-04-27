@@ -4,7 +4,7 @@ import type { InferSelectModel } from 'drizzle-orm';
 import { eq, sql, and, isNull } from 'drizzle-orm';
 import { drizzleClient } from '../drizzle';
 
-import type {MicroLobby, Regions, SlotNumbers} from 'wc3mt-lobby-container';
+import type {MicroLobby, PlayerPayload, Regions, SlotNumbers} from 'wc3mt-lobby-container';
 import type {LobbyUpdatesExtended} from './lobbyControl';
 
 import type {GameSocketEvents, AvailableHandicaps} from './../globals/gameSocket';
@@ -502,7 +502,7 @@ class Administration extends ModuleBase {
     }
   }
 
-  async clearPlayer(data: {name: string; slot: number; [key: string]: unknown}) {
+  async clearPlayer(data: PlayerPayload) {
     this.verbose('Checking if player is clear: ' + data.name);
     const findplayer = (await drizzleClient.query.userList.findFirst({where: (item)=> eq(item.name, data.name)}));
     if (!findplayer){

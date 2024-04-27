@@ -192,13 +192,13 @@ class WarControl extends Global {
   }
 
   async handleBnetLogin() {
-    if (settings.values.client.bnetUsername && settings.values.client.bnetPassword) {
+    if (settings.values.client.bnetUsername && settings.values.client._bnetPassword) {
       this.info('Attempting to login to Battle.net.');
       clipboard.writeText(settings.values.client.bnetUsername);
       await keyboard.type(Key.Tab);
       await keyboard.type(Key.LeftControl, Key.V);
       await keyboard.type(Key.Tab);
-      clipboard.writeText(settings.values.client.bnetPassword);
+      clipboard.writeText(settings.values.client._bnetPassword);
       await keyboard.type(Key.LeftControl, Key.V);
       await keyboard.type(Key.Enter);
     }

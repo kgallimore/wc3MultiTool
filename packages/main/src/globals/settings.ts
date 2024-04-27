@@ -1,9 +1,14 @@
 import {Global} from '../globalBase';
+import type {Entries} from 'type-fest';
+
 
 import Store from 'electron-store';
 
 import type {PickByValue} from './../utility';
 import type {ObsHotkeys} from './../modules/obs';
+import {drizzleClient} from '../drizzle';
+import {settings as settingsTable} from '../schema';
+import {eq, and} from 'drizzle-orm';
 
 const store = new Store();
 
@@ -15,9 +20,201 @@ export interface AppSettings {
   client: ClientSettings;
   streaming: StreamingSettings;
 }
+
+export type AppSettingsTypes = Record<
+  SettingsKeys,
+  'boolean' | 'integer' | 'string'
+>;
+type AllowedSettingsTypes = 'boolean' | 'number' | 'bigint' | 'string' | 'array' | 'object';
+type AllowedSettingsTypesTypes = boolean | bigint | number | string | object;
+interface AppSettingsDataPoint {
+  allowedTypes: Array<AllowedSettingsTypes>;
+  allowedValues?: Array<string | number | boolean | object>;
+  defaultValue: string | boolean | number | [];
+  sensitive?: boolean;
+  value?: AllowedSettingsTypesTypes;
+}
+
+interface AppSettingsDataStructure {
+  autoHost: Record<keyof AutoHostSettings, AppSettingsDataPoint>;
+  obs: Record<keyof ObsSettings, AppSettingsDataPoint>;
+  discord: Record<keyof DiscordSettings, AppSettingsDataPoint>;
+  elo: Record<keyof EloSettings, AppSettingsDataPoint>;
+  client: Record<keyof ClientSettings, AppSettingsDataPoint>;
+  streaming: Record<keyof StreamingSettings, AppSettingsDataPoint>;
+}
+
+type AppSettingsDataSubStructure = Record<
+  SettingsKeys,
+  AppSettingsDataPoint
+>;
+
+export const AppSettingsData: AppSettingsDataStructure = {
+  autoHost: {
+    type: {defaultValue: 'off', allowedTypes: ['string']},
+    private: {defaultValue: false, allowedTypes: ['boolean']},
+    sounds: {defaultValue: false, allowedTypes: ['boolean']},
+    increment: {defaultValue: true, allowedTypes: ['boolean']},
+    mapName: {defaultValue: '', allowedTypes: ['string']},
+    gameName: {defaultValue: '', allowedTypes: ['string']},
+    mapPath: {defaultValue: 'N/A', allowedTypes: ['string']},
+    announceIsBot: {defaultValue: false, allowedTypes: ['boolean']},
+    announceCustom: {defaultValue: false, allowedTypes: ['boolean']},
+    announceRestingInterval: {defaultValue: 30, allowedTypes: ['number']},
+    moveToSpec: {defaultValue: false, allowedTypes: ['boolean']},
+    moveToTeam: {defaultValue: '', allowedTypes: ['string']},
+    rapidHostTimer: {defaultValue: 0, allowedTypes: ['number']},
+    smartHostTimeout: {defaultValue: 0, allowedTypes: ['number']},
+    voteStart: {defaultValue: false, allowedTypes: ['boolean']},
+    voteStartPercent: {defaultValue: 60, allowedTypes: ['number']},
+    voteStartTeamFill: {defaultValue: true, allowedTypes: ['boolean']},
+    closeSlots: {defaultValue: [], allowedTypes: ['array']},
+    customAnnouncement: {defaultValue: '', allowedTypes: ['string']},
+    observers: {defaultValue: '0', allowedTypes: ['string'], allowedValues: ['0', '1', '2', '3']},
+    advancedMapOptions: {defaultValue: false, allowedTypes: ['boolean']},
+    flagLockTeams: {defaultValue: true, allowedTypes: ['boolean']},
+    flagPlaceTeamsTogether: {defaultValue: true, allowedTypes: ['boolean']},
+    flagFullSharedUnitControl: {defaultValue: true, allowedTypes: ['boolean']},
+    flagRandomRaces: {defaultValue: true, allowedTypes: ['boolean']},
+    flagRandomHero: {defaultValue: true, allowedTypes: ['boolean']},
+    settingVisibility: {
+      defaultValue: '0',
+      allowedTypes: ['string'],
+      allowedValues: ['0', '1', '2', '3'],
+    },
+    leaveAlternate: {defaultValue: true, allowedTypes: ['boolean']},
+    shufflePlayers: {defaultValue: true, allowedTypes: ['boolean']},
+    regionChangeType: {
+      defaultValue: 'off',
+      allowedTypes: ['string'],
+      allowedValues: ['off', 'realm', 'openVPN', 'both'],
+    },
+    regionChangeTimeEU: {defaultValue: '11:00', allowedTypes: ['string']},
+    regionChangeOpenVPNConfigEU: {defaultValue: '', allowedTypes: ['string']},
+    regionChangeTimeNA: {defaultValue: '01:00', allowedTypes: ['string']},
+    regionChangeOpenVPNConfigNA: {defaultValue: '', allowedTypes: ['string']},
+    whitelist: {defaultValue: true, allowedTypes: ['boolean']},
+    minPlayers: {
+      defaultValue: 0,
+      allowedTypes: ['number'],
+      allowedValues: [
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+      ],
+    },
+    delayStart: {defaultValue: 0, allowedTypes: ['number']},
+    openVPNPath: {defaultValue: '', allowedTypes: ['string']},
+  },
+  obs: {
+    enabled: {defaultValue: false, allowedTypes: ['boolean']},
+    sceneSwitchType: {
+      defaultValue: 'off',
+      allowedTypes: ['string'],
+      allowedValues: ['off', 'hotkeys', 'websockets'],
+    },
+    inGameHotkey: {defaultValue: false, allowedTypes: ['boolean', 'object']},
+    outOfGameHotkey: {defaultValue: false, allowedTypes: ['boolean', 'object']},
+    inGameWSScene: {defaultValue: '', allowedTypes: ['string']},
+    outOfGameWSScene: {defaultValue: '', allowedTypes: ['string']},
+    address: {defaultValue: '', allowedTypes: ['string']},
+    _token: {defaultValue: '', allowedTypes: ['string'], sensitive: true},
+    autoStream: {defaultValue: false, allowedTypes: ['boolean']},
+    textSource: {defaultValue: false, allowedTypes: ['boolean']},
+  },
+  discord: {
+    enabled: {defaultValue: false, allowedTypes: ['boolean']},
+    _token: {defaultValue: '', allowedTypes: ['string'], sensitive: true},
+    announceChannel: {defaultValue: '', allowedTypes: ['string']},
+    chatChannel: {defaultValue: '', allowedTypes: ['string']},
+    useThreads: {defaultValue: true, allowedTypes: ['boolean']},
+    bidirectionalChat: {defaultValue: false, allowedTypes: ['boolean']},
+    sendInGameChat: {defaultValue: false, allowedTypes: ['boolean']},
+    adminChannel: {defaultValue: '', allowedTypes: ['string']},
+    logLevel: {
+      defaultValue: 'error',
+      allowedTypes: ['string'],
+      allowedValues: ['error', 'warn', 'off'],
+    },
+    adminRole: {defaultValue: 'wc3mt', allowedTypes: ['string']},
+    customName: {defaultValue: '', allowedTypes: ['string']},
+  },
+  elo: {
+    type: {
+      defaultValue: 'off',
+      allowedTypes: ['string'],
+      allowedValues: ['off', 'wc3stats', 'pyroTD', 'mariadb', 'mysql', 'sqlite', 'random'],
+    },
+    dbIP: {defaultValue: '127.0.0.1', allowedTypes: ['string']},
+    dbPort: {defaultValue: 3306, allowedTypes: ['number']},
+    dbUser: {defaultValue: '', allowedTypes: ['string']},
+    _dbPassword: {defaultValue: '', allowedTypes: ['string'], sensitive: true},
+    dbName: {defaultValue: '', allowedTypes: ['string']},
+    dbTableName: {defaultValue: '', allowedTypes: ['string']},
+    dbSecondaryTable: {defaultValue: '', allowedTypes: ['string']},
+    dbPrimaryTableKey: {defaultValue: '', allowedTypes: ['string']},
+    dbSecondaryTableKey: {defaultValue: '', allowedTypes: ['string']},
+    dbUserColumn: {defaultValue: 'player', allowedTypes: ['string']},
+    dbELOColumn: {defaultValue: 'rating', allowedTypes: ['string']},
+    dbPlayedColumn: {defaultValue: 'played', allowedTypes: ['string']},
+    dbWonColumn: {defaultValue: 'wins', allowedTypes: ['string']},
+    dbRankColumn: {defaultValue: 'rank', allowedTypes: ['string']},
+    dbLastChangeColumn: {defaultValue: '', allowedTypes: ['string']},
+    dbSeasonColumn: {defaultValue: '', allowedTypes: ['string']},
+    dbCurrentSeason: {defaultValue: '', allowedTypes: ['string']},
+    dbDefaultElo: {defaultValue: 500, allowedTypes: ['number']},
+    sqlitePath: {defaultValue: '', allowedTypes: ['string']},
+    balanceTeams: {defaultValue: true, allowedTypes: ['boolean']},
+    announce: {defaultValue: true, allowedTypes: ['boolean']},
+    hideElo: {defaultValue: false, allowedTypes: ['boolean']},
+    excludeHostFromSwap: {defaultValue: true, allowedTypes: ['boolean']},
+    lookupName: {defaultValue: '', allowedTypes: ['string']},
+    _privateKey: {defaultValue: '', allowedTypes: ['string'], sensitive: true},
+    available: {defaultValue: false, allowedTypes: ['boolean']},
+    wc3StatsVariant: {defaultValue: '', allowedTypes: ['string']},
+    handleReplays: {defaultValue: true, allowedTypes: ['boolean']},
+    requireStats: {defaultValue: false, allowedTypes: ['boolean']},
+    minGames: {defaultValue: 0, allowedTypes: ['number']},
+    minWins: {defaultValue: 0, allowedTypes: ['number']},
+    minRank: {defaultValue: 0, allowedTypes: ['number']},
+    minRating: {defaultValue: 0, allowedTypes: ['number']},
+    eloMapNameLookupURL: {
+      defaultValue: 'https://war.trenchguns.com/eloMapnameLookups.json',
+      allowedTypes: ['string'],
+    },
+  },
+  client: {
+    restartOnUpdate: {defaultValue: false, allowedTypes: ['boolean']},
+    checkForUpdates: {defaultValue: true, allowedTypes: ['boolean']},
+    performanceMode: {defaultValue: false, allowedTypes: ['boolean']},
+    openWarcraftOnStart: {defaultValue: false, allowedTypes: ['boolean']},
+    startOnLogin: {defaultValue: false, allowedTypes: ['boolean']},
+    commAddress: {defaultValue: '', allowedTypes: ['string']},
+    language: {defaultValue: 'en', allowedTypes: ['string']},
+    translateToLobby: {defaultValue: false, allowedTypes: ['boolean']},
+    antiCrash: {defaultValue: true, allowedTypes: ['boolean']},
+    alternateLaunch: {defaultValue: false, allowedTypes: ['boolean']},
+    bnetUsername: {defaultValue: '', allowedTypes: ['string']},
+    _bnetPassword: {defaultValue: '', allowedTypes: ['string'], sensitive: true},
+    releaseChannel: {
+      defaultValue: 'latest',
+      allowedTypes: ['string'],
+      allowedValues: ['latest', 'beta', 'alpha'],
+    },
+    debugAssistance: {defaultValue: false, allowedTypes: ['boolean']},
+  },
+  streaming: {
+    enabled: {defaultValue: false, allowedTypes: ['boolean']},
+    _seToken: {defaultValue: '', allowedTypes: ['string'], sensitive: true},
+    sendTipsInGame: {defaultValue: false, allowedTypes: ['boolean']},
+    minInGameTip: {defaultValue: 1, allowedTypes: ['number']},
+    sendTipsInDiscord: {defaultValue: false, allowedTypes: ['boolean']},
+    sendTipsInLobby: {defaultValue: false, allowedTypes: ['boolean']},
+  },
+};
+
+export const appSettingsTypes = <AppSettingsTypes>{};
 export interface StreamingSettings {
   enabled: boolean;
-  seToken: string;
+  _seToken: string;
   sendTipsInGame: boolean;
   sendTipsInLobby: boolean;
   sendTipsInDiscord: boolean;
@@ -35,7 +232,7 @@ export interface ClientSettings {
   antiCrash: boolean;
   alternateLaunch: boolean;
   bnetUsername: string;
-  bnetPassword: string;
+  _bnetPassword: string;
   releaseChannel: 'latest' | 'beta' | 'alpha';
   debugAssistance: boolean;
 }
@@ -87,14 +284,14 @@ export interface ObsSettings {
   inGameWSScene: string;
   outOfGameWSScene: string;
   address: string;
-  token: string;
+  _token: string;
   autoStream: boolean;
   textSource: boolean;
 }
 
 export interface DiscordSettings {
   enabled: boolean;
-  token: string;
+  _token: string;
   announceChannel: string;
   chatChannel: string;
   useThreads: boolean;
@@ -110,7 +307,7 @@ export interface EloSettings {
   dbIP: string;
   dbPort: number;
   dbUser: string;
-  dbPassword: string;
+  _dbPassword: string;
   dbName: string;
   dbTableName: string;
   dbSecondaryTable: string;
@@ -131,7 +328,7 @@ export interface EloSettings {
   hideElo: boolean;
   excludeHostFromSwap: boolean;
   lookupName: string;
-  privateKey: string;
+  _privateKey: string;
   available: boolean;
   wc3StatsVariant: string;
   handleReplays: boolean;
@@ -166,147 +363,160 @@ export interface UpdateSetting {
 }
 class AppSettingsContainer extends Global {
   // TODO Get that returns settings with sensitive fields removed
-  private _values: AppSettings;
+  private _values: AppSettingsDataStructure;
 
   constructor() {
     super('Settings');
-    this._values = <AppSettings>{
-      autoHost: {
-        type: store.get('autoHost.type') ?? 'off',
-        private: store.get('autoHost.private') ?? false,
-        sounds: store.get('autoHost.sounds') ?? false,
-        increment: store.get('autoHost.increment') ?? true,
-        mapName: store.get('autoHost.mapName') ?? '',
-        gameName: store.get('autoHost.gameName') ?? '',
-        mapPath: store.get('autoHost.mapPath') ?? 'N/A',
-        announceIsBot: store.get('autoHost.announceIsBot') ?? false,
-        announceCustom: store.get('autoHost.announceCustom') ?? false,
-        announceRestingInterval: store.get('autoHost.announceRestingInterval') ?? 30,
-        moveToSpec: store.get('autoHost.moveToSpec') ?? false,
-        moveToTeam: store.get('autoHost.moveToTeam') ?? '',
-        rapidHostTimer: store.get('autoHost.rapidHostTimer') ?? 0,
-        smartHostTimeout: store.get('autoHost.smartHostTimeout') ?? 0,
-        voteStart: store.get('autoHost.voteStart') ?? false,
-        voteStartPercent: store.get('autoHost.voteStartPercent') ?? 60,
-        voteStartTeamFill: store.get('autoHost.voteStartTeamFill') ?? true,
-        closeSlots: store.get('autoHost.closeSlots') ?? [],
-        customAnnouncement: store.get('autoHost.customAnnouncement') ?? '',
-        observers:
-          typeof store.get('autoHost.observers') !== 'string'
-            ? '0'
-            : store.get('autoHost.observers'),
-        advancedMapOptions: store.get('autoHost.advancedMapOptions') ?? false,
-        flagLockTeams: store.get('autoHost.flagLockTeams') ?? true,
-        flagPlaceTeamsTogether: store.get('autoHost.flagPlaceTeamsTogether') ?? true,
-        flagFullSharedUnitControl: store.get('autoHost.flagFullSharedUnitControl') ?? false,
-        flagRandomRaces: store.get('autoHost.flagRandomRaces') ?? false,
-        flagRandomHero: store.get('autoHost.flagRandomHero') ?? false,
-        settingVisibility: store.get('autoHost.settingVisibility') ?? '0',
-        leaveAlternate: store.get('autoHost.leaveAlternate') ?? false,
-        shufflePlayers: store.get('autoHost.shufflePlayers') ?? false,
-        regionChangeType: store.get('autoHost.regionChangeType') ?? 'off',
-        regionChangeTimeEU: store.get('autoHost.regionChangeTimeEU') ?? '11:00',
-        regionChangeOpenVPNConfigEU: store.get('autoHost.regionChangeOpenVPNConfigEU') ?? '',
-        regionChangeTimeNA: store.get('autoHost.regionChangeTimeNA') ?? '01:00',
-        regionChangeOpenVPNConfigNA: store.get('autoHost.regionChangeOpenVPNConfigNA') ?? '',
-        whitelist: store.get('autoHost.whitelist') ?? false,
-        minPlayers: store.get('autoHost.minPlayers') ?? 0,
-        delayStart: store.get('autoHost.delayStart') ?? 0,
-        openVPNPath: store.get('autoHost.openVPNPath') ?? '',
-      },
-      obs: {
-        enabled: store.get('obs.enabled') ?? false,
-        sceneSwitchType: store.get('obs.sceneSwitchType') ?? 'off',
-        inGameHotkey: store.get('obs.inGameHotkey') ?? false,
-        outOfGameHotkey: store.get('obs.outOfGameHotkey') ?? false,
-        inGameWSScene: store.get('obs.inGameWSScene') ?? '',
-        outOfGameWSScene: store.get('obs.outOfGameWSScene') ?? '',
-        address: store.get('obs.obsAddress') ?? '',
-        token: store.get('obs.obsPassword') ?? '',
-        autoStream: store.get('obs.autoStream') ?? false,
-        textSource: store.get('obs.textSource') ?? false,
-      },
-      elo: {
-        type: store.get('elo.type') ?? 'off',
-        dbIP: store.get('elo.dbIP') ?? '127.0.0.1',
-        dbPort: store.get('elo.dbPort') ?? 3306,
-        dbUser: store.get('elo.dbUser') ?? '',
-        dbPassword: store.get('elo.dbPassword') ?? '',
-        dbName: store.get('elo.dbName') ?? '',
-        dbTableName: store.get('elo.dbTableName') ?? '',
-        dbSecondaryTable: store.get('elo.dbSecondaryTable') ?? '',
-        dbPrimaryTableKey: store.get('elo.dbPrimaryTableKey') ?? '',
-        dbSecondaryTableKey: store.get('elo.dbSecondaryTableKey') ?? '',
-        dbUserColumn: store.get('elo.dbUserColumn') ?? 'player',
-        dbELOColumn: store.get('elo.dbELOColumn') ?? 'rating',
-        dbPlayedColumn: store.get('elo.dbPlayedColumn') ?? 'played',
-        dbWonColumn: store.get('elo.dbWonColumn') ?? 'wins',
-        dbRankColumn: store.get('elo.dbRankColumn') ?? 'rank',
-        dbLastChangeColumn: store.get('elo.dbLastChangeColumn') ?? '',
-        dbSeasonColumn: store.get('elo.dbSeasonColumn') ?? '',
-        dbCurrentSeason: store.get('elo.dbCurrentSeason') ?? '',
-        dbDefaultElo: store.get('elo.dbDefaultElo') ?? 500,
-        sqlitePath: store.get('elo.sqlitePath') ?? '',
-        balanceTeams: store.get('elo.balanceTeams') ?? true,
-        announce: store.get('elo.announce') ?? true,
-        hideElo: store.get('elo.hideElo') ?? false,
-        excludeHostFromSwap: store.get('elo.excludeHostFromSwap') ?? true,
-        lookupName: store.get('elo.lookupName') ?? '',
-        privateKey: store.get('elo.privateKey') ?? '',
-        available: store.get('elo.available') ?? false,
-        wc3StatsVariant: store.get('elo.wc3StatsVariant') ?? store.get('elo.wc3statsVariant') ?? '',
-        handleReplays: store.get('elo.handleReplays') ?? true,
-        requireStats: store.get('elo.requireStats') ?? false,
-        minGames: store.get('elo.minGames') ?? 0,
-        minWins: store.get('elo.minWins') ?? 0,
-        minRank: store.get('elo.minRank') ?? 0,
-        minRating: store.get('elo.minRating') ?? 0,
-        eloMapNameLookupURL:
-          store.get('elo.eloMapNameLookupURL') ??
-          'https://war.trenchguns.com/eloMapnameLookups.json',
-      },
-      discord: {
-        enabled: store.get('discord.enabled') ?? false,
-        token: store.get('discord.token') ?? '',
-        announceChannel: store.get('discord.announceChannel') ?? '',
-        chatChannel: store.get('discord.chatChannel') ?? '',
-        useThreads: store.get('discord.useThreads') ?? true,
-        bidirectionalChat: store.get('discord.bidirectionalChat') ?? false,
-        sendInGameChat: store.get('discord.sendInGameChat') ?? false,
-        adminChannel: store.get('discord.adminChannel') ?? '',
-        logLevel: store.get('discord.logLevel') ?? 'error',
-        adminRole: store.get('discord.adminRole') ?? 'wc3mt',
-        customName: store.get('client.customName') ?? store.get('anonymousIdentifier'),
-      },
-      client: {
-        restartOnUpdate: store.get('client.restartOnUpdate') ?? false,
-        checkForUpdates: store.get('client.checkForUpdates') ?? true,
-        performanceMode: store.get('client.performanceMode') ?? false,
-        openWarcraftOnStart: store.get('client.openWarcraftOnStart') ?? false,
-        startOnLogin: store.get('client.startOnLogin') ?? false,
-        commAddress: store.get('client.commAddress') ?? '',
-        language: store.get('client.language') ?? 'en',
-        translateToLobby: store.get('client.translateToLobby') ?? false,
-        antiCrash: store.get('client.antiCrash') ?? true,
-        alternateLaunch: store.get('client.alternateLaunch') ?? false,
-        bnetUsername: store.get('client.bnetUsername') ?? '',
-        bnetPassword: store.get('client.bnetPassword') ?? '',
-        releaseChannel: store.get('client.releaseChannel') ?? 'latest',
-        debugAssistance: store.get('client.debugAssistance') ?? false,
-      },
-      streaming: {
-        enabled: store.get('streaming.enabled') ?? false,
-        seToken: store.get('streaming.seToken') ?? '',
-        sendTipsInGame: store.get('streaming.sendTipsInGame') ?? false,
-        minInGameTip: store.get('streaming.minInGameTip') ?? 1,
-        sendTipsInDiscord: store.get('streaming.sendTipsInDiscord') ?? false,
-        sendTipsInLobby: store.get('streaming.sendTipsInLobby') ?? false,
-      },
-    };
+
+    this._values = AppSettingsData;
+
+    //Pre-populate settings from defaults
+    const entries = Object.entries(AppSettingsData) as [
+      keyof AppSettingsDataStructure,
+      AppSettingsDataSubStructure,
+    ][];
+    // Load from electron store
+    for (const [category, setting] of entries) {
+      const objKeys = Object.keys(setting) as SettingsKeys[];
+      for (let key of objKeys) {
+        // Old stores did not have underscores in the sensitive keys
+        key = key.replace('_', '') as SettingsKeys;
+        const getValue = store.get(category + '.' + key);
+        if (getValue !== undefined) {
+          console.log('Setting ' + category + '.' + key + ' to ' + getValue);
+          // @ts-expect-error We are ignoring this during swap-over
+          this._values[category][key].value = getValue;
+        }
+      }
+    }
+
+  }
+
+  async loadSettings(){
+    const dbSettings = await drizzleClient.query.settings.findMany() as {id: number, category: keyof AppSettingsDataStructure, key: SettingsKeys, value: string, type: AllowedSettingsTypes}[];
+    const flattenedCurrentSettings = (Object.entries(this._values)as Entries<typeof this._values>).map(([category, settings]) => {
+      return (Object.entries(settings) as Entries<typeof settings>).map(([key, value]) => {
+        return {category, key, dataPoint: value};
+      });
+    }).flat();
+
+    for(const dbSetting of dbSettings){
+      // @ts-expect-error Not sure how to type yet
+      this._values[dbSetting.category][dbSetting.key].value = this.stringToAppSettingsType(dbSetting.value, dbSetting.type);
+    }
+    
+    // Catch any missed settings updates during transition
+    for(const currentSetting of flattenedCurrentSettings){
+      const matchedSettings = dbSettings.filter(setting => setting.category === currentSetting.category && setting.key === currentSetting.key);
+      if(currentSetting.dataPoint.value === undefined) continue;
+      if(matchedSettings.length === 0){
+        let valueType = typeof currentSetting.dataPoint.value as AllowedSettingsTypes;
+        if(valueType === 'object' && Array.isArray(currentSetting.dataPoint.value)) valueType = 'array';
+        const updateValue = valueType === 'object' ? currentSetting.dataPoint.value = JSON.stringify(currentSetting.dataPoint.value) : currentSetting.dataPoint.value.toString();
+        try{
+          await drizzleClient.insert(settingsTable).values({category: currentSetting.category, key: currentSetting.key, value: updateValue, sensitive: currentSetting.dataPoint.sensitive ?? false, type: typeof currentSetting.dataPoint.value});
+
+        }catch(e){
+          console.error('Error inserting setting:', e);
+        }
+      }else if(matchedSettings[0].value !== currentSetting.dataPoint.value.toString()){
+        await drizzleClient.update(settingsTable).set({value: currentSetting.dataPoint.value.toString(), type: typeof currentSetting.dataPoint.value}).where(eq(settingsTable.id, matchedSettings[0].id));
+      }
+    }
+
+  }
+
+  private stringToAppSettingsTypeGuess(value: string, allowedTypes: Array<AllowedSettingsTypesTypes>): AllowedSettingsTypesTypes {
+    let returnValue: AllowedSettingsTypesTypes = value;
+    if (allowedTypes.includes('number') && parseInt(value).toString() === value){
+      return parseInt(value.toString());
+    }
+    else if(allowedTypes.includes('boolean') && ['true', 'false'].includes(value.toLowerCase())) returnValue = value.toLowerCase() === 'true';
+    else if(allowedTypes.includes('bigint') && typeof value == 'string') returnValue = BigInt(value);
+    else if(allowedTypes.includes('object') || allowedTypes.includes('array')){
+      try{
+        returnValue = JSON.parse(value);
+        return returnValue;
+      }catch(e){
+        // Do nothing
+      }
+    }
+    return returnValue;
+  }
+
+  private stringToAppSettingsType(value: string, targetType: AllowedSettingsTypesTypes): AllowedSettingsTypesTypes{
+    switch(targetType){
+      case 'number':
+        return parseInt(value.toString());
+      case 'boolean':
+        return value.toLowerCase() === 'true';
+      case 'bigint':
+        return BigInt(value);
+      case 'object':
+      case 'array':
+        try{
+          const returnValue = JSON.parse(value);
+          return returnValue;
+        }catch(e){
+          // Do nothing
+          return value;
+        }
+      default:
+        return value;
+      }
+  }
+
+  private async setSetting<AppSettingsCategory extends keyof AppSettingsDataStructure>(
+    category: AppSettingsCategory,
+    key: keyof AppSettingsDataStructure[AppSettingsCategory],
+    value: AllowedSettingsTypesTypes,
+  ) {
+    try {
+      console.log(value);
+      await drizzleClient
+        .update(settingsTable)
+        .set({value: value.toString()})
+        .where(and(eq(settingsTable.category, category), eq(settingsTable.key, key as string)));
+      (this._values[category][key] as AppSettingsDataPoint).value = value;
+    } catch (e) {
+      this.error('Error updating setting: ' + category, key, value, e);
+    }
+  }
+
+  private getSetting<AppSettingsCategory extends keyof AppSettingsDataStructure>(
+    category: AppSettingsCategory,
+    key: keyof AppSettingsDataStructure[AppSettingsCategory],
+  ): AllowedSettingsTypesTypes | undefined {
+    const targetKey = this._values[category]?.[key] as AppSettingsDataPoint | undefined;
+    const value = targetKey?.value ?? targetKey?.defaultValue;
+    if (value === undefined) return value;
+
+    return targetKey?.value ?? targetKey?.defaultValue;
   }
 
   get values(): AppSettings {
-    return this._values;
+    const fullCopy: AppSettings = {} as AppSettings;
+    for (const [key, groups] of Object.entries(this._values) as [
+      keyof AppSettings,
+      Record<SettingsKeys, AppSettingsDataPoint>,
+    ][]) {
+      // @ts-expect-error Still need to figure out how to type this
+      fullCopy[key] = {} as AppSettings[keyof AppSettings];
+      for (const [settingKey, dataPoint] of Object.entries(groups) as [
+        SettingsKeys,
+        AppSettingsDataPoint,
+      ][]) {
+        const revealValue =
+          (dataPoint.sensitive || settingKey.startsWith('_'))
+            ? '*****'
+            : (dataPoint.value != undefined
+            ? dataPoint.value
+            : dataPoint.defaultValue);
+        // @ts-expect-error Still need to figure out how to type this
+        fullCopy[key][settingKey] = revealValue;
+      }
+    }
+    return fullCopy;
   }
 
   set values(value: AppSettings) {
@@ -322,79 +532,106 @@ class AppSettingsContainer extends Global {
     | AutoHostSettings
     | ObsSettings
     | EloSettings {
-    const copy = this._values[setting];
-    Object.keys(copy)
-      .filter(key => key.toLowerCase().includes('token') || key.toLowerCase().includes('password'))
-      //@ts-expect-error This is fine.
-      .forEach(key => (copy[key] = copy[key] ? '*****' : ''));
-    return copy;
-  }
-
-  getAllSettingsClean(): AppSettings {
-    const fullCopy = this._values;
-    Object.keys(this._values).forEach(sett => {
-      // @ts-expect-error Not sure
-      fullCopy[sett as keyof AppSettings] = this.cleanSetting(sett as keyof AppSettings);
-    });
+    const fullCopy:
+      | DiscordSettings
+      | ClientSettings
+      | StreamingSettings
+      | AutoHostSettings
+      | ObsSettings
+      | EloSettings = {} as
+      | DiscordSettings
+      | ClientSettings
+      | StreamingSettings
+      | AutoHostSettings
+      | ObsSettings
+      | EloSettings;
+    for (const [settingKey, dataPoint] of Object.entries(this._values[setting]) as [
+      SettingsKeys,
+      AppSettingsDataPoint,
+    ][]) {
+      const revealValue =
+        dataPoint.sensitive || settingKey.startsWith('_')
+          ? '*****'
+          : dataPoint.value != undefined
+          ? dataPoint.value
+          : dataPoint.defaultValue;
+      // @ts-expect-error Still need to figure out how to type this
+      fullCopy[setting][settingKey] = revealValue;
+    }
     return fullCopy;
   }
 
-  updateSettings(updates: SettingsUpdates) {
+  getAllSettingsClean(): AppSettings {
+    const fullCopy: AppSettings = {} as AppSettings;
+    for (const [key, groups] of Object.entries(this._values) as [
+      keyof AppSettings,
+      Record<SettingsKeys, AppSettingsDataPoint>,
+    ][]) {
+      for (const [settingKey, dataPoint] of Object.entries(groups) as [
+        SettingsKeys,
+        AppSettingsDataPoint,
+      ][]) {
+        const revealValue =
+          dataPoint.sensitive || settingKey.startsWith('_')
+            ? '*****'
+            : dataPoint.value != undefined
+            ? dataPoint.value
+            : dataPoint.defaultValue;
+        // @ts-expect-error Still need to figure out how to type this
+        fullCopy[key][settingKey] = revealValue;
+      }
+    }
+    return fullCopy;
+  }
+
+  async updateSettings(updates: SettingsUpdates) {
     const filteredUpdates: SettingsUpdates = {};
-    (
-      Object.entries(updates) as {
-        [K in keyof AppSettings]: [keyof PickByValue<AppSettings, AppSettings[K]>, AppSettings[K]];
-      }[keyof AppSettings][]
-    ).forEach(([settingName, entries]) => {
-      const targetSetting = this._values[settingName];
-      if (targetSetting === undefined) {
-        this.warn('Setting ' + settingName + ' is not a valid key.');
+    for (const [category, entries] of Object.entries(updates) as {
+      [K in keyof AppSettings]: [keyof PickByValue<AppSettings, AppSettings[K]>, AppSettings[K]];
+    }[keyof AppSettings][]) {
+      if (this._values[category] === undefined) {
+        this.warn('Setting ' + category + ' is not a valid key.');
         return;
       }
-      Object.entries(entries).forEach(([key, value]) => {
-        // @ts-expect-error Still need to figure out how to type this
-        const targetCurrentValue = this._values[settingName]?.[key];
+      // eslint-disable-next-line prefer-const
+      for(let [settingsKey, value] of Object.entries(entries) as [SettingsKeys, AllowedSettingsTypesTypes][]) {
+        //@ts-expect-error Still need to figure out how to type this
+        const targetCurrentValue = this.settingsHelper(category,settingsKey);
         if (targetCurrentValue === undefined) {
-          this._generateError('Target key does not exist.', settingName, key, value);
+          this._generateError('Target key does not exist.', category, settingsKey, value);
           return false;
         }
-        if (targetCurrentValue === value) {
-          this._generateError('Target key is already value.', settingName, key, value);
+        if (targetCurrentValue.value === value) {
+          this._generateError('Target key is already value.', category, settingsKey, value);
           return false;
         }
-        if (key === 'inGameHotkey' || key === 'outOfGameHotkey') {
-          if (typeof value !== 'boolean' && typeof value !== 'object') {
-            this._generateError('Hotkeys must be a boolean or false', settingName, key, value);
-            return false;
-          }
-        } else if (typeof targetCurrentValue !== typeof value) {
-          if (typeof targetCurrentValue === 'number' && typeof value === 'string') {
-            if (parseInt(value).toString() !== value) {
-              this._generateError('New value needs to be a number', settingName, key, value);
-              return false;
-            } else {
-              value = parseInt(value);
+        let valueUpdateType = typeof value as AllowedSettingsTypes;
+        if(valueUpdateType === 'object' && Array.isArray(value) && value !== null) valueUpdateType = 'array';
+        if (!targetCurrentValue.allowedTypes.includes(valueUpdateType)) {
+          if(targetCurrentValue.allowedTypes.includes('object') && typeof value == 'string'){
+            try{
+              value = JSON.parse(value);
+            }catch(e){
+              this._generateError('Invalid JSON object', category, settingsKey, value);
             }
-          } else if (typeof targetCurrentValue === 'string' && typeof value === 'number') {
-            value = value.toString();
-          } else {
-            const errorText =
-              'Invalid type. Target is ' +
-              typeof targetCurrentValue +
-              '. Given was ' +
-              typeof value +
-              '.';
-            this._generateError(errorText, settingName, key, value);
+          } 
+          else if (targetCurrentValue.allowedTypes.includes('string')) value = value.toString();
+          else if (targetCurrentValue.allowedTypes.includes('number'))
+            value = parseInt(value.toString());
+          else if(targetCurrentValue.allowedTypes.includes('boolean')) value = value.toString() === 'true';
+          else if(targetCurrentValue.allowedTypes.includes('bigint') && typeof value == 'string') value = BigInt(value);
+          else {
+            this._generateError('Invalid settings update type.', category, settingsKey, value);
             return false;
           }
         }
-        if (key === 'mapPath' && typeof value === 'string') {
+        if (settingsKey === 'mapPath' && typeof value === 'string') {
           value.replace(/\\/g, '/');
           const splitName = (value as string).split('/');
           let mapName = splitName[splitName.length - 1];
           if (mapName) {
             mapName = mapName.substring(0, mapName.length - 4);
-            this._values.autoHost.mapName = mapName;
+            this._values.autoHost.mapName.value = mapName;
             if (!filteredUpdates.autoHost) {
               filteredUpdates.autoHost = {mapName};
             } else {
@@ -403,27 +640,32 @@ class AppSettingsContainer extends Global {
           }
         }
         // @ts-expect-error Unable to type
-        this._values[settingName][key] = value;
-
-        store.set(settingName + '.' + key, value);
+        await this.setSetting(category, settingsKey, value);
         this.info(
-          settingName + ' settings changed: ' + key,
-          key.toLowerCase().includes('token') || key.toLowerCase().includes('password')
+          category + ' settings changed: ' + settingsKey,
+          settingsKey.toLowerCase().includes('token') || settingsKey.toLowerCase().includes('password')
             ? '*HIDDEN*'
             : value,
         );
-        if (!filteredUpdates[settingName]) {
-          filteredUpdates[settingName] = {};
+        if (!filteredUpdates[category]) {
+          filteredUpdates[category] = {};
         }
-        // @ts-expect-error Still need to figure out how to type this
-        filteredUpdates[settingName][key] = value;
-      });
-    });
+        // @ts-expect-error Unable to type
+        filteredUpdates[category][settingsKey] = value;
+      }
+    }
     if (Object.keys(filteredUpdates).length > 0) {
       this.emit('settingsUpdates', filteredUpdates);
       return true;
     }
     return false;
+  }
+
+  private settingsHelper<SettingsCategory extends keyof AppSettings>(category: SettingsCategory, key: keyof AppSettingsDataStructure[SettingsCategory]): AppSettingsDataPoint | undefined {
+    return this._values[category]?.[key] as
+    | AppSettingsDataPoint
+    | undefined;
+
   }
 
   private _generateError(errorText: string, settingName: string, key: string, value: unknown) {

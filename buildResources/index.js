@@ -80,7 +80,8 @@ function clientWSSetup() {
         };
     }
 }
-export function clientSend(message) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function clientSend(message) {
     if (clientWS && clientWS.readyState === 1) {
         clientWS.send(JSON.stringify({ message }));
     }

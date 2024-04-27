@@ -72,7 +72,7 @@ if (!app.isPackaged) {
   screen.config.highlightOpacity = 0.75;
 }
 
-
+await settings.loadSettings();
 if (app.getVersion().includes('beta')) {
   settings.updateSettings({client: {releaseChannel: 'beta'}});
 } else if (app.getVersion().includes('alpha')) {
