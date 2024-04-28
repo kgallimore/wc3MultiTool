@@ -1,13 +1,10 @@
 import {Global} from '../globalBase';
-import Store from 'electron-store';
 
 import type {PickByValue} from './../utility';
 import {lookup} from 'fast-geoip';
 import {request} from 'http';
 
 export interface ClientState {
-  tableVersion: number;
-  latestUploadedReplay: number;
   currentStep: string;
   currentStepProgress: number;
   vpnActive: 'us' | 'eu' | false;
@@ -17,19 +14,10 @@ export interface ClientState {
 }
 
 class ClientStateSingle extends Global {
-  private _store = new Store();
   private _values: ClientState;
   constructor() {
     super('Client State');
-    // Get the tableVersion, if it's not set then we are going to create the most up to date table, so we set it to the most recent version.
-    let tableVersion: number = this._store.get('tableVersion') as number;
-    if (!tableVersion) {
-      tableVersion = 2;
-      this._store.set('tableVersion', 2);
-    }
     this._values = {
-      tableVersion,
-      latestUploadedReplay: (this._store.get('latestUploadedReplay') as number) ?? 0,
       currentStep: '',
       currentStepProgress: 0,
       vpnActive: false,

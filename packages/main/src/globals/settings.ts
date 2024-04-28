@@ -4,7 +4,6 @@ import type {Entries} from 'type-fest';
 
 import Store from 'electron-store';
 
-import type {PickByValue} from './../utility';
 import type {ObsHotkeys} from './../modules/obs';
 import {drizzleClient} from '../drizzle';
 import {settings as settingsTable} from '../schema';
@@ -180,8 +179,11 @@ export const AppSettingsData: AppSettingsDataStructure = {
       defaultValue: 'https://war.trenchguns.com/eloMapnameLookups.json',
       allowedTypes: ['string'],
     },
+    latestUploadedReplay: {defaultValue: 0, allowedTypes: ['number']},
   },
   client: {
+    tableVersion: {defaultValue: 0, allowedTypes: ['number']},
+    warInstallLoc: {defaultValue: '', allowedTypes: ['string']},
     restartOnUpdate: {defaultValue: false, allowedTypes: ['boolean']},
     checkForUpdates: {defaultValue: true, allowedTypes: ['boolean']},
     performanceMode: {defaultValue: false, allowedTypes: ['boolean']},
@@ -221,6 +223,8 @@ export interface StreamingSettings {
   minInGameTip: number;
 }
 export interface ClientSettings {
+  tableVersion: number;
+  warInstallLoc: string;
   restartOnUpdate: boolean;
   checkForUpdates: boolean;
   performanceMode: boolean;
@@ -338,6 +342,7 @@ export interface EloSettings {
   minGames: number;
   minWins: number;
   eloMapNameLookupURL: string;
+  latestUploadedReplay: number;
 }
 export type SettingsKeys =
   | keyof ObsSettings
@@ -383,7 +388,6 @@ class AppSettingsContainer extends Global {
         key = key.replace('_', '') as SettingsKeys;
         const getValue = store.get(category + '.' + key);
         if (getValue !== undefined) {
-          console.log('Setting ' + category + '.' + key + ' to ' + getValue);
           // @ts-expect-error We are ignoring this during swap-over
           this._values[category][key].value = getValue;
         }
@@ -408,19 +412,17 @@ class AppSettingsContainer extends Global {
     // Catch any missed settings updates during transition
     for(const currentSetting of flattenedCurrentSettings){
       const matchedSettings = dbSettings.filter(setting => setting.category === currentSetting.category && setting.key === currentSetting.key);
-      if(currentSetting.dataPoint.value === undefined) continue;
+      let valueType = typeof (currentSetting.dataPoint.value ?? currentSetting.dataPoint.defaultValue) as AllowedSettingsTypes;
+      if(valueType === 'object' && Array.isArray(currentSetting.dataPoint.value)) valueType = 'array';
+      const updateValue = valueType === 'object' ? JSON.stringify(currentSetting.dataPoint.value ?? currentSetting.dataPoint.defaultValue) : (currentSetting.dataPoint.value ?? currentSetting.dataPoint.defaultValue).toString();
       if(matchedSettings.length === 0){
-        let valueType = typeof currentSetting.dataPoint.value as AllowedSettingsTypes;
-        if(valueType === 'object' && Array.isArray(currentSetting.dataPoint.value)) valueType = 'array';
-        const updateValue = valueType === 'object' ? currentSetting.dataPoint.value = JSON.stringify(currentSetting.dataPoint.value) : currentSetting.dataPoint.value.toString();
         try{
-          await drizzleClient.insert(settingsTable).values({category: currentSetting.category, key: currentSetting.key, value: updateValue, sensitive: currentSetting.dataPoint.sensitive ?? false, type: typeof currentSetting.dataPoint.value});
-
+          await drizzleClient.insert(settingsTable).values({category: currentSetting.category, key: currentSetting.key, value: updateValue, sensitive: currentSetting.dataPoint.sensitive ?? false, type: valueType});
         }catch(e){
           console.error('Error inserting setting:', e);
         }
-      }else if(matchedSettings[0].value !== currentSetting.dataPoint.value.toString()){
-        await drizzleClient.update(settingsTable).set({value: currentSetting.dataPoint.value.toString(), type: typeof currentSetting.dataPoint.value}).where(eq(settingsTable.id, matchedSettings[0].id));
+      }else if(matchedSettings[0].value !== currentSetting.dataPoint.value?.toString()){
+        await drizzleClient.update(settingsTable).set({value: updateValue?.toString(), type: valueType}).where(eq(settingsTable.id, matchedSettings[0].id));
       }
     }
 
@@ -472,7 +474,7 @@ class AppSettingsContainer extends Global {
     value: AllowedSettingsTypesTypes,
   ) {
     try {
-      console.log(value);
+      this.info('Updating setting: ' + category, key, value.toString());
       await drizzleClient
         .update(settingsTable)
         .set({value: value.toString()})
@@ -490,7 +492,6 @@ class AppSettingsContainer extends Global {
     const targetKey = this._values[category]?.[key] as AppSettingsDataPoint | undefined;
     const value = targetKey?.value ?? targetKey?.defaultValue;
     if (value === undefined) return value;
-
     return targetKey?.value ?? targetKey?.defaultValue;
   }
 
@@ -586,10 +587,9 @@ class AppSettingsContainer extends Global {
 
   async updateSettings(updates: SettingsUpdates) {
     const filteredUpdates: SettingsUpdates = {};
-    for (const [category, entries] of Object.entries(updates) as {
-      [K in keyof AppSettings]: [keyof PickByValue<AppSettings, AppSettings[K]>, AppSettings[K]];
-    }[keyof AppSettings][]) {
-      if (this._values[category] === undefined) {
+    console.log('Updating settings', updates);
+    for (const [category, entries] of Object.entries(updates) as Entries<SettingsUpdates>) {
+      if (this._values[category] === undefined || entries === undefined) {
         this.warn('Setting ' + category + ' is not a valid key.');
         return;
       }
@@ -597,10 +597,12 @@ class AppSettingsContainer extends Global {
       for(let [settingsKey, value] of Object.entries(entries) as [SettingsKeys, AllowedSettingsTypesTypes][]) {
         //@ts-expect-error Still need to figure out how to type this
         const targetCurrentValue = this.settingsHelper(category,settingsKey);
+        console.log('Target current value:', targetCurrentValue, category, settingsKey, value);
         if (targetCurrentValue === undefined) {
           this._generateError('Target key does not exist.', category, settingsKey, value);
           return false;
         }
+        if(value === undefined) value = targetCurrentValue.defaultValue;
         if (targetCurrentValue.value === value) {
           this._generateError('Target key is already value.', category, settingsKey, value);
           return false;

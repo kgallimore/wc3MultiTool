@@ -11,31 +11,21 @@ const state = {
   inGame: false,
 };
 let addedHtml: HTMLElement | null;
-const version = '1.2.0';
+const version = '1.3.0';
 
 let qs: URLSearchParams;
 let guid: string | null;
-const currentLog: string = '';
-
+let currentLog: string = '';
+const logContainer = document.getElementById('logContainer');
 function addLog(text: string, error: boolean = false) {
   console.log(text, error);
-  /*
+  
   if (text === currentLog) {
     return;
   }
   currentLog = text;
-
-  if (!addedHtml) {
-    addedHtml = document.createElement("DIV");
-    // @ts-ignore
-    addedHtml.style.zoom = "1.5";
-    var root = document.getElementById("root")?.appendChild(addedHtml);
-  }
-
-  addedHtml.innerHTML = `<div class="Primary-Back-Button" style="position:absolute; left:30%"><div class="Primary-Button-Frame-Alternate-B" id="toggleAutoHostButton"><div class="Primary-Button Primary-Button-${
-    error ? "Red" : "Green"
-  }" id="toggleAutoHostColor"><div class="Primary-Button-Content"><div>${text}
-</div></div></div></div></div>`;*/
+  if(logContainer)
+    logContainer.innerText = text;
 }
 
 setup();
@@ -157,35 +147,6 @@ function sendSocket(messageType = 'info', data: string | object = '') {
       setTimeout(() => {
         sendSocket(messageType, data);
       }, 100);
-    }
-  }
-}
-
-export function modifyPages() {
-  if (
-    !addedHtml &&
-    state.menuState &&
-    state.menuState !== 'Unknown' &&
-    state.menuState !== 'In Game' &&
-    state.menuState !== 'LOADING_SCREEN' &&
-    webSocket &&
-    webSocket.readyState === 1
-  ) {
-    addedHtml = document.createElement('DIV');
-    // TODO: Remove zoom dependency
-    //@ts-expect-error This style does exist
-    addedHtml.style.zoom = '1.75';
-    addedHtml.innerHTML = `<div class="Primary-Back-Button" style="position:absolute; left:30%"><div class="Primary-Button-Frame-Alternate-B" id="toggleAutoHostButton"><div class="Primary-Button Primary-Button-${
-      autoHost.type === 'off' ? 'Red' : 'Green'
-    }" id="toggleAutoHostColor"><div class="Primary-Button-Content"><div>Toggle Auto Host ${
-      autoHost.type === 'off' ? 'On' : 'Off'
-    }</div></div></div></div></div>`;
-    document.getElementById('root')?.appendChild(addedHtml);
-    const autoHostButton = document.getElementById('toggleAutoHostButton');
-    if (autoHostButton) {
-      autoHostButton.addEventListener('click', function (_event) {
-        sendSocket('toggleAutoHost');
-      });
     }
   }
 }

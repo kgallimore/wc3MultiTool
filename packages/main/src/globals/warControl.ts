@@ -5,9 +5,6 @@ import {settings} from './settings';
 import {gameState} from './gameState';
 import {gameSocket} from './gameSocket';
 
-import Store from 'electron-store';
-const store = new Store();
-
 import type {Window, Region} from '@nut-tree/nut-js';
 import {
   keyboard,
@@ -46,7 +43,7 @@ class WarControl extends Global {
     screen.height().then(height => {
       this.setResourceDir(height);
     });
-    this.warInstallLoc = store.get('warInstallLoc') as string;
+    this.warInstallLoc = settings.values.client.warInstallLoc;
     this.appPath = app.getAppPath();
     this.isPackaged = app.isPackaged;
   }

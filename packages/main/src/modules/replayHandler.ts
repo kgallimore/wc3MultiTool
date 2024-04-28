@@ -1,13 +1,10 @@
 import {ModuleBase} from './../moduleBase';
 
 import {app} from 'electron';
-import Store from 'electron-store';
-const store = new Store();
 //import parser from 'w3gjs';
 import {readFileSync, readdirSync, existsSync, statSync} from 'fs';
 import type {GameState} from './../globals/gameState';
 import {join} from 'path';
-
 export interface mmdResults {
   list: {
     [key: string]: {pid: string; won: boolean; extra: {[key: string]: string}};
@@ -38,7 +35,7 @@ class ReplayHandler extends ModuleBase {
             }
           }
         });
-      if (mostModified.file && mostModified.mtime > this.clientState.values.latestUploadedReplay) {
+      if (mostModified.file && mostModified.mtime > this.settings.values.elo.latestUploadedReplay) {
         this.info('Found new replay:', mostModified.file);
         this.analyzeGame(mostModified.file).then(mmdResults => {
           this.emitEvent({mmdResults});
@@ -72,10 +69,7 @@ class ReplayHandler extends ModuleBase {
                   currentStep: 'Uploaded replay',
                   currentStepProgress: 0,
                 });
-                this.clientState.updateClientState({
-                  latestUploadedReplay: mostModified.mtime,
-                });
-                store.set('latestUploadedReplay', this.clientState.values.latestUploadedReplay);
+                this.settings.updateSettings({elo: {latestUploadedReplay: mostModified.mtime}});
               }
             },
             error => {

@@ -22,8 +22,10 @@ declare global {
   import {gameState, clientState, appSettings, windowData} from './stores/page';
   import UserLists from './lib/UserLists.svelte';
   import type {LobbyUpdatesExtended} from '../../main/src/modules/lobbyControl';
+  import type {Entries} from 'type-fest';
+  import type { SettingsUpdates } from '../../main/src/globals/settings';
 
-  let lobby: MicroLobby;
+  let lobby: MicroLobby | null;
   let appVersion = '0.0.0';
   let banList: {
     data: BanWhiteList;
@@ -57,7 +59,7 @@ declare global {
   });
 
   function updatestructuredTeamData() {
-    let exported = lobby.exportTeamStructure(false);
+    let exported = lobby?.exportTeamStructure(false);
     if (exported) {
       structuredTeamData = Object.entries(exported);
     } else {
@@ -96,11 +98,14 @@ declare global {
       }
       if (data.globalUpdate.settings) {
         appSettings.update(state => {
-          Object.entries(data.globalUpdate.settings).forEach(([settingType, updates]) => {
-            Object.entries(updates).forEach(([key, value]) => {
-              state[settingType][key] = value;
-            });
-          });
+          const settingsEntries = Object.entries(data.globalUpdate?.settings ?? {}) as Entries<SettingsUpdates>;
+          for (const [settingType, updates] of settingsEntries) {
+            if(!updates) continue;
+            const setting = state[settingType];
+            for (const [key, value] of Object.entries(updates) as Entries<SettingsUpdates[keyof SettingsUpdates]>) {
+              setting[key] = value;
+            }
+          }
           return state;
         });
         // TODO: this needs to be redone
@@ -120,7 +125,7 @@ declare global {
         case 'action':
           toast.push(newData.value as string);
           windowData.update(state => {
-            state.lastAction = newData.value;
+            state.lastAction = newData.value as string;
             state.banReason = '';
             state.battleTag = '';
             return state;
@@ -128,7 +133,7 @@ declare global {
           break;
         case 'updater':
           windowData.update(state => {
-            state.updateStatus = newData.value;
+            state.updateStatus = newData.value as string;
             return state;
           });
           break;
@@ -156,7 +161,7 @@ declare global {
           break;
         case 'gotMapPath':
           appSettings.update(state => {
-            state.autoHost.mapPath = newData.value;
+            state.autoHost.mapPath = (newData.value as string);
             return state;
           });
           break;

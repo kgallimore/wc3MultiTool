@@ -88,7 +88,6 @@
   }
 
   function toMain(args: WindowSend) {
-    // @ts-expect-error the api does exist
     window.api.send('toMain', args);
   }
 </script>

@@ -15,10 +15,9 @@
       data: PlayerData;
     }[],
   ][];
-  export let lobby: MicroLobby;
+  export let lobby: MicroLobby | null;
 
   function toMain(args: WindowSend) {
-    // @ts-expect-error - TS is not aware of window.api
     window.api.send('toMain', args);
   }
 </script>

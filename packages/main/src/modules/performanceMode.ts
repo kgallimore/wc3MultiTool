@@ -1,17 +1,16 @@
 import { ModuleBase } from '../moduleBase';
 
 import { existsSync, rename } from 'fs';
-import Store from 'electron-store';
 import type { SettingsUpdates } from './../globals/settings';
 import type { GameState } from './../globals/gameState';
-const store = new Store();
+import { settings } from './../globals/settings';
 
 class PerformanceMode extends ModuleBase {
   warInstallLoc: string;
 
   constructor() {
     super('Performance Mode', { listeners: ['settingsUpdate', 'gameStateUpdates'] });
-    this.warInstallLoc = store.get('warInstallLoc') as string;
+    this.warInstallLoc = settings.values.client.warInstallLoc;
     this.togglePerformanceMode(this.settings.values.client.performanceMode);
   }
 

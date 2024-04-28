@@ -6,7 +6,6 @@ const {autoUpdater} = pkg;
 import log from 'electron-log/main';
 import {screen, keyboard} from '@nut-tree/nut-js';
 // require('@nut-tree/nl-matcher');
-import Store from 'electron-store';
 // @ts-expect-error Really old package
 import audioLoader from 'audio-loader';
 import playAudio from 'audio-play';
@@ -81,11 +80,9 @@ if (app.getVersion().includes('beta')) {
   settings.updateSettings({client: {releaseChannel: 'latest'}});
 }
 
-const store = new Store();
 
 const wc3mtTargetFile = `${app.getPath('documents')}\\Warcraft III\\CustomMapData\\wc3mt.txt`;
-let warInstallLoc: string = store.get('warInstallLoc') as string;
-
+let warInstallLoc: string = settings.values.client.warInstallLoc;
 const modules = [
   administration,
   autoHost,
@@ -124,6 +121,7 @@ lobbyControl.on('lobbyUpdate', (lobbyUpdate: LobbyUpdatesExtended) =>
 );
 
 ipcMain.on('toMain', (_event, args: WindowSend) => {
+  console.log('toMain', args);
   commandClient(args);
 });
 
@@ -191,32 +189,33 @@ app
       {
         warInstallLoc = data.toString();
         if (existsSync(warInstallLoc + '\\_retail_\\x86_64\\Warcraft III.exe')) {
-          store.set('warInstallLoc', warInstallLoc);
+          await settings.updateSettings({client: {warInstallLoc}});
         } else {
           // TODO this needs to be checked to make sure it doesn't mess with WarSingle. Also creating a temp window seems like a bad idea
           const tempWindow = new BrowserWindow();
-          dialog
+          try{
+            const result = await dialog
             .showOpenDialog(tempWindow, {
               title: 'Please Choose Warcraft III Launcher.exe',
               defaultPath: 'C:\\Program Files (x86)',
               properties: ['openFile'],
               filters: [{name: 'Warcraft 3 Executable', extensions: ['exe']}],
-            })
-            .then(result => {
+            });
               tempWindow.close();
               if (!result.canceled) {
                 if (result.filePaths[0].includes('Warcraft III')) {
                   warInstallLoc = result.filePaths[0].split(/(\\*|\/*)Warcraft III[^\\/]*\.exe/)[0];
                   log.info(`Change install location to ${warInstallLoc}`);
-                  store.set('warInstallLoc', warInstallLoc);
+                  await settings.updateSettings({client: {warInstallLoc}});
                 } else {
                   log.warn('Invalid Warcraft file?');
                 }
               }
-            })
-            .catch(err => {
-              log.warn(err.message, err.stack);
-            });
+          }catch(err){
+            //@ts-expect-error This can't be typed?
+            log.warn(err.message, err.stack);
+          }
+
         }
       }
     }
@@ -390,6 +389,7 @@ async function commandClient(args: WindowSend) {
       }
       break;
     case 'init':
+      console.log('Init!!!!!');
       sendWindow({
         init: {
           settings: settings.values,
