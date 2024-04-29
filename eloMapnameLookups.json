@@ -59,5 +59,10 @@
     "regex": "(WMW|Wintermaul Wars).*X",
     "elo": true,
     "defaultElo": { "wc3stats": 1000 }
+  },
+  "X CHFootiesv":{
+    "regex": "(xCHFooties|chfoots).*",
+    "elo": true,
+      "defaultElo": { "wc3stats": 500 }
   }
 }
