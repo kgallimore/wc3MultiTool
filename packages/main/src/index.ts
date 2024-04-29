@@ -121,7 +121,6 @@ lobbyControl.on('lobbyUpdate', (lobbyUpdate: LobbyUpdatesExtended) =>
 );
 
 ipcMain.on('toMain', (_event, args: WindowSend) => {
-  console.log('toMain', args);
   commandClient(args);
 });
 

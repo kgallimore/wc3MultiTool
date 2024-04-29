@@ -457,9 +457,11 @@ class AppSettingsContainer extends Global {
       case 'object':
       case 'array':
         try{
-          const returnValue = JSON.parse(value);
-          return returnValue;
+          return JSON.parse(value);
         }catch(e){
+          this.error('Error parsing JSON:', e);
+          if(targetType === 'array') return [];
+          else if(targetType === 'object') return {};
           // Do nothing
           return value;
         }
@@ -474,10 +476,11 @@ class AppSettingsContainer extends Global {
     value: AllowedSettingsTypesTypes,
   ) {
     try {
-      this.info('Updating setting: ' + category, key, value.toString());
+      const stringValue = typeof value == 'object' ? JSON.stringify(value) : value.toString();
+      this.info('Updating setting: ' + category, key, stringValue);
       await drizzleClient
         .update(settingsTable)
-        .set({value: value.toString()})
+        .set({value: stringValue})
         .where(and(eq(settingsTable.category, category), eq(settingsTable.key, key as string)));
       (this._values[category][key] as AppSettingsDataPoint).value = value;
     } catch (e) {
@@ -587,7 +590,6 @@ class AppSettingsContainer extends Global {
 
   async updateSettings(updates: SettingsUpdates) {
     const filteredUpdates: SettingsUpdates = {};
-    console.log('Updating settings', updates);
     for (const [category, entries] of Object.entries(updates) as Entries<SettingsUpdates>) {
       if (this._values[category] === undefined || entries === undefined) {
         this.warn('Setting ' + category + ' is not a valid key.');
@@ -597,7 +599,6 @@ class AppSettingsContainer extends Global {
       for(let [settingsKey, value] of Object.entries(entries) as [SettingsKeys, AllowedSettingsTypesTypes][]) {
         //@ts-expect-error Still need to figure out how to type this
         const targetCurrentValue = this.settingsHelper(category,settingsKey);
-        console.log('Target current value:', targetCurrentValue, category, settingsKey, value);
         if (targetCurrentValue === undefined) {
           this._generateError('Target key does not exist.', category, settingsKey, value);
           return false;
