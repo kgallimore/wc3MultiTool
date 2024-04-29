@@ -68,8 +68,6 @@ declare global {
   }
 
   function init() {
-    toMain({messageType: 'init'});
-
     // Make all urls open in external browser
     document.body.addEventListener('click', event => {
       if ((event.target as HTMLElement).tagName.toLowerCase() === 'a') {

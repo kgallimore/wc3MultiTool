@@ -42,7 +42,7 @@ export interface GameState {
   selfBattleTag: string;
   inGame: boolean;
   action: GameStateActions;
-  openLobbyParams: OpenLobbyParams;
+  openLobbyParams: OpenLobbyParams | undefined;
   connected: boolean;
   gameVersion: string;
 }

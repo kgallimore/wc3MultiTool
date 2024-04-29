@@ -1,4 +1,4 @@
-import {resolve, sep} from 'path';
+// import {resolve, sep} from 'path';
 
 export default {
   '*.{js,mjs,cjs,ts,mts,cts,svelte}': 'eslint --cache --fix',

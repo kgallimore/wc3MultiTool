@@ -144,6 +144,7 @@ app.on('second-instance', async (_event, args) => {
     protocolHandler.processURL(args[2]);
   } else {
     browserWindow = await restoreOrCreateWindow();
+    await commandClient({messageType: 'init'});
   }
 });
 
@@ -173,6 +174,7 @@ app.on('window-all-closed', () => {
  */
 app.on('activate', async () => {
   browserWindow = await restoreOrCreateWindow();
+  await commandClient({messageType: 'init'});
 });
 
 /**
@@ -233,6 +235,7 @@ app
       setTimeout(warControl.openWarcraft, 3000);
     }
     browserWindow = await restoreOrCreateWindow();
+    await commandClient({messageType: 'init'});
   })
   .catch(e => console.error('Failed create window:', e));
 
@@ -338,6 +341,8 @@ function playSound(file: string) {
 function sendWindow(data: WindowReceive) {
   if (browserWindow?.webContents) {
     browserWindow.webContents.send('fromMain', data);
+  }else{
+    log.warn('No browserWindow to send data to');
   }
 }
 
@@ -389,7 +394,6 @@ async function commandClient(args: WindowSend) {
       }
       break;
     case 'init':
-      console.log('Init!!!!!');
       sendWindow({
         init: {
           settings: settings.values,
