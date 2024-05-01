@@ -397,7 +397,7 @@ class AppSettingsContainer extends Global {
   }
 
   async loadSettings(){
-    const dbSettings = await drizzleClient.query.settings.findMany() as {id: number, category: keyof AppSettingsDataStructure, key: SettingsKeys, value: string, type: AllowedSettingsTypes}[];
+    const dbSettings = await drizzleClient.query.settings.findMany() as {id: number, category: keyof AppSettingsDataStructure, key: SettingsKeys, value: string}[];
     const flattenedCurrentSettings = (Object.entries(this._values)as Entries<typeof this._values>).map(([category, settings]) => {
       return (Object.entries(settings) as Entries<typeof settings>).map(([key, value]) => {
         return {category, key, dataPoint: value};
@@ -405,8 +405,8 @@ class AppSettingsContainer extends Global {
     }).flat();
 
     for(const dbSetting of dbSettings){
-      // @ts-expect-error Not sure how to type yet
-      this._values[dbSetting.category][dbSetting.key].value = this.stringToAppSettingsType(dbSetting.value, dbSetting.type);
+      // @ts-expect-error Not sure how to type this
+      this._values[dbSetting.category][dbSetting.key].value = JSON.parse(dbSetting.value);
     }
     
     // Catch any missed settings updates during transition
@@ -414,60 +414,20 @@ class AppSettingsContainer extends Global {
       const matchedSettings = dbSettings.filter(setting => setting.category === currentSetting.category && setting.key === currentSetting.key);
       let valueType = typeof (currentSetting.dataPoint.value ?? currentSetting.dataPoint.defaultValue) as AllowedSettingsTypes;
       if(valueType === 'object' && Array.isArray(currentSetting.dataPoint.value)) valueType = 'array';
-      const updateValue = valueType === 'object' ? JSON.stringify(currentSetting.dataPoint.value ?? currentSetting.dataPoint.defaultValue) : (currentSetting.dataPoint.value ?? currentSetting.dataPoint.defaultValue).toString();
+      const updateValue = JSON.stringify(currentSetting.dataPoint.value ?? currentSetting.dataPoint.defaultValue);
+      // eslint-disable-next-line drizzle/enforce-delete-with-where
+      store.delete(currentSetting.category + '.' + currentSetting.key);
       if(matchedSettings.length === 0){
         try{
-          await drizzleClient.insert(settingsTable).values({category: currentSetting.category, key: currentSetting.key, value: updateValue, sensitive: currentSetting.dataPoint.sensitive ?? false, type: valueType});
+          await drizzleClient.insert(settingsTable).values({category: currentSetting.category, key: currentSetting.key, value: updateValue, sensitive: currentSetting.dataPoint.sensitive ?? false});
         }catch(e){
           console.error('Error inserting setting:', e);
         }
       }else if(matchedSettings[0].value !== currentSetting.dataPoint.value?.toString()){
-        await drizzleClient.update(settingsTable).set({value: updateValue?.toString(), type: valueType}).where(eq(settingsTable.id, matchedSettings[0].id));
+        await drizzleClient.update(settingsTable).set({value: updateValue}).where(eq(settingsTable.id, matchedSettings[0].id));
       }
     }
 
-  }
-
-  private stringToAppSettingsTypeGuess(value: string, allowedTypes: Array<AllowedSettingsTypesTypes>): AllowedSettingsTypesTypes {
-    let returnValue: AllowedSettingsTypesTypes = value;
-    if (allowedTypes.includes('number') && parseInt(value).toString() === value){
-      return parseInt(value.toString());
-    }
-    else if(allowedTypes.includes('boolean') && ['true', 'false'].includes(value.toLowerCase())) returnValue = value.toLowerCase() === 'true';
-    else if(allowedTypes.includes('bigint') && typeof value == 'string') returnValue = BigInt(value);
-    else if(allowedTypes.includes('object') || allowedTypes.includes('array')){
-      try{
-        returnValue = JSON.parse(value);
-        return returnValue;
-      }catch(e){
-        // Do nothing
-      }
-    }
-    return returnValue;
-  }
-
-  private stringToAppSettingsType(value: string, targetType: AllowedSettingsTypesTypes): AllowedSettingsTypesTypes{
-    switch(targetType){
-      case 'number':
-        return parseInt(value.toString());
-      case 'boolean':
-        return value.toLowerCase() === 'true';
-      case 'bigint':
-        return BigInt(value);
-      case 'object':
-      case 'array':
-        try{
-          return JSON.parse(value);
-        }catch(e){
-          this.error('Error parsing JSON:', e);
-          if(targetType === 'array') return [];
-          else if(targetType === 'object') return {};
-          // Do nothing
-          return value;
-        }
-      default:
-        return value;
-      }
   }
 
   private async setSetting<AppSettingsCategory extends keyof AppSettingsDataStructure>(
@@ -476,7 +436,7 @@ class AppSettingsContainer extends Global {
     value: AllowedSettingsTypesTypes,
   ) {
     try {
-      const stringValue = typeof value == 'object' ? JSON.stringify(value) : value.toString();
+      const stringValue = JSON.stringify(value);
       this.info('Updating setting: ' + category, key, stringValue);
       await drizzleClient
         .update(settingsTable)

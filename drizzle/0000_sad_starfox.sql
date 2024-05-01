@@ -33,7 +33,6 @@ CREATE TABLE `Logs` (
 --> statement-breakpoint
 CREATE TABLE `Settings` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
-	`type` text NOT NULL,
 	`category` text NOT NULL,
 	`key` text NOT NULL,
 	`value` text NOT NULL,

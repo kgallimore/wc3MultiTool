@@ -65,7 +65,6 @@ export const logs = sqliteTable('Logs', {
 
 export const settings = sqliteTable('Settings', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
-	type: text('type').notNull(),
 	category: text('category').notNull(),
 	key: text('key').notNull(),
 	value: text('value').notNull(),
