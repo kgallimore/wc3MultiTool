@@ -1,7 +1,7 @@
 import {ModuleBase} from '../moduleBase';
 
 import type {SettingsUpdates} from './../globals/settings';
-
+// @ts-expect-error No typing for required socket.io vers
 import io from 'socket.io-client';
 
 export interface TipData {

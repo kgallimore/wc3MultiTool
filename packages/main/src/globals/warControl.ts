@@ -13,14 +13,13 @@ import {
   getActiveWindow,
   mouse,
   centerOf,
-  imageResource,
   Point,
   sleep,
   getWindows,
 } from '@nut-tree/nut-js';
 
 import {join} from 'path';
-import '@nut-tree/nl-matcher';
+import {windowElementDescribedBy} from '@nut-tree/element-inspector/win';
 import {clipboard} from 'electron';
 import {promisify} from 'util';
 import * as child from 'child_process';
@@ -32,7 +31,6 @@ class WarControl extends Global {
   inFocus: boolean = false;
   isOpen: boolean = false;
   windowRegion: Region | null = null;
-  warInstallLoc: string;
   isPackaged: boolean = false;
   appPath: string;
   sendingInGameChat: {active: boolean; queue: string[]} = {active: false, queue: []};
@@ -43,7 +41,6 @@ class WarControl extends Global {
     screen.height().then(height => {
       this.setResourceDir(height);
     });
-    this.warInstallLoc = settings.values.client.warInstallLoc;
     this.appPath = app.getAppPath();
     this.isPackaged = app.isPackaged;
   }
@@ -74,14 +71,18 @@ class WarControl extends Global {
       if (settings.values.client.alternateLaunch) {
         //shell.openPath(warInstallLoc + "\\_retail_\\x86_64\\Warcraft III.exe -launch");
         if (callCount === 0 || callCount % 15 === 0) {
-          exec(`"${this.warInstallLoc}\\_retail_\\x86_64\\Warcraft III.exe" -launch -uid w3`);
+          exec(
+            `"${settings.values.client.warInstallLoc}\\_retail_\\x86_64\\Warcraft III.exe" -launch -uid w3`,
+          );
         }
         await sleep(1000);
         return await this.openWarcraft(region, callCount + 1, reopen);
       }
       const battleNetOpen = await this.checkProcess('Battle.net.exe');
       if (battleNetOpen !== true) {
-        shell.openPath(this.warInstallLoc + '\\_retail_\\x86_64\\Warcraft III.exe');
+        shell.openPath(
+          settings.values.client.warInstallLoc + '\\_retail_\\x86_64\\Warcraft III.exe',
+        );
         await sleep(1000);
         return await this.openWarcraft(region, callCount + 1, reopen);
       } else if (callCount > 60 && !reopen) {
@@ -108,7 +109,9 @@ class WarControl extends Global {
       }
       if (!battleNetWindow) {
         if (callCount % 2 == 0) {
-          shell.openPath(this.warInstallLoc + '\\_retail_\\x86_64\\Warcraft III.exe');
+          shell.openPath(
+            settings.values.client.warInstallLoc + '\\_retail_\\x86_64\\Warcraft III.exe',
+          );
         }
         await sleep(3000);
         return await this.openWarcraft(region, callCount + 3, reopen);
@@ -116,30 +119,14 @@ class WarControl extends Global {
       await battleNetWindow.focus();
       await battleNetWindow.move({x: 0, y: 0});
       await sleep(100);
-      const activeWindow = await getActiveWindow();
-      const activeWindowTitle = await activeWindow.title;
-      if (activeWindowTitle !== 'Battle.net') {
-        this.verbose('Something went wrong, trying again. Active window: ' + activeWindowTitle);
-        await sleep(500);
-        return await this.openWarcraft(region, callCount + 1, reopen);
-      }
-      const searchRegion = await activeWindow.region;
-      searchRegion.width = searchRegion.width * 0.35;
-      searchRegion.top = searchRegion.top + searchRegion.height * 0.7;
-      searchRegion.height = searchRegion.height * 0.2;
       const targetRegion = {asia: 1, eu: 2, us: 3, usw: 3, '': 0}[region];
       try {
         if (targetRegion > 0 && gameState.values.selfRegion !== region) {
           this.info(`Changing region to ${region}`);
-          const changeRegionPosition = await screen.waitFor(
-            imageResource('changeRegion.png'),
-            30000,
-            100,
-            {
-              searchRegion,
-              confidence: 0.65,
-            },
-          );
+          const changeRegionPosition = (await battleNetWindow.find(windowElementDescribedBy({id: 'play-btn'})))?.region;
+          if(!changeRegionPosition) return false;
+          changeRegionPosition.left += changeRegionPosition.width * 0.9;
+          changeRegionPosition.width = changeRegionPosition.width * 0.1;
           const changeRegionPositionCenter = await centerOf(changeRegionPosition);
           await mouse.setPosition(changeRegionPositionCenter);
           await mouse.leftClick();
@@ -153,14 +140,11 @@ class WarControl extends Global {
           await mouse.leftClick();
           this.info(`Changed region to ${region}`);
         }
-        const playRegionCenter = await centerOf(
-          screen.waitFor(imageResource('play.png'), 30000, 100, {
-            searchRegion,
-            confidence: 0.87,
-          }),
-        );
+        const playButtonElement = await battleNetWindow.find(windowElementDescribedBy({id: 'play-btn-main'}));
+        if(!playButtonElement?.region) return false;
+        const playRegionCenter = await centerOf(playButtonElement.region);
         await mouse.setPosition(playRegionCenter);
-        await mouse.leftClick();
+        await mouse.doubleClick(0);
         this.info('Found and clicked play');
         for (let i = 0; i < 20; i++) {
           if (await this.isWarcraftOpen()) {
@@ -334,7 +318,7 @@ class WarControl extends Global {
       if (!focused && this.inFocus) {
         this.notification(
           'Warcraft is not in focus',
-          'An action was attempted but Warcraft was not inf focus',
+          'An action was attempted but Warcraft was not in focus',
         );
       }
       this.inFocus = focused;

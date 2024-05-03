@@ -8,22 +8,22 @@ class ProtocolHandler extends ModuleBase {
   }
   protected onGameSocketEvent(events: GameSocketEvents): void {
     if (events.connected) {
-      if (this.gameState.values.openLobbyParams.lobbyName) {
+      if (this.gameState.values.openLobbyParams?.lobbyName) {
         this.openParamsJoin();
       }
     }
     if (events.SetGlueScreen) {
       if (['CUSTOM_LOBBIES', 'MAIN_MENU'].includes(events.SetGlueScreen.screen)) {
         this.info('Checking to see if we should auto host or join a lobby link.');
-        if (this.gameState.values.openLobbyParams.lobbyName) {
+        if (this.gameState.values.openLobbyParams?.lobbyName) {
           setTimeout(protocolHandler.openParamsJoin, 250);
         }
       }
     }
     if (
       events.GameList &&
-      (this.gameState.values.openLobbyParams.lobbyName ||
-        this.gameState.values.openLobbyParams.gameId)
+      (this.gameState.values.openLobbyParams?.lobbyName ||
+        this.gameState.values.openLobbyParams?.gameId)
     ) {
       this.info('GameList received, trying to find lobby.');
       this.handleGameList(events.GameList);
@@ -76,9 +76,9 @@ class ProtocolHandler extends ModuleBase {
   async openParamsJoin() {
     // TODO: make this more robust
     if (
-      this.gameState.values.openLobbyParams.lobbyName ||
-      (this.gameState.values.openLobbyParams.gameId &&
-        this.gameState.values.openLobbyParams.mapFile)
+      this.gameState.values.openLobbyParams?.lobbyName ||
+      (this.gameState.values.openLobbyParams?.gameId &&
+        this.gameState.values.openLobbyParams?.mapFile)
     ) {
       this.info('Setting autoHost to off to join a lobby link.');
       this.settings.updateSettings({ autoHost: { type: 'off' } });
@@ -136,7 +136,7 @@ class ProtocolHandler extends ModuleBase {
     if (List.games && List.games.length > 0) {
       List.games.some((game) => {
         if (
-          this.gameState.values.openLobbyParams.lobbyName &&
+          this.gameState.values.openLobbyParams?.lobbyName &&
           game.name === this.gameState.values.openLobbyParams.lobbyName
         ) {
           this.info('Found game by name');
@@ -149,7 +149,7 @@ class ProtocolHandler extends ModuleBase {
           });
           return true;
         } else if (
-          this.gameState.values.openLobbyParams.gameId &&
+          this.gameState.values.openLobbyParams?.gameId &&
           game.id === this.gameState.values.openLobbyParams.gameId
         ) {
           this.info('Found game by Id');

@@ -276,7 +276,7 @@ class AutoHost extends ModuleBase {
           }
         }
       } else if (['CUSTOM_LOBBIES', 'MAIN_MENU', 'SCORE_SCREEN'].includes(updates.menuState)) {
-        if (this.gameState.values.openLobbyParams.lobbyName) {
+        if (this.gameState.values.openLobbyParams?.lobbyName) {
           this.verbose('Skipping autohost since a lobby is being joined.');
         } else {
           setTimeout(this.autoHostGame.bind(this), 1000);

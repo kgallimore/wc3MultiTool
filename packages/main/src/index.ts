@@ -5,7 +5,9 @@ import pkg from 'electron-updater';
 const {autoUpdater} = pkg;
 import log from 'electron-log/main';
 import {screen, keyboard} from '@nut-tree/nut-js';
-// require('@nut-tree/nl-matcher');
+import '@nut-tree/nl-matcher';
+import '@nut-tree/element-inspector';
+import {useBolt} from '@nut-tree/bolt';
 // @ts-expect-error Really old package
 import audioLoader from 'audio-loader';
 import playAudio from 'audio-play';
@@ -62,6 +64,8 @@ autoUpdater.logger = log;
 log.initialize();
 log.errorHandler.startCatching();
 
+await settings.loadSettings();
+
 screen.config.confidence = 0.8;
 keyboard.config.autoDelayMs = 25;
 
@@ -70,8 +74,8 @@ if (!app.isPackaged) {
   screen.config.highlightDurationMs = 1500;
   screen.config.highlightOpacity = 0.75;
 }
+useBolt();
 
-await settings.loadSettings();
 if (app.getVersion().includes('beta')) {
   settings.updateSettings({client: {releaseChannel: 'beta'}});
 } else if (app.getVersion().includes('alpha')) {
