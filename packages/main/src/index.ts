@@ -58,13 +58,13 @@ import type { InferSelectModel } from 'drizzle-orm';
 
 let browserWindow: BrowserWindow;
 
-
-autoUpdater.channel = settings.values.client.releaseChannel;
-autoUpdater.logger = log;
 log.initialize();
 log.errorHandler.startCatching();
 
 await settings.loadSettings();
+
+autoUpdater.channel = settings.values.client.releaseChannel;
+autoUpdater.logger = log;
 
 screen.config.confidence = 0.8;
 keyboard.config.autoDelayMs = 25;

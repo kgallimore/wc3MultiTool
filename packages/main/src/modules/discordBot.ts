@@ -2,7 +2,7 @@ import {ModuleBase} from '../moduleBase';
 
 import type {SettingsUpdates} from '../globals/settings';
 
-import Discord, {Collection} from 'discord.js';
+import Discord, {Collection, type SlashCommandSubcommandsOnlyBuilder, type SlashCommandBuilder} from 'discord.js';
 import {EmbedBuilder, InteractionType, IntentsBitField} from 'discord.js';
 import {Routes} from 'discord-api-types/v10';
 import {REST} from '@discordjs/rest';
@@ -13,13 +13,22 @@ import {DeColorName, type AdminCommands} from '../utility';
 import {app} from 'electron';
 import type {GameState} from '../globals/gameState';
 import type {GameSocketEvents} from '../globals/gameSocket';
-import {readdir} from 'fs';
-import {join} from 'path';
+import {DiscordCommands} from './discordCommands';
 
 import {administration} from './administration';
 
 export type ChatChannelMatch = 'chat' | 'announce' | 'admin' | '';
-
+export interface DiscordCommand {
+  data: SlashCommandBuilder | SlashCommandSubcommandsOnlyBuilder;
+  execute: (
+    interaction: Discord.ChatInputCommandInteraction<'cached'>,
+    channel: ChatChannelMatch,
+  ) => Promise<void>;
+  autoComplete?: (
+    interaction: Discord.AutocompleteInteraction<'cached'>,
+    channel: ChatChannelMatch,
+  ) => Promise<void>;
+}
 class DiscordBot extends ModuleBase {
   client: Discord.Client | null = null;
   announceChannel: Discord.TextChannel | null = null;
@@ -44,16 +53,7 @@ class DiscordBot extends ModuleBase {
   };
   commandInteractions: Discord.Collection<
     string,
-    {
-      execute: (
-        interaction: Discord.ChatInputCommandInteraction<'cached'>,
-        channel: ChatChannelMatch,
-      ) => Promise<void>;
-      autoComplete?: (
-        interaction: Discord.AutocompleteInteraction<'cached'>,
-        channel: ChatChannelMatch,
-      ) => Promise<void>;
-    }
+    DiscordCommand
   > = new Collection();
   commands: Discord.RESTPostAPIApplicationCommandsJSONBody[] = [];
 
@@ -68,27 +68,17 @@ class DiscordBot extends ModuleBase {
         'errors',
       ],
     });
-    const directory = join(app.getAppPath(), 'packages/main/src/modules/discordCommands');
-    readdir(directory, (err, files) => {
-      if (err) {
-        this.error(err);
-        return;
-      }
-      if (files) {
-        files = files.filter(file => file.endsWith('.js'));
-        for (const file of files) {
-          const command = require(join(directory, file));
-          this.commandInteractions.set(command.data.name, command);
-          this.commands.push(command.data.toJSON());
-        }
-        this.initialize();
-      }
-    });
+    for(const [commandName, command] of Object.entries(DiscordCommands)){
+      this.commandInteractions.set(commandName,command);
+      this.commands.push(command.data.toJSON());
+    }
+    this.initialize();
+
   }
 
   protected onSettingsUpdate(updates: SettingsUpdates) {
     if (updates.discord) {
-      if (updates.discord._token !== undefined) {
+      if (updates.discord._token !== undefined || updates.discord.enabled !== undefined) {
         this.initialize();
       }
       if (
@@ -152,6 +142,7 @@ class DiscordBot extends ModuleBase {
   }
 
   private initialize() {
+    console.log('Initializing Discord', this.settings.values.discord.enabled, this.settings.values.discord._token);
     this.client?.destroy();
     this.client = null;
     if (!this.settings.values.discord.enabled) {
@@ -160,6 +151,7 @@ class DiscordBot extends ModuleBase {
     if (!this.settings.values.discord._token) {
       return;
     }
+    console.log('Discord Initialized');
     this.client = new Discord.Client({
       intents: [
         IntentsBitField.Flags.GuildMessages,
@@ -217,6 +209,7 @@ class DiscordBot extends ModuleBase {
         }
       }
     });
+    this.client.on('warn',(err)=>  this.warn(err));
 
     this.client.on('messageCreate', async msg => {
       if (

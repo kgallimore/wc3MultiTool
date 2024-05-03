@@ -5,6 +5,7 @@ dist
 thumbs.db
 
 .eslintcache
+.npmrc
 .browserslistrc
 .electron-vendors.cache.json
 

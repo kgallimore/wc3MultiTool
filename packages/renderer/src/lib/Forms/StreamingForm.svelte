@@ -52,9 +52,9 @@
           <input
             type="password"
             class="form-control"
-            id="seToken"
+            id="_seToken"
             placeholder="Stream Elements JWT Token"
-            value={$appSettings.streaming.seToken}
+            value={$appSettings.streaming._seToken}
             on:change={onInputChange}
           />
         </div>

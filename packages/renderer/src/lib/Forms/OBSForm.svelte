@@ -192,13 +192,13 @@
           </div>
           <div class="row">
             <div class="col">
-              <label for="obsPassword">OBS Password(Optional)</label>
+              <label for="obs_Password">OBS Password(Optional)</label>
               <input
                 type="password"
                 class="form-control"
-                id="obsPassword"
+                id="obs_Password"
                 placeholder="Password"
-                value={$appSettings.obs.token}
+                value={$appSettings.obs._token}
                 on:change={onInputChange}
               />
             </div>

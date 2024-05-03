@@ -117,8 +117,8 @@
               <SettingsTextInput
                 frontFacingName="Database Pass"
                 placeholder="Password"
-                key="dbPassword"
-                value={$appSettings.elo.dbPassword}
+                key="_dbPassword"
+                value={$appSettings.elo._dbPassword}
                 on:change={onInputChange}
               />
             </div>
@@ -307,13 +307,13 @@
               {#if $appSettings.elo.handleReplays}
                 <div class="row">
                   <div class="col">
-                    <label for="eloPrivateKey">Private Key</label>
+                    <label for="elo_PrivateKey">Private Key</label>
                     <input
                       type="text"
                       class="form-control"
-                      id="eloPrivateKey"
+                      id="elo_PrivateKey"
                       placeholder="Optional"
-                      value={$appSettings.elo.privateKey}
+                      value={$appSettings.elo._privateKey}
                       on:change={onInputChange}
                     />
                   </div>

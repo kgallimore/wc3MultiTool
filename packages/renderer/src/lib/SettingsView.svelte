@@ -24,11 +24,18 @@
     } else {
       val = e.currentTarget.value;
     }
-    let keyName: string;
+    let keyName: string = e.currentTarget.id;
     if (e.currentTarget.id.indexOf(e.currentTarget.form!.name) === 0) {
+      var shift = 0;
+      if(keyName.charAt(e.currentTarget.form!.name.length) === "_"){
+        shift++;
+      }
       keyName =
-        e.currentTarget.id.charAt(e.currentTarget.form!.name.length).toLowerCase() +
-        e.currentTarget.id.slice(e.currentTarget.form!.name.length + 1);
+      keyName.charAt(e.currentTarget.form!.name.length + shift).toLowerCase() +
+      keyName.slice(e.currentTarget.form!.name.length + 1 + shift);
+      if(shift == 1){
+        keyName = "_" + keyName;
+      }
     } else {
       keyName = e.currentTarget.id;
     }

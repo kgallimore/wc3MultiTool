@@ -94,7 +94,7 @@
               // @ts-expect-error This exists
               if (!e.target.checked) {
                 updateSettingSingle('client', 'bnetUsername', '');
-                updateSettingSingle('client', 'bnetPassword', '');
+                updateSettingSingle('client', '_bnetPassword', '');
               }
               updateSettingSingle(
                 'client',
@@ -199,13 +199,13 @@
             />
           </div>
           <div class="col">
-            <label for="bnetPassword">Battle.net Password</label>
+            <label for="_bnetPassword">Battle.net Password</label>
             <input
               type="password"
               class="form-control"
-              id="bnetPassword"
+              id="_bnetPassword"
               placeholder="BNet Password"
-              value={$appSettings.client.bnetPassword}
+              value={$appSettings.client._bnetPassword}
               maxlength="35"
               on:change={onInputChange}
             />

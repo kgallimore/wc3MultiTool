@@ -60,13 +60,13 @@
         </div>
         <div class="row">
           <div class="col">
-            <label for="discordToken">Token</label>
+            <label for="discord_Token">Token</label>
             <input
               type="password"
               class="form-control"
-              id="discordToken"
+              id="discord_Token"
               placeholder="Token"
-              value={$appSettings.discord.token}
+              value={$appSettings.discord._token}
               on:change={onInputChange}
             />
           </div>

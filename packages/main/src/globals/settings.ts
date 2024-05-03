@@ -92,7 +92,7 @@ export const AppSettingsData: AppSettingsDataStructure = {
     regionChangeOpenVPNConfigEU: {defaultValue: '', allowedTypes: ['string']},
     regionChangeTimeNA: {defaultValue: '01:00', allowedTypes: ['string']},
     regionChangeOpenVPNConfigNA: {defaultValue: '', allowedTypes: ['string']},
-    whitelist: {defaultValue: true, allowedTypes: ['boolean']},
+    whitelist: {defaultValue: false, allowedTypes: ['boolean']},
     minPlayers: {
       defaultValue: 0,
       allowedTypes: ['number'],
@@ -470,10 +470,7 @@ class AppSettingsContainer extends Global {
         SettingsKeys,
         AppSettingsDataPoint,
       ][]) {
-        const revealValue =
-          (dataPoint.sensitive || settingKey.startsWith('_'))
-            ? '*****'
-            : (dataPoint.value != undefined
+        const revealValue = (dataPoint.value != undefined
             ? dataPoint.value
             : dataPoint.defaultValue);
         // @ts-expect-error Still need to figure out how to type this
