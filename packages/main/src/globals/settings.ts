@@ -393,11 +393,7 @@ class AppSettingsContainer extends Global {
         }
       }
     }
-
-  }
-
-  async loadSettings(){
-    const dbSettings = await drizzleClient.query.settings.findMany() as {id: number, category: keyof AppSettingsDataStructure, key: SettingsKeys, value: string}[];
+    const dbSettings = drizzleClient.query.settings.findMany().sync() as {id: number, category: keyof AppSettingsDataStructure, key: SettingsKeys, value: string}[];
     const flattenedCurrentSettings = (Object.entries(this._values)as Entries<typeof this._values>).map(([category, settings]) => {
       return (Object.entries(settings) as Entries<typeof settings>).map(([key, value]) => {
         return {category, key, dataPoint: value};
@@ -419,15 +415,14 @@ class AppSettingsContainer extends Global {
       store.delete(currentSetting.category + '.' + currentSetting.key);
       if(matchedSettings.length === 0){
         try{
-          await drizzleClient.insert(settingsTable).values({category: currentSetting.category, key: currentSetting.key, value: updateValue, sensitive: currentSetting.dataPoint.sensitive ?? false});
+          drizzleClient.insert(settingsTable).values({category: currentSetting.category, key: currentSetting.key, value: updateValue, sensitive: currentSetting.dataPoint.sensitive ?? false}).run();
         }catch(e){
           console.error('Error inserting setting:', e);
         }
       }else if(matchedSettings[0].value !== currentSetting.dataPoint.value?.toString()){
-        await drizzleClient.update(settingsTable).set({value: updateValue}).where(eq(settingsTable.id, matchedSettings[0].id));
+        drizzleClient.update(settingsTable).set({value: updateValue}).where(eq(settingsTable.id, matchedSettings[0].id)).run();
       }
     }
-
   }
 
   private async setSetting<AppSettingsCategory extends keyof AppSettingsDataStructure>(
