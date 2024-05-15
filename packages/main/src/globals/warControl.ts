@@ -119,7 +119,7 @@ class WarControl extends Global {
       await battleNetWindow.focus();
       await battleNetWindow.move({x: 0, y: 0});
       await sleep(100);
-      const targetRegion = {asia: 1, eu: 2, us: 3, usw: 3, '': 0}[region];
+      const targetRegion = {asia: 1, eu: 2, us: 3, usw: 3, kr: 1, '': 0}[region];
       try {
         if (targetRegion > 0 && gameState.values.selfRegion !== region) {
           this.info(`Changing region to ${region}`);

@@ -1,6 +1,6 @@
 import {Global} from './../globalBase';
 
-import type {Regions} from 'wc3mt-lobby-container';
+import {type Regions, RegionEnum} from 'wc3mt-lobby-container';
 import {BattleTagRegex} from 'wc3mt-lobby-container';
 
 import type {PickByValue} from './../utility';
@@ -137,7 +137,7 @@ class GameStateContainer extends Global {
         } else if (
           key === 'selfRegion' &&
           typeof value === 'string' &&
-          ['us', 'eu', 'usw', ''].includes(value)
+          [...RegionEnum, ''].includes(value)
         ) {
           this._values[key] = value as Regions;
         } else if (key === 'menuState' && typeof value === 'string') {
