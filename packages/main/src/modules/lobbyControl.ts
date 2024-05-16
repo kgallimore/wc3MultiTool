@@ -389,8 +389,7 @@ export class LobbyControl extends Module {
               swaps.swaps.includes(player),
             );
             if (expectedSwapsCheck !== -1) {
-              this.expectedSwaps.splice(expectedSwapsCheck, 1);
-              this.info(`Expected swap removed for ${player}`);
+              this.expectedSwaps = [];
             }
           } else if (event.playersSwapped) {
             const players = event.playersSwapped.players.sort();
