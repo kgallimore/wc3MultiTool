@@ -179,57 +179,56 @@ export class LobbyControl extends Module {
     setInterval(() => this.fetchEloMapNameLookups(), 1000 * 60 * 60 * 24);
   }
 
-  fetchEloMapNameLookups(): void {
+  async fetchEloMapNameLookups(): Promise<void> {
     if (this.settings.values.elo.eloMapNameLookupURL) {
       this.verbose(
         'Fetching elo map name lookups from: ' + this.settings.values.elo.eloMapNameLookupURL,
       );
-      fetch(this.settings.values.elo.eloMapNameLookupURL, {
+      const res = await fetch(this.settings.values.elo.eloMapNameLookupURL, {
         method: 'GET',
         cache: 'no-store',
-      }).then(res => {
-        if (res.status !== 200) {
-          this.error(
-            'Could not fetch elo map name lookups from: ' +
-              this.settings.values.elo.eloMapNameLookupURL +
-              ' Error: ' +
-              res.statusText,
-          );
+      });
+      if (res.status !== 200) {
+        this.error(
+          'Could not fetch elo map name lookups from: ' +
+            this.settings.values.elo.eloMapNameLookupURL +
+            ' Error: ' +
+            res.statusText,
+        );
+        return;
+      }
+      (res.json() as Promise<EloMapNameLookups>).then(data => {
+        const oldEntryKeys = Object.keys(this.eloMapNameLookups);
+        const newEntries = Object.entries(data);
+        if (oldEntryKeys.length !== newEntries.length) {
+          this.updateEloMapNameLookups(data, 'New length');
           return;
         }
-        (res.json() as Promise<EloMapNameLookups>).then(data => {
-          const oldEntryKeys = Object.keys(this.eloMapNameLookups);
-          const newEntries = Object.entries(data);
-          if (oldEntryKeys.length !== newEntries.length) {
-            this.updateEloMapNameLookups(data, 'New length');
+        for (const [key, value] of newEntries) {
+          if (!this.eloMapNameLookups[key]) {
+            this.updateEloMapNameLookups(data, 'New map: ' + key);
             return;
           }
-          for (const [key, value] of newEntries) {
-            if (!this.eloMapNameLookups[key]) {
-              this.updateEloMapNameLookups(data, 'New map: ' + key);
-              return;
-            }
-            for (const [key2, value2] of Object.entries(value)) {
-              if (typeof this.eloMapNameLookups[key] !== 'object') {
-                if (this.eloMapNameLookups[key][key2 as keyof EloMapNameData] !== value2) {
-                  this.updateEloMapNameLookups(data, `New value: ${key} ${key2} ${value2}`);
-                  return;
-                }
-              } else {
-                if (
-                  JSON.stringify(this.eloMapNameLookups[key][key2 as keyof EloMapNameData]) !==
-                  JSON.stringify(value2)
-                ) {
-                  this.updateEloMapNameLookups(
-                    data,
-                    `New object value: ${key} ${key2} ${JSON.stringify(value2)}`,
-                  );
-                  return;
-                }
+          for (const [key2, value2] of Object.entries(value)) {
+            if (typeof this.eloMapNameLookups[key] !== 'object') {
+              if (this.eloMapNameLookups[key][key2 as keyof EloMapNameData] !== value2) {
+                this.updateEloMapNameLookups(data, `New value: ${key} ${key2} ${value2}`);
+                return;
+              }
+            } else {
+              if (
+                JSON.stringify(this.eloMapNameLookups[key][key2 as keyof EloMapNameData]) !==
+                JSON.stringify(value2)
+              ) {
+                this.updateEloMapNameLookups(
+                  data,
+                  `New object value: ${key} ${key2} ${JSON.stringify(value2)}`,
+                );
+                return;
               }
             }
           }
-        });
+        }
       });
     }
   }
@@ -327,8 +326,8 @@ export class LobbyControl extends Module {
         Object.values(payload.players).find(slot => slot.isSelf) !== undefined &&
         payload.playerHost
       ) {
+        this.startTimer = null;
         try {
-          this.startTimer = null;
           this.microLobby = new MicroLobby({
             region,
             payload,
@@ -363,7 +362,7 @@ export class LobbyControl extends Module {
           }
           this.emitLobbyUpdate({newLobby: this.microLobby.exportMin()});
         } catch (e) {
-          this.error(e);
+          this.error('There was an error creating the microlobby', e);
         }
       }
     } else {

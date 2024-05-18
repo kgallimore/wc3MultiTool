@@ -299,12 +299,16 @@ export type AdminCommands =
   | 'unperm'
   | 'autohost'
   | 'autostart'
-  | 'balance';
+  | 'balance'
+  | 'help';
+
+  export type AllCommands = AdminCommands | 'help';
+  export type AllRoles = AdminRoles | null;
 
 export const commands: Record<
-  AdminCommands,
+AllCommands,
   {
-    minPermissions: AdminRoles;
+    minPermissions: AllRoles;
     requiresHost: boolean;
     requiresLobby: boolean;
     description: string;
@@ -464,6 +468,12 @@ export const commands: Record<
     requiresLobby: true,
     description: 'Swaps two players',
     arguments: '(name|slotNumber) (name|slotNumber)',
+  },
+  help: {
+    minPermissions: null,
+    requiresHost: false,
+    requiresLobby: false,
+    description: 'Gets a list of all of your available commands',
   },
 };
 export const commandArray = Object.entries(commands);

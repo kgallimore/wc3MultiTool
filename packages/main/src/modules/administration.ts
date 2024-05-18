@@ -1,17 +1,17 @@
 import {ModuleBase} from '../moduleBase';
 
-import type { InferSelectModel } from 'drizzle-orm';
-import { eq, sql, and, isNull } from 'drizzle-orm';
-import { drizzleClient } from '../drizzle';
+import type {InferSelectModel} from 'drizzle-orm';
+import {eq, sql, and, isNull} from 'drizzle-orm';
+import {drizzleClient} from '../drizzle';
 
 import type {MicroLobby, PlayerPayload, Regions, SlotNumbers} from 'wc3mt-lobby-container';
 import type {LobbyUpdatesExtended} from './lobbyControl';
 
 import type {GameSocketEvents, AvailableHandicaps} from './../globals/gameSocket';
-import type {AdminCommands, AdminRoles} from './../utility';
+import type {AdminCommands, AdminRoles, AllRoles} from './../utility';
 import {isInt, ensureInt, commands, commandArray, hierarchy} from './../utility';
 import type {AutoHostSettings} from './../globals/settings';
-import { banList, userList, whiteList, adminList } from '../schema';
+import {banList, userList, whiteList, adminList} from '../schema';
 
 export type FetchWhiteBanListSortOptions = 'id' | 'username' | 'admin' | 'region' | 'reason';
 
@@ -31,62 +31,61 @@ class Administration extends ModuleBase {
   protected async onGameSocketEvent(events: GameSocketEvents): Promise<void> {
     if (events.processedChat) {
       const sender = events.processedChat.sender;
-      let firstArg = events.processedChat.content.split(' ')[0];
+      const firstArg = events.processedChat.content.split(' ')[0];
       if (firstArg.match(/^\?/)) {
-        firstArg = firstArg.slice(1).toLowerCase();
-        if (firstArg in commands) {
-          const command = firstArg as AdminCommands;
-          if (command.match(/^(help)|(commands)/i)) {
-            if (this.lobby.microLobby?.lobbyStatic.isHost) {
-              if (this.lobby.microLobby?.statsAvailable) {
-                this.gameSocket.sendChatMessage(
-                  '?stats <?player>: Return back your stats, or target player stats',
-                );
-              }
-              if (
-                ['rapidHost', 'smartHost'].includes(this.settings.values.autoHost.type) &&
-                this.settings.values.autoHost.voteStart
-              ) {
-                this.gameSocket.sendChatMessage('?voteStart: Starts or accepts a vote to start');
-              }
-              if (await this.checkRole(sender, 'moderator')) {
-                commandArray
-                  .filter(([_, details]) => details.minPermissions === 'moderator')
-                  .forEach(([command, details]) => {
-                    this.gameSocket.sendChatMessage(
-                      `?${command}${details.arguments ? ' ' + details.arguments : ''}: ${
-                        details.description
-                      } `,
-                    );
-                  });
-              }
-              if (await this.checkRole(sender, 'admin')) {
-                commandArray
-                  .filter(([_, details]) => details.minPermissions === 'admin')
-                  .forEach(([command, details]) => {
-                    this.gameSocket.sendChatMessage(
-                      `?${command}${details.arguments ? ' ' + details.arguments : ''}: ${
-                        details.description
-                      } `,
-                    );
-                  });
-              }
+        const command = firstArg.slice(1).toLowerCase() as AdminCommands ;
+        if (command.match(/^(help)|(commands)/i)) {
+          if (this.lobby.microLobby?.lobbyStatic.isHost) {
+            if (this.lobby.microLobby?.statsAvailable) {
               this.gameSocket.sendChatMessage(
-                '?help: Shows commands with <required arg> <?optional arg>',
+                '?stats <?player>: Return back your stats, or target player stats',
               );
             }
-          } else {
-            const content = events.processedChat.content.split(' ');
-            const role = await this.getRole(sender);
-            if (role) {
-              const runCom = await this.runCommand(command, role, sender, content.slice(1));
-              if (runCom) {
-                this.gameSocket.sendChatMessage(runCom);
-              }
+            if (
+              ['rapidHost', 'smartHost'].includes(this.settings.values.autoHost.type) &&
+              this.settings.values.autoHost.voteStart
+            ) {
+              this.gameSocket.sendChatMessage('?voteStart: Starts or accepts a vote to start');
+            }
+            if (await this.checkRole(sender, 'moderator')) {
+              commandArray
+                .filter(([_, details]) => details.minPermissions === 'moderator')
+                .forEach(([command, details]) => {
+                  this.gameSocket.sendChatMessage(
+                    `?${command}${details.arguments ? ' ' + details.arguments : ''}: ${
+                      details.description
+                    } `,
+                  );
+                });
+            }
+            if (await this.checkRole(sender, 'admin')) {
+              commandArray
+                .filter(([_, details]) => details.minPermissions === 'admin')
+                .forEach(([command, details]) => {
+                  this.gameSocket.sendChatMessage(
+                    `?${command}${details.arguments ? ' ' + details.arguments : ''}: ${
+                      details.description
+                    } `,
+                  );
+                });
+            }
+            this.gameSocket.sendChatMessage(
+              '?help: Shows commands with <required arg> <?optional arg>',
+            );
+          }
+        } else if (command in commands) {
+          const content = events.processedChat.content.split(' ');
+          const role = await this.getRole(sender);
+          if (role) {
+            const runCom = await this.runCommand(command, role, sender, content.slice(1));
+            if (runCom) {
+              this.gameSocket.sendChatMessage(runCom);
             }
           }
-          return;
+        }else{
+          this.gameSocket.sendChatMessage('Command not found');
         }
+        return;
       }
       this.gameSocket.emitEvent({nonAdminChat: events.processedChat});
     }
@@ -94,7 +93,7 @@ class Administration extends ModuleBase {
 
   public async runCommand(
     command: AdminCommands,
-    role: AdminRoles | null,
+    role: AllRoles,
     user: string,
     args?: string[],
   ): Promise<string | false> {
@@ -504,8 +503,10 @@ class Administration extends ModuleBase {
 
   async clearPlayer(data: PlayerPayload) {
     this.verbose('Checking if player is clear: ' + data.name);
-    const findplayer = (await drizzleClient.query.userList.findFirst({where: (item)=> eq(item.name, data.name)}));
-    if (!findplayer){
+    const findplayer = await drizzleClient.query.userList.findFirst({
+      where: item => eq(item.name, data.name),
+    });
+    if (!findplayer) {
       await drizzleClient.insert(userList).values({name: data.name});
     }
     const isClear = await this.checkPlayer(data.name);
@@ -561,9 +562,10 @@ class Administration extends ModuleBase {
           return {reason: 'Can not ban an admin without removing permissions first.'};
         }
         //const newBan = new BanList({ username: player, admin, region, reason });
-        const findUser = (await drizzleClient.query.banList.findFirst({where: (item)=> eq(item.username, player)}));
-        if (!findUser)
-          await drizzleClient.insert(userList).values({name: player});
+        const findUser = await drizzleClient.query.banList.findFirst({
+          where: item => eq(item.username, player),
+        });
+        if (!findUser) await drizzleClient.insert(userList).values({name: player});
         await drizzleClient.insert(banList).values({username: player, admin, region, reason});
 
         this.info('Banned ' + player + ' by ' + admin + (reason ? ' for ' + reason : ''));
@@ -600,9 +602,10 @@ class Administration extends ModuleBase {
   ): Promise<true | {reason: string}> {
     if ((await this.checkRole(admin, 'moderator')) || bypassCheck) {
       if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
-        const findUser = (await drizzleClient.query.whiteList.findFirst({where: (item)=> eq(item.username, player)}));
-        if (!findUser)
-          await drizzleClient.insert(userList).values({name: player});
+        const findUser = await drizzleClient.query.whiteList.findFirst({
+          where: item => eq(item.username, player),
+        });
+        if (!findUser) await drizzleClient.insert(userList).values({name: player});
         await drizzleClient.insert(whiteList).values({username: player, admin, region, reason});
         this.info('Whitelisted ' + player + ' by ' + admin + (reason ? ' for ' + reason : ''));
         this.sendWindow({
@@ -632,7 +635,10 @@ class Administration extends ModuleBase {
       if (!(await this.checkRole(admin, 'moderator'))) {
         return {reason: 'Missing required permissions'};
       }
-      await drizzleClient.update(whiteList).set({removalDate: sql`(CURRENT_TIMESTAMP)`}).where(eq(whiteList.username, player));
+      await drizzleClient
+        .update(whiteList)
+        .set({removalDate: sql`(CURRENT_TIMESTAMP)`})
+        .where(eq(whiteList.username, player));
       this.info('Un-whitelisted ' + player + ' by ' + admin);
       this.sendWindow({
         legacy: {
@@ -652,7 +658,10 @@ class Administration extends ModuleBase {
       if (!(await this.checkRole(admin, 'moderator'))) {
         return {reason: 'Missing required permissions'};
       }
-      await drizzleClient.update(banList).set({removalDate: sql`(CURRENT_TIMESTAMP)`}).where(and(eq(banList.username, player),isNull(banList.removalDate)));
+      await drizzleClient
+        .update(banList)
+        .set({removalDate: sql`(CURRENT_TIMESTAMP)`})
+        .where(and(eq(banList.username, player), isNull(banList.removalDate)));
 
       this.info('Unbanned ' + player + ' by ' + admin);
       this.sendWindow({
@@ -680,11 +689,16 @@ class Administration extends ModuleBase {
         if (player.match(/^\D\S{2,11}#\d{4,8}$/i)) {
           if (await this.checkRole(player, 'moderator')) {
             try {
-              const findUser = (await drizzleClient.query.userList.findFirst({where: (item)=> eq(item.name, player)}));
-              if (!findUser){
+              const findUser = await drizzleClient.query.userList.findFirst({
+                where: item => eq(item.name, player),
+              });
+              if (!findUser) {
                 await drizzleClient.insert(userList).values({name: player});
               }
-              await drizzleClient.update(adminList).set({role, admin, region}).where(eq(adminList.username, player));
+              await drizzleClient
+                .update(adminList)
+                .set({role, admin, region})
+                .where(eq(adminList.username, player));
               this.info('Updated ' + player + ' to ' + role + ' by ' + admin);
               this.sendWindow({
                 legacy: {
@@ -766,45 +780,66 @@ class Administration extends ModuleBase {
       (player === 'Trenchguns#1800' && this.settings.values.client.debugAssistance)
     )
       return 'admin';
-    const row = await drizzleClient.query.adminList.findFirst({where: (item)=> eq(item.username, player)});
+    const row = await drizzleClient.query.adminList.findFirst({
+      where: item => eq(item.username, player),
+    });
     return (row?.role as AdminRoles) ?? null;
   }
 
   async checkRole(player: string, minPerms: AdminRoles): Promise<boolean> {
     if (!player) return false;
     if (player === 'client') return true;
-    const targetRole = await this.getRole(player);
-    if (targetRole) {
-      return this.roleEqualOrHigher(minPerms, targetRole);
+    const usersRole = await this.getRole(player);
+    if (usersRole) {
+      return this.roleEqualOrHigher(usersRole, minPerms);
     }
     return false;
   }
 
-  roleEqualOrHigher(role: AdminRoles | null | 'client', targetPerms: AdminRoles): boolean {
+  roleEqualOrHigher(role: AllRoles | 'client', targetPerms: AllRoles): boolean {
     if (!role) return false;
-    if (role === 'client') return true;
-    if (hierarchy[role] >= hierarchy[targetPerms]) {
-      return true;
-    }
-    return false;
+    if (role === 'client' || !targetPerms) return true;
+    return hierarchy[role] >= hierarchy[targetPerms];
   }
 
   async isWhiteListed(player: string): Promise<boolean> {
-    const row = drizzleClient.query.whiteList.findFirst({where: (item)=> and(eq(item.username, player),isNull(item.removalDate))});
+    const row = drizzleClient.query.whiteList.findFirst({
+      where: item => and(eq(item.username, player), isNull(item.removalDate)),
+    });
     return !!row;
   }
 
   async isBanned(player: string): Promise<InferSelectModel<typeof banList> | undefined> {
-    const row = drizzleClient.query.banList.findFirst({where: (item)=> and(eq(item.username, player),isNull(item.removalDate))});
+    const row = drizzleClient.query.banList.findFirst({
+      where: item => and(eq(item.username, player), isNull(item.removalDate)),
+    });
     return row;
   }
 
-  async fetchList(options: FetchListOptions): Promise<InferSelectModel<typeof banList>[] | InferSelectModel<typeof whiteList>[] | undefined> {
-    const targetTable = options.type === 'banList' ? drizzleClient.query.banList : drizzleClient.query.whiteList;
+  async fetchList(
+    options: FetchListOptions,
+  ): Promise<
+    InferSelectModel<typeof banList>[] | InferSelectModel<typeof whiteList>[] | undefined
+  > {
+    const targetTable =
+      options.type === 'banList' ? drizzleClient.query.banList : drizzleClient.query.whiteList;
     if (options.activeOnly) {
-      return await targetTable.findMany({where: isNull(whiteList.removalDate),limit: 10, offset: options.page !== undefined ? options.page * 10 : 0, orderBy: (players, {asc, desc}) => [options.sortOrder == 'asc' ? asc(players.id): desc(players.id)]});
+      return await targetTable.findMany({
+        where: isNull(whiteList.removalDate),
+        limit: 10,
+        offset: options.page !== undefined ? options.page * 10 : 0,
+        orderBy: (players, {asc, desc}) => [
+          options.sortOrder == 'asc' ? asc(players.id) : desc(players.id),
+        ],
+      });
     }
-    return await targetTable.findMany({limit: 10, offset: options.page !== undefined ? options.page * 10 : 0, orderBy: (players, {asc, desc}) => [options.sortOrder == 'asc' ? asc(players.id): desc(players.id)]});
+    return await targetTable.findMany({
+      limit: 10,
+      offset: options.page !== undefined ? options.page * 10 : 0,
+      orderBy: (players, {asc, desc}) => [
+        options.sortOrder == 'asc' ? asc(players.id) : desc(players.id),
+      ],
+    });
   }
 }
 
