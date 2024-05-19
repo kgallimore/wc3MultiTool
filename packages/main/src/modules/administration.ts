@@ -73,6 +73,7 @@ class Administration extends ModuleBase {
               '?help: Shows commands with <required arg> <?optional arg>',
             );
           }
+          return;
         } else if (command in commands) {
           const content = events.processedChat.content.split(' ');
           const role = await this.getRole(sender);
@@ -82,10 +83,8 @@ class Administration extends ModuleBase {
               this.gameSocket.sendChatMessage(runCom);
             }
           }
-        }else{
-          this.gameSocket.sendChatMessage('Command not found');
+          return;
         }
-        return;
       }
       this.gameSocket.emitEvent({nonAdminChat: events.processedChat});
     }
