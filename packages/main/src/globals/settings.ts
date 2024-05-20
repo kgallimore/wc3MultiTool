@@ -8,6 +8,8 @@ import type {ObsHotkeys} from './../modules/obs';
 import {drizzleClient} from '../drizzle';
 import {settings as settingsTable} from '../schema';
 import {eq, and} from 'drizzle-orm';
+import { migrateDB } from './../migrate';
+
 
 const store = new Store();
 
@@ -372,8 +374,9 @@ class AppSettingsContainer extends Global {
 
   constructor() {
     super('Settings');
-
     this._values = AppSettingsData;
+    //We need to migrate the database before we can load the settings
+    migrateDB();
 
     //Pre-populate settings from defaults
     const entries = Object.entries(AppSettingsData) as [
