@@ -121,6 +121,8 @@ class WarControl extends Global {
       const targetRegion = {asia: 1, eu: 2, us: 3, usw: 3, kr: 1, '': 0}[region];
       try {
         if (targetRegion > 0 && gameState.values.selfRegion !== region) {
+          //Get current region by getting full title of text box
+          //await battleNetWindow.find(elements.textBox({title: new RegExp(/Region:/), type: 'TextBox'}))
           this.info(`Changing region to ${region}`);
           const changeRegionButton = await battleNetWindow.find(elements.menuItem({title: 'Regions', role: 'widget'}));
           if(changeRegionButton.region){
