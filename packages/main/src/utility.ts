@@ -484,3 +484,41 @@ export const hierarchy: {[key: string]: number} = {
   swapper: 2,
   baswapper: 1,
 };
+
+export function generateBotAnnouncement(settings: AppSettings, statsAvailable: boolean = false) {
+  if (['rapidHost', 'smartHost'].includes(settings.autoHost.type)) {
+    if (settings.autoHost.announceIsBot) {
+      let text = 'Welcome. I am a bot.';
+      if (statsAvailable && settings.elo.type !== 'off') {
+        text += ' I will fetch ELO from ' + settings.elo.type + '.';
+        if (settings.elo.balanceTeams) {
+          text += ' I will try to balance teams before we start.';
+        }
+      }
+      if (
+        (settings.elo.type === 'off' || !settings.elo.balanceTeams) &&
+        settings.autoHost.shufflePlayers
+      ) {
+        text += ' I will shuffle players before we start.';
+      }
+      if (settings.autoHost.voteStartRequired) {
+        text += ' You must ?votestart to start the game.';
+      } else if (settings.autoHost.minPlayers > 0) {
+        text += ` I will start with ${settings.autoHost.minPlayers} players.`;
+      } else {
+        text += ' I will start when the lobby is full.';
+      }
+      if (settings.autoHost.swapRequests) {
+        text += ' You may ?swapreq to swap spots.';
+      }
+      if (settings.autoHost.regionChangeType != 'off') {
+        text += ' I switch regions.';
+      }
+      return text;
+    }
+    if (settings.autoHost.announceCustom && settings.autoHost.customAnnouncement) {
+      return settings.autoHost.customAnnouncement;
+    }
+  }
+  return '';
+}

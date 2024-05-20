@@ -42,10 +42,12 @@ class Administration extends ModuleBase {
               );
             }
             if (
-              ['rapidHost', 'smartHost'].includes(this.settings.values.autoHost.type) &&
-              this.settings.values.autoHost.voteStart
+              ['rapidHost', 'smartHost'].includes(this.settings.values.autoHost.type)
             ) {
-              this.gameSocket.sendChatMessage('?voteStart: Starts or accepts a vote to start');
+              if(this.settings.values.autoHost.voteStart)
+                this.gameSocket.sendChatMessage('?voteStart: Starts or accepts a vote to start');
+              if(this.settings.values.autoHost.swapRequests)
+                this.gameSocket.sendChatMessage('?swapreq (yes/no/cancel/slot/player): Starts or accepts a vote to swap spots with another player');
             }
             if (await this.checkRole(sender, 'moderator')) {
               commandArray

@@ -70,6 +70,8 @@ export const appSettings = writable<AppSettings>({
     minPlayers: 0,
     delayStart: 0,
     openVPNPath: '',
+    voteStartRequired: false,
+    swapRequests: false,
   },
   obs: {
     enabled: false,

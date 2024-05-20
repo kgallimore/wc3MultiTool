@@ -52,49 +52,49 @@ type AppSettingsDataSubStructure = Record<
 
 export const AppSettingsData: AppSettingsDataStructure = {
   autoHost: {
-    type: {defaultValue: 'off', allowedTypes: ['string']},
-    private: {defaultValue: false, allowedTypes: ['boolean']},
-    sounds: {defaultValue: false, allowedTypes: ['boolean']},
-    increment: {defaultValue: true, allowedTypes: ['boolean']},
-    mapName: {defaultValue: '', allowedTypes: ['string']},
-    gameName: {defaultValue: '', allowedTypes: ['string']},
-    mapPath: {defaultValue: 'N/A', allowedTypes: ['string']},
-    announceIsBot: {defaultValue: false, allowedTypes: ['boolean']},
-    announceCustom: {defaultValue: false, allowedTypes: ['boolean']},
-    announceRestingInterval: {defaultValue: 30, allowedTypes: ['number']},
-    moveToSpec: {defaultValue: false, allowedTypes: ['boolean']},
-    moveToTeam: {defaultValue: '', allowedTypes: ['string']},
-    rapidHostTimer: {defaultValue: 0, allowedTypes: ['number']},
-    smartHostTimeout: {defaultValue: 0, allowedTypes: ['number']},
-    voteStart: {defaultValue: false, allowedTypes: ['boolean']},
-    voteStartPercent: {defaultValue: 60, allowedTypes: ['number']},
-    voteStartTeamFill: {defaultValue: true, allowedTypes: ['boolean']},
-    closeSlots: {defaultValue: [], allowedTypes: ['array']},
-    customAnnouncement: {defaultValue: '', allowedTypes: ['string']},
-    observers: {defaultValue: '0', allowedTypes: ['string'], allowedValues: ['0', '1', '2', '3']},
-    advancedMapOptions: {defaultValue: false, allowedTypes: ['boolean']},
-    flagLockTeams: {defaultValue: true, allowedTypes: ['boolean']},
-    flagPlaceTeamsTogether: {defaultValue: true, allowedTypes: ['boolean']},
-    flagFullSharedUnitControl: {defaultValue: true, allowedTypes: ['boolean']},
-    flagRandomRaces: {defaultValue: true, allowedTypes: ['boolean']},
-    flagRandomHero: {defaultValue: true, allowedTypes: ['boolean']},
+    type: { defaultValue: 'off', allowedTypes: ['string'] },
+    private: { defaultValue: false, allowedTypes: ['boolean'] },
+    sounds: { defaultValue: false, allowedTypes: ['boolean'] },
+    increment: { defaultValue: true, allowedTypes: ['boolean'] },
+    mapName: { defaultValue: '', allowedTypes: ['string'] },
+    gameName: { defaultValue: '', allowedTypes: ['string'] },
+    mapPath: { defaultValue: 'N/A', allowedTypes: ['string'] },
+    announceIsBot: { defaultValue: false, allowedTypes: ['boolean'] },
+    announceCustom: { defaultValue: false, allowedTypes: ['boolean'] },
+    announceRestingInterval: { defaultValue: 30, allowedTypes: ['number'] },
+    moveToSpec: { defaultValue: false, allowedTypes: ['boolean'] },
+    moveToTeam: { defaultValue: '', allowedTypes: ['string'] },
+    rapidHostTimer: { defaultValue: 0, allowedTypes: ['number'] },
+    smartHostTimeout: { defaultValue: 0, allowedTypes: ['number'] },
+    voteStart: { defaultValue: false, allowedTypes: ['boolean'] },
+    voteStartPercent: { defaultValue: 60, allowedTypes: ['number'] },
+    voteStartTeamFill: { defaultValue: true, allowedTypes: ['boolean'] },
+    closeSlots: { defaultValue: [], allowedTypes: ['array'] },
+    customAnnouncement: { defaultValue: '', allowedTypes: ['string'] },
+    observers: { defaultValue: '0', allowedTypes: ['string'], allowedValues: ['0', '1', '2', '3'] },
+    advancedMapOptions: { defaultValue: false, allowedTypes: ['boolean'] },
+    flagLockTeams: { defaultValue: true, allowedTypes: ['boolean'] },
+    flagPlaceTeamsTogether: { defaultValue: true, allowedTypes: ['boolean'] },
+    flagFullSharedUnitControl: { defaultValue: true, allowedTypes: ['boolean'] },
+    flagRandomRaces: { defaultValue: true, allowedTypes: ['boolean'] },
+    flagRandomHero: { defaultValue: true, allowedTypes: ['boolean'] },
     settingVisibility: {
       defaultValue: '0',
       allowedTypes: ['string'],
       allowedValues: ['0', '1', '2', '3'],
     },
-    leaveAlternate: {defaultValue: true, allowedTypes: ['boolean']},
-    shufflePlayers: {defaultValue: true, allowedTypes: ['boolean']},
+    leaveAlternate: { defaultValue: true, allowedTypes: ['boolean'] },
+    shufflePlayers: { defaultValue: true, allowedTypes: ['boolean'] },
     regionChangeType: {
       defaultValue: 'off',
       allowedTypes: ['string'],
       allowedValues: ['off', 'realm', 'openVPN', 'both'],
     },
-    regionChangeTimeEU: {defaultValue: '11:00', allowedTypes: ['string']},
-    regionChangeOpenVPNConfigEU: {defaultValue: '', allowedTypes: ['string']},
-    regionChangeTimeNA: {defaultValue: '01:00', allowedTypes: ['string']},
-    regionChangeOpenVPNConfigNA: {defaultValue: '', allowedTypes: ['string']},
-    whitelist: {defaultValue: false, allowedTypes: ['boolean']},
+    regionChangeTimeEU: { defaultValue: '11:00', allowedTypes: ['string'] },
+    regionChangeOpenVPNConfigEU: { defaultValue: '', allowedTypes: ['string'] },
+    regionChangeTimeNA: { defaultValue: '01:00', allowedTypes: ['string'] },
+    regionChangeOpenVPNConfigNA: { defaultValue: '', allowedTypes: ['string'] },
+    whitelist: { defaultValue: false, allowedTypes: ['boolean'] },
     minPlayers: {
       defaultValue: 0,
       allowedTypes: ['number'],
@@ -102,8 +102,10 @@ export const AppSettingsData: AppSettingsDataStructure = {
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
       ],
     },
-    delayStart: {defaultValue: 0, allowedTypes: ['number']},
-    openVPNPath: {defaultValue: '', allowedTypes: ['string']},
+    delayStart: { defaultValue: 0, allowedTypes: ['number'] },
+    openVPNPath: { defaultValue: '', allowedTypes: ['string'] },
+    voteStartOnly: { defaultValue: false, allowedTypes: ['boolean'] },
+    swapRequests: { defaultValue: false, allowedTypes: ['boolean'] },
   },
   obs: {
     enabled: {defaultValue: false, allowedTypes: ['boolean']},
@@ -260,6 +262,7 @@ export interface AutoHostSettings {
   voteStart: boolean;
   voteStartPercent: number;
   voteStartTeamFill: boolean;
+  voteStartRequired: boolean;
   closeSlots: Array<number>;
   customAnnouncement: string;
   observers: '0' | '1' | '2' | '3';
@@ -281,6 +284,7 @@ export interface AutoHostSettings {
   minPlayers: number;
   delayStart: number;
   openVPNPath: string;
+  swapRequests: boolean;
 }
 export interface ObsSettings {
   enabled: boolean;

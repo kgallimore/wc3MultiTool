@@ -23,6 +23,7 @@ import type {LobbyUpdatesExtended} from './lobbyControl';
 import {statsToString} from './lobbyControl';
 import type {Regions} from 'wc3mt-lobby-container';
 import {exec} from 'child_process';
+import {generateBotAnnouncement, isInt} from './../utility';
 class AutoHost extends ModuleBase {
   voteStartVotes: Array<string> = [];
   wc3mtTargetFile = `${app.getPath('documents')}\\Warcraft III\\CustomMapData\\wc3mt.txt`;
@@ -34,13 +35,14 @@ class AutoHost extends ModuleBase {
     tryCount: 0,
   };
   private lastAnnounceTime: number = 0;
+  swapRequests: {target: string; user: string;}[] = [];
 
   constructor() {
     super('AutoHost', {
       listeners: ['gameSocketEvent', 'gameStateUpdates', 'lobbyUpdate'],
     });
     this.disconnectVPN().then(() => {
-      setTimeout(()=>this.setVPNState(), 1000);
+      setTimeout(() => this.setVPNState(), 1000);
     });
   }
 
@@ -102,6 +104,7 @@ class AutoHost extends ModuleBase {
       if (!teams) {
         return;
       }
+      if(this.settings.values.autoHost.voteStartRequired) return; 
       if (this.settings.values.autoHost.minPlayers !== 0) {
         if (
           this.lobby.microLobby.nonSpecPlayers.length < this.settings.values.autoHost.minPlayers
@@ -148,6 +151,20 @@ class AutoHost extends ModuleBase {
         currentStepProgress: 100,
       });
     }
+    if(updates.playerLeft){
+      const requestIndex = this.swapRequests.findIndex((data) => data.target === updates.playerLeft || data.user === updates.playerLeft);
+      if(requestIndex !== -1){
+        this.gameSocket.sendChatMessage(`Swap request between ${this.swapRequests[requestIndex].target} and ${this.swapRequests[requestIndex].user} cancelled.`);
+        this.swapRequests.splice(requestIndex, 1);
+      }
+    }
+    if(updates.playerMoved){
+      const requestIndex = this.swapRequests.findIndex((data) => data.target === updates.playerMoved?.name || data.user === updates.playerMoved?.name);
+      if(requestIndex !== -1){
+        this.gameSocket.sendChatMessage(`Swap request between ${this.swapRequests[requestIndex].target} and ${this.swapRequests[requestIndex].user} cancelled.`);
+        this.swapRequests.splice(requestIndex, 1);
+      }
+    }
   }
 
   protected onGameSocketEvent(events: GameSocketEvents): void {
@@ -164,58 +181,109 @@ class AutoHost extends ModuleBase {
     }
     if (events.nonAdminChat) {
       if (events.nonAdminChat.content.match(/^\?votestart$/i)) {
-        if (['rapidHost', 'smartHost'].includes(this.settings.values.autoHost.type)) {
-          if (
-            this.settings.values.autoHost.voteStart &&
-            this.lobby.microLobby?.lobbyStatic.isHost
-          ) {
-            if (!this.lobby.microLobby.allPlayers.includes(events.nonAdminChat.sender)) {
-              this.gameSocket.sendChatMessage('Only players may vote start.');
+        if (!this.lobby.microLobby?.lobbyStatic.isHost) return;
+        if (!['rapidHost', 'smartHost'].includes(this.settings.values.autoHost.type)) return;
+        if (this.settings.values.autoHost.voteStart) {
+          if (!this.lobby.microLobby.allPlayers.includes(events.nonAdminChat.sender)) {
+            this.gameSocket.sendChatMessage('Only players may vote start.');
+            return;
+          }
+          if (this.voteStartVotes.length === 0) {
+            const numPlayers = Object.values(this.lobby.exportDataStructure('Autohost 2', true))
+              .flatMap(team => team)
+              .filter(player => player.realPlayer).length;
+            if (numPlayers < 2) {
+              this.gameSocket.sendChatMessage('Unavailable. Not enough players.');
               return;
             }
-            if (this.voteStartVotes.length === 0) {
-              const numPlayers = Object.values(this.lobby.exportDataStructure('Autohost 2', true))
-                .flatMap(team => team)
-                .filter(player => player.realPlayer).length;
-              if (numPlayers < 2) {
-                this.gameSocket.sendChatMessage('Unavailable. Not enough players.');
-                return;
-              }
-              if (
-                (this.settings.values.autoHost.voteStartTeamFill &&
-                  this.lobby.allPlayerTeamsContainPlayers()) ||
-                !this.settings.values.autoHost.voteStartTeamFill
-              ) {
-                this.voteTimer = setTimeout(this.cancelVote.bind(this), 60000);
-                this.gameSocket.sendChatMessage('You have 60 seconds to ?votestart.');
-              } else {
-                this.gameSocket.sendChatMessage('Unavailable. Not all teams have players.');
-                return;
-              }
+            if (
+              (this.settings.values.autoHost.voteStartTeamFill &&
+                this.lobby.allPlayerTeamsContainPlayers()) ||
+              !this.settings.values.autoHost.voteStartTeamFill
+            ) {
+              this.voteTimer = setTimeout(this.cancelVote.bind(this), 60000);
+              this.gameSocket.sendChatMessage('You have 60 seconds to ?votestart.');
+            } else {
+              this.gameSocket.sendChatMessage('Unavailable. Not all teams have players.');
+              return;
             }
-            if (!this.voteStartVotes.includes(events.nonAdminChat.sender) && this.voteTimer) {
-              this.voteStartVotes.push(events.nonAdminChat.sender);
-              if (
-                this.voteStartVotes.length >=
-                this.lobby.microLobby?.nonSpecPlayers.length *
-                  (this.settings.values.autoHost.voteStartPercent / 100)
-              ) {
-                this.info('Vote start succeeded');
-                this.lobby.startGame();
-              } else {
-                this.gameSocket.sendChatMessage(
-                  Math.ceil(
-                    this.lobby.microLobby?.nonSpecPlayers.length *
-                      (this.settings.values.autoHost.voteStartPercent / 100) -
-                      this.voteStartVotes.length,
-                  ).toString() + ' more vote(s) required.',
-                );
-              }
+          }
+          if (!this.voteStartVotes.includes(events.nonAdminChat.sender) && this.voteTimer) {
+            this.voteStartVotes.push(events.nonAdminChat.sender);
+            if (
+              this.voteStartVotes.length >=
+              this.lobby.microLobby?.nonSpecPlayers.length *
+                (this.settings.values.autoHost.voteStartPercent / 100)
+            ) {
+              this.info('Vote start succeeded');
+              this.lobby.startGame();
+            } else {
+              this.gameSocket.sendChatMessage(
+                Math.ceil(
+                  this.lobby.microLobby?.nonSpecPlayers.length *
+                    (this.settings.values.autoHost.voteStartPercent / 100) -
+                    this.voteStartVotes.length,
+                ).toString() + ' more vote(s) required.',
+              );
             }
           } else {
             this.gameSocket.sendChatMessage('Unavailable. Vote start is disabled.');
           }
         }
+      } else if (events.nonAdminChat.content.match(/^\?swapreq/i)) {
+        if (!this.lobby.microLobby?.lobbyStatic.isHost) return;
+        if(!this.settings.values.autoHost.swapRequests) {
+          this.gameSocket.sendChatMessage('Unavailable. Swap requests are disabled.');
+        }
+        const sender = events.nonAdminChat.sender;
+        const swapArguments = events.nonAdminChat.content.split(' ');
+        if(swapArguments.length < 2) {
+          this.gameSocket.sendChatMessage('Missing swap argument.');
+          return;
+        }
+        const target = swapArguments[1];
+        if(['yes', 'no', 'cancel'].includes(target)){
+          const requestIndex = this.swapRequests.findIndex((data) => data.target === sender || (target === 'cancel' && data.user === sender));
+          if(requestIndex === -1) {
+            this.gameSocket.sendChatMessage('No swap request found.');
+            return;
+          }
+          if(target != 'yes'){
+            this.gameSocket.sendChatMessage(`Swap request between ${this.swapRequests[requestIndex].target} and ${this.swapRequests[requestIndex].user} cancelled.`);
+          }else{
+            this.gameSocket.sendChatMessage(`Swap request between ${this.swapRequests[requestIndex].target} and ${this.swapRequests[requestIndex].user} approved.`);
+            this.lobby.swapPlayers({players: [this.swapRequests[requestIndex].target, this.swapRequests[requestIndex].user]});
+          }
+          this.swapRequests.splice(requestIndex, 1);
+          return;
+        }else{
+        let targetPlayerName: string = '';
+        if (isInt(target, 24, 1)) {
+          targetPlayerName = Object.values(this.lobby.microLobby.slots).find((data)=> data.slotStatus === 2 && data.slot === parseInt(target) - 1)?.name ?? '';
+          if(!targetPlayerName) {
+            this.gameSocket.sendChatMessage('Invalid slot number.');
+            return;
+          }
+
+        } else {
+          const targets = this.lobby.microLobby?.searchPlayer(target);
+          if (targets.length === 1) {
+            targetPlayerName = targets[0];
+          } else if (targets.length > 1) {
+            this.gameSocket.sendChatMessage('Multiple matches found. Please be more specific.');
+            return;
+          } else {
+            this.gameSocket.sendChatMessage('No matching player names found.');
+            return;
+          }
+        }
+        if(targetPlayerName === sender) {
+          this.gameSocket.sendChatMessage('You cannot swap with yourself.');
+          return;
+        }
+        this.swapRequests.push({target: targetPlayerName, user: sender});
+        this.gameSocket.sendChatMessage(`${targetPlayerName} please ?swapreq yes/no.`);
+      }
       }
     }
     if (events.MultiplayerGameCreateResult && this.creatingGame.status) {
@@ -341,8 +409,12 @@ class AutoHost extends ModuleBase {
           if (
             this.clientState.values.vpnActive ||
             (!this.clientState.values.vpnActive &&
-              ((newRegion === 'eu' && this.settings.values.autoHost.regionChangeOpenVPNConfigEU && !this.clientState.values.ipIsEU) ||
-                (newRegion === 'us' && this.settings.values.autoHost.regionChangeOpenVPNConfigNA && this.clientState.values.ipIsEU)))
+              ((newRegion === 'eu' &&
+                this.settings.values.autoHost.regionChangeOpenVPNConfigEU &&
+                !this.clientState.values.ipIsEU) ||
+                (newRegion === 'us' &&
+                  this.settings.values.autoHost.regionChangeOpenVPNConfigNA &&
+                  this.clientState.values.ipIsEU)))
           ) {
             this.info(`Changing VPN region to ${newRegion}`);
             await this.warControl.exitGame();
@@ -578,7 +650,11 @@ class AutoHost extends ModuleBase {
       this.settings.values.autoHost.regionChangeTimeEU,
       this.settings.values.autoHost.regionChangeTimeNA,
     );
-    if (region !== this.clientState.values.vpnActive && (region == 'eu' && !this.clientState.values.ipIsEU)) {
+    if (
+      region !== this.clientState.values.vpnActive &&
+      region == 'eu' &&
+      !this.clientState.values.ipIsEU
+    ) {
       if (this.clientState.values.vpnActive) {
         this.info('Turning off ' + this.clientState.values.vpnActive + ' OpenVPN');
         await this.disconnectVPN();
@@ -598,7 +674,7 @@ class AutoHost extends ModuleBase {
       exec(
         `"${this.settings.values.autoHost.openVPNPath}" --command connect ${this.settings.values.autoHost.regionChangeOpenVPNConfigEU} --silent_connection 1`,
       );
-      if (await this.checkForIPChange() || this.clientState.values.ipIsEU) {
+      if ((await this.checkForIPChange()) || this.clientState.values.ipIsEU) {
         this.clientState.values.vpnActive = 'eu';
         this.info('EU VPN successfully enabled');
         return true;
@@ -619,7 +695,7 @@ class AutoHost extends ModuleBase {
       exec(
         `"${this.settings.values.autoHost.openVPNPath}" --command connect ${this.settings.values.autoHost.regionChangeOpenVPNConfigNA} --silent_connection 1`,
       );
-      if (await this.checkForIPChange() || !this.clientState.values.ipIsEU) {
+      if ((await this.checkForIPChange()) || !this.clientState.values.ipIsEU) {
         this.clientState.values.vpnActive = 'us';
         this.info('US VPN successfully enabled');
         return true;
@@ -661,49 +737,10 @@ class AutoHost extends ModuleBase {
         currentTime >
         this.lastAnnounceTime + 1000 * this.settings.values.autoHost.announceRestingInterval
       ) {
-        this.lastAnnounceTime = currentTime;
-        if (['rapidHost', 'smartHost'].includes(this.settings.values.autoHost.type)) {
-          if (this.settings.values.autoHost.announceIsBot) {
-            let text = 'Welcome. I am a bot.';
-            if (this.lobby.microLobby?.statsAvailable && this.settings.values.elo.type !== 'off') {
-              text += ' I will fetch ELO from ' + this.settings.values.elo.type + '.';
-              if (this.settings.values.elo.balanceTeams) {
-                text += ' I will try to balance teams before we start.';
-              }
-            }
-            if (
-              (this.settings.values.elo.type === 'off' || !this.settings.values.elo.balanceTeams) &&
-              this.settings.values.autoHost.shufflePlayers
-            ) {
-              text += ' I will shuffle players before we start.';
-            }
-            if (['smartHost', 'rapidHost'].includes(this.settings.values.autoHost.type)) {
-              if (this.settings.values.autoHost.minPlayers > 0) {
-                text += ` I will start with ${this.settings.values.autoHost.minPlayers} players.`;
-              } else {
-                text += ' I will start when slots are full.';
-              }
-            }
-            if (this.settings.values.autoHost.voteStart) {
-              text += ' You can vote start with ?votestart';
-            }
-            if (this.settings.values.autoHost.regionChangeType != 'off') {
-              text += ' I switch regions.';
-            }
-            this.gameSocket.sendChatMessage(text);
-          }
-          if (
-            this.settings.values.autoHost.announceCustom &&
-            this.settings.values.autoHost.customAnnouncement
-          ) {
-            this.gameSocket.sendChatMessage(this.settings.values.autoHost.customAnnouncement);
-          }
-        } else if (
-          this.settings.values.autoHost.type === 'lobbyHost' &&
-          this.settings.values.autoHost.announceCustom &&
-          this.settings.values.autoHost.customAnnouncement
-        ) {
-          this.gameSocket.sendChatMessage(this.settings.values.autoHost.customAnnouncement);
+        const announceText = generateBotAnnouncement(this.settings.values, this.lobby.microLobby?.statsAvailable);
+        if(announceText) {
+          this.gameSocket.sendChatMessage(announceText);
+          this.lastAnnounceTime = currentTime;
         }
       }
     }
