@@ -18,13 +18,11 @@ import {
   Point,
   straightTo,
 } from '@nut-tree/nut-js';
-// require('@nut-tree/nl-matcher');
 import type {GameState} from './../globals/gameState';
 import type {LobbyUpdatesExtended} from './lobbyControl';
 import {statsToString} from './lobbyControl';
 import type {Regions} from 'wc3mt-lobby-container';
 import {exec} from 'child_process';
-
 class AutoHost extends ModuleBase {
   voteStartVotes: Array<string> = [];
   wc3mtTargetFile = `${app.getPath('documents')}\\Warcraft III\\CustomMapData\\wc3mt.txt`;
@@ -42,7 +40,7 @@ class AutoHost extends ModuleBase {
       listeners: ['gameSocketEvent', 'gameStateUpdates', 'lobbyUpdate'],
     });
     this.disconnectVPN().then(() => {
-      this.setVPNState();
+      setTimeout(()=>this.setVPNState(), 1000);
     });
   }
 
@@ -223,10 +221,10 @@ class AutoHost extends ModuleBase {
     if (events.MultiplayerGameCreateResult && this.creatingGame.status) {
       if (events.MultiplayerGameCreateResult.details.success == false) {
         this.warn('Failed to create game. Attempt: ' + this.creatingGame.tryCount);
-        if (this.creatingGame.tryCount < 50) {
+        if (this.creatingGame.tryCount < 25) {
           this.creatingGame.status = false;
           this.creatingGame.tryCount += 1;
-          setTimeout(() => this.createGame(), 100);
+          setTimeout(() => this.createGame(), 200);
         } else {
           this.resetCreatingGame();
           this.error('Failed to create game.');
@@ -343,8 +341,8 @@ class AutoHost extends ModuleBase {
           if (
             this.clientState.values.vpnActive ||
             (!this.clientState.values.vpnActive &&
-              ((newRegion === 'eu' && this.settings.values.autoHost.regionChangeOpenVPNConfigEU) ||
-                (newRegion === 'us' && this.settings.values.autoHost.regionChangeOpenVPNConfigNA)))
+              ((newRegion === 'eu' && this.settings.values.autoHost.regionChangeOpenVPNConfigEU && !this.clientState.values.ipIsEU) ||
+                (newRegion === 'us' && this.settings.values.autoHost.regionChangeOpenVPNConfigNA && this.clientState.values.ipIsEU)))
           ) {
             this.info(`Changing VPN region to ${newRegion}`);
             await this.warControl.exitGame();
@@ -558,10 +556,10 @@ class AutoHost extends ModuleBase {
       return false;
     }
     this.verbose('Turning off all OpenVPN connections');
-    exec(`"${this.settings.values.autoHost.openVPNPath}" --command disconnect_all`);
+    //exec(`"${this.settings.values.autoHost.openVPNPath}" --command disconnect_all`);
     this.clientState.values.vpnActive = false;
     // Only allow 5 seconds since no vpn may be active anyways.
-    return await this.checkForIPChange(20);
+    return await this.checkForIPChange(18);
   }
 
   async setVPNState(): Promise<boolean> {
@@ -580,15 +578,14 @@ class AutoHost extends ModuleBase {
       this.settings.values.autoHost.regionChangeTimeEU,
       this.settings.values.autoHost.regionChangeTimeNA,
     );
-    if (region !== this.clientState.values.vpnActive) {
+    if (region !== this.clientState.values.vpnActive && (region == 'eu' && !this.clientState.values.ipIsEU)) {
       if (this.clientState.values.vpnActive) {
         this.info('Turning off ' + this.clientState.values.vpnActive + ' OpenVPN');
         await this.disconnectVPN();
-        return await this.enableVPN(region);
       } else {
         this.verbose('No OpenVPN currently active.');
-        return await this.enableVPN(region);
       }
+      return await this.enableVPN(region);
     } else {
       return true;
     }
@@ -596,52 +593,45 @@ class AutoHost extends ModuleBase {
 
   async enableVPN(region: 'eu' | 'us'): Promise<boolean> {
     if (region === 'eu') {
-      if (this.settings.values.autoHost.regionChangeOpenVPNConfigEU) {
-        this.info('Turning on EU OpenVPN');
-        exec(
-          `"${this.settings.values.autoHost.openVPNPath}" --command connect ${this.settings.values.autoHost.regionChangeOpenVPNConfigEU} --silent_connection 1`,
-        );
-        if (await this.checkForIPChange()) {
-          this.clientState.values.vpnActive = 'eu';
-          this.info('EU VPN successfully enabled');
+      if (!this.settings.values.autoHost.regionChangeOpenVPNConfigEU) return true;
+      this.info('Turning on EU OpenVPN');
+      exec(
+        `"${this.settings.values.autoHost.openVPNPath}" --command connect ${this.settings.values.autoHost.regionChangeOpenVPNConfigEU} --silent_connection 1`,
+      );
+      if (await this.checkForIPChange() || this.clientState.values.ipIsEU) {
+        this.clientState.values.vpnActive = 'eu';
+        this.info('EU VPN successfully enabled');
+        return true;
+      } else {
+        if (this.clientState.values.ipIsEU) {
+          this.warn(
+            'Something went wrong setting up OpenVPN EU, but current IP seems to be in EU.',
+          );
           return true;
         } else {
-          if (this.clientState.values.ipIsEU) {
-            this.warn(
-              'Something went wrong setting up OpenVPN EU, but current IP seems to be in EU.',
-            );
-            return true;
-          } else {
-            this.error('Something went wrong setting up OpenVPN EU.');
-            return false;
-          }
+          this.error('Something went wrong setting up OpenVPN EU.');
+          return false;
         }
-      } else {
-        return true;
       }
     } else if (region === 'us') {
-      if (this.settings.values.autoHost.regionChangeOpenVPNConfigNA) {
-        this.info('Turning on US OpenVPN');
-        exec(
-          `"${this.settings.values.autoHost.openVPNPath}" --command connect ${this.settings.values.autoHost.regionChangeOpenVPNConfigNA} --silent_connection 1`,
-        );
-        if (await this.checkForIPChange()) {
-          this.clientState.values.vpnActive = 'us';
-          this.info('US VPN successfully enabled');
-          return true;
-        } else {
-          if (!this.clientState.values.ipIsEU) {
-            this.warn(
-              'Something went wrong setting up OpenVPN US, but current IP seems to NOT be in EU.',
-            );
-            return true;
-          } else {
-            this.error('Something went wrong setting up OpenVPN US.');
-            return false;
-          }
-        }
-      } else {
+      if (!this.settings.values.autoHost.regionChangeOpenVPNConfigNA) return true;
+      this.info('Turning on US OpenVPN');
+      exec(
+        `"${this.settings.values.autoHost.openVPNPath}" --command connect ${this.settings.values.autoHost.regionChangeOpenVPNConfigNA} --silent_connection 1`,
+      );
+      if (await this.checkForIPChange() || !this.clientState.values.ipIsEU) {
+        this.clientState.values.vpnActive = 'us';
+        this.info('US VPN successfully enabled');
         return true;
+      } else {
+        if (!this.clientState.values.ipIsEU) {
+          this.warn(
+            'Something went wrong setting up OpenVPN US, but current IP seems to NOT be in EU.',
+          );
+          return true;
+        }
+        this.error('Something went wrong setting up OpenVPN US.');
+        return false;
       }
     }
     return false;
@@ -649,12 +639,12 @@ class AutoHost extends ModuleBase {
 
   async checkForIPChange(callNumber: number = 0): Promise<boolean> {
     const newIP = await this.clientState.getPublicIP();
-    if (newIP.old) {
+    if (newIP?.old) {
       return true;
-    } else if (callNumber > 30) {
+    } else if (callNumber > 20) {
       return false;
     } else {
-      await sleep(500);
+      await sleep(2000);
       callNumber++;
       return await this.checkForIPChange(callNumber);
     }

@@ -2,7 +2,6 @@ import {Global} from '../globalBase';
 
 import type {PickByValue} from './../utility';
 import {lookup} from 'fast-geoip';
-import {request} from 'http';
 
 export interface ClientState {
   currentStep: string;
@@ -25,7 +24,9 @@ class ClientStateSingle extends Global {
       ipCountry: '',
       ipIsEU: false,
     };
-    this.getPublicIP();
+    this.getPublicIP().then(() => {
+      this.info('Public IP info fetched.');
+    });
   }
 
   get values() {
@@ -41,28 +42,16 @@ class ClientStateSingle extends Global {
     country: string;
     isEU: boolean;
     old?: string;
-  }> {
+  } | null> {
     let ip: string = '';
-    const req = request(
-      {
-        host: 'api.ipify.org',
-        port: 80,
-        path: '/?format=json',
-      },
-      res => {
-        res.setEncoding('utf8');
-
-        let body = '';
-        res.on('data', chunk => {
-          body += chunk;
-        });
-        res.on('end', () => {
-          const data = JSON.parse(body);
-          ip = data.ip;
-        });
-      },
-    );
-    req.end();
+    try{
+      const res = await fetch('https://ws.trenchguns.com/api/ip', {method: 'GET', headers: {'pragma': 'no-cache', 'cache-control': 'no-cache'},
+      cache: 'no-store'});
+      const data = await res.json();
+      ip = data.ip;
+    }catch(e){
+      this.error('Failed to fetch public IP.', e);
+    }
     let oldVal: string = '';
     if (ip !== this._values.currentIP) {
       oldVal = this._values.currentIP;
