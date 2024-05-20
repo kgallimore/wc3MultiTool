@@ -392,6 +392,10 @@ class AppSettingsContainer extends Global {
         const getValue = store.get(category + '.' + key);
         if (getValue !== undefined) {
           // @ts-expect-error We are ignoring this during swap-over
+          if(this._values[category][key] == undefined && this._values[category]['_'+ key] != undefined){
+            key = '_' + key;
+          }
+          // @ts-expect-error We are ignoring this during swap-over
           this._values[category][key].value = getValue;
         }
       }
