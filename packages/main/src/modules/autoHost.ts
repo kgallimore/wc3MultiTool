@@ -663,7 +663,7 @@ class AutoHost extends ModuleBase {
       return false;
     }
     if (!this.settings.values.autoHost.openVPNPath) {
-      this.warn('Please set a path for openvpn.exe');
+      this.error('Please set a path for openvpn.exe');
       return false;
     }
     const region = getTargetRegion(
@@ -671,9 +671,9 @@ class AutoHost extends ModuleBase {
       this.settings.values.autoHost.regionChangeTimeNA,
     );
     if (
-      region !== this.clientState.values.vpnActive &&
-      region == 'eu' &&
-      !this.clientState.values.ipIsEU
+      region !== this.clientState.values.vpnActive ||
+      (region == 'eu' &&
+      !this.clientState.values.ipIsEU) || (region == 'us' && this.clientState.values.ipIsEU)
     ) {
       if (this.clientState.values.vpnActive) {
         this.info('Turning off ' + this.clientState.values.vpnActive + ' OpenVPN');
