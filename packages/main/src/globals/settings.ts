@@ -104,7 +104,7 @@ export const AppSettingsData: AppSettingsDataStructure = {
     },
     delayStart: { defaultValue: 0, allowedTypes: ['number'] },
     openVPNPath: { defaultValue: '', allowedTypes: ['string'] },
-    voteStartOnly: { defaultValue: false, allowedTypes: ['boolean'] },
+    voteStartRequired: { defaultValue: false, allowedTypes: ['boolean'] },
     swapRequests: { defaultValue: false, allowedTypes: ['boolean'] },
   },
   obs: {
@@ -412,6 +412,8 @@ class AppSettingsContainer extends Global {
     }).flat();
 
     for(const dbSetting of dbSettings){
+      // @ts-expect-error Not sure how to handle missing values
+      if(this._values[dbSetting.category][dbSetting.key] == undefined) continue;
       // @ts-expect-error Not sure how to type this
       this._values[dbSetting.category][dbSetting.key].value = JSON.parse(dbSetting.value);
     }
