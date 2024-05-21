@@ -1,2 +1,4 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+.github/actions/**/*.js linguist-detectable=false
+scripts/*.js linguist-detectable=false
+*.config.js linguist-detectable=false
+* text=auto eol=lf

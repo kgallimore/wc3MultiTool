@@ -1,0 +1,68 @@
+{
+  "HLW": { "regex": "HLW", "elo": true, "defaultElo": { "wc3stats": 500 } },
+  "Pyro TD": {
+    "regex": "pyro\\s*td\\s*league",
+    "elo": true,
+    "defaultElo": { "wc3stats": 500 }
+  },
+  "Vampirism Fire": {
+    "regex": "Vampirism\\s*Fire",
+    "elo": true,
+    "defaultElo": { "wc3stats": 1500 }
+  },
+  "Footmen VsGrunts": {
+    "regex": "footmen.*vs.*grunts",
+    "elo": true,
+    "defaultElo": { "wc3stats": 1000 }
+  },
+  "Broken Alliances": {
+    "regex": "Broken.*Alliances",
+    "elo": true,
+    "defaultElo": { "wc3stats": 500 }
+  },
+  "Reforged Footmen Frenzy": {
+    "regex": "Reforged.*Footmen",
+    "elo": true,
+    "defaultElo": { "wc3stats": 1500 }
+  },
+  "Direct Strike": {
+    "regex": "Direct.*Strike.*Reforged",
+    "elo": true,
+    "defaultElo": { "wc3stats": 500 }
+  },
+  "WW3 Diplomacy": {
+    "regex": "WW3.*Diplomacy",
+    "elo": true,
+    "defaultElo": { "wc3stats": 500 }
+  },
+  "Legion TD": {
+    "regex": "Legion.*TD",
+    "elo": true,
+    "defaultElo": { "wc3stats": 500 }
+  },
+  "Tree Tag": {
+    "regex": "Tree.*Tag",
+    "elo": true,
+    "defaultElo": { "wc3stats": 500 }
+  },
+  "Battleships Crossfire": {
+    "regex": "Battleships.*Crossfire",
+    "elo": true,
+    "defaultElo": { "wc3stats": 500 }
+  },
+  "Risk Europe": {
+    "regex": "Risk.*Europe",
+    "elo": true,
+    "defaultElo": { "wc3stats": 500 }
+  },
+  "Wintermaul Wars": {
+    "regex": "(WMW|Wintermaul Wars).*X",
+    "elo": true,
+    "defaultElo": { "wc3stats": 1000 }
+  },
+  "X CHFootiesv":{
+    "regex": "(xCHFooties|chfoots).*",
+    "elo": true,
+      "defaultElo": { "wc3stats": 500 }
+  }
+}

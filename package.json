@@ -1,69 +1,78 @@
 {
   "name": "wc3multitool",
-  "version": "1.0.12-alpha",
+  "version": "3.0.5-alpha",
   "description": "A multi-tool for Warcraft 3",
-  "repository": {
-    "type": "git",
-    "url": "git://github.com/kgallimore/wc3multitool.git"
-  },
-  "main": "src/app.js",
+  "private": true,
+  "type": "module",
+  "main": "packages/main/dist/index.js",
+  "author": "Keith Gallimore",
   "scripts": {
-    "compile": "tsc -w",
-    "build": "tsc && npm run svelte-build",
-    "start": "concurrently \"npm:compile\" \"npm:svelte-dev\" \"electron-forge start\"",
-    "publish": "electron-builder --publish always",
-    "pack": "electron-builder --dir",
-    "dist": "npm run build && electron-builder",
-    "rebuild": "electron-rebuild",
-    "svelte-build": "rollup -c",
-    "svelte-dev": "rollup -c -w",
-    "svelte-start": "sirv public",
-    "postinstall": "electron-builder install-app-deps"
+    "build": "npm run build:main && npm run build:preload && npm run build:renderer && npm run build:webUI",
+    "build:main": "cd ./packages/main && vite build",
+    "build:preload": "cd ./packages/preload && vite build",
+    "build:renderer": "cd ./packages/renderer && vite build",
+    "build:webUI": "cd ./packages/webUI && tsc",
+    "deploy": "cd scripts && tsx deploy.ts",
+    "compile": "cross-env MODE=production npm run build && electron-builder build --dir --config.asar=false",
+    "pack": "cross-env MODE=production npm run build && electron-builder build",
+    "watch": "node scripts/watch.js",
+    "lint": "eslint . --ext js,mjs,cjs,ts,mts,cts,svelte",
+    "lint:fix": "eslint . --ext js,mjs,cjs,ts,mts,cts,svelte --fix",
+    "typecheck:main": "tsc --noEmit -p packages/main/tsconfig.json",
+    "typecheck:preload": "tsc --noEmit -p packages/preload/tsconfig.json",
+    "typecheck:renderer": "svelte-check --noEmit -p packages/renderer/tsconfig.json",
+    "typecheck": "npm run typecheck:main && npm run typecheck:preload && npm run typecheck:renderer",
+    "rebuild": "electron-rebuild -f",
+    "postinstall": "cross-env ELECTRON_RUN_AS_NODE=1 electron scripts/update-electron-vendors.js",
+    "format": "npx prettier --write \"**/*.{js,mjs,cjs,ts,mts,cts,svelte,json}\"",
+    "introspect": "drizzle-kit introspect:sqlite --config=drizzle.config.ts",
+    "generate": "cd ./packages/main/src && drizzle-kit generate:sqlite --config=drizzle.config.ts"
   },
   "build": {
     "appId": "wc3multitool",
     "productName": "WC3 Multi-Tool",
     "copyright": "Keith Gallimore",
+    "files": [
+      "packages/**/dist/**",
+      "drizzle/**",
+      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
+      "!**/node_modules/*.d.ts",
+      "!**/node_modules/.bin",
+      "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}",
+      "!.editorconfig",
+      "!**/._*",
+      "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}",
+      "!**/{__pycache__,thumbs.db,.flowconfig,.idea,.vs,.nyc_output}",
+      "!**/{appveyor.yml,.travis.yml,circle.yml}",
+      "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}"
+    ],
+    "extraResources": [
+      "node_modules/@prisma/engines/schema-engine-*",
+      "node_modules/@prisma/engines/query*",
+      "node_modules/@prisma/engines/libquery*"
+    ],
     "extraFiles": [
       {
-        "from": "./src/webui.html",
+        "from": "buildResources",
         "to": "."
-      },
-      {
-        "from": "./src/webui.js",
-        "to": "."
-      },
-      {
-        "from": "./src/webuiPerf.html",
-        "to": "."
-      },
-      {
-        "from": "./public",
-        "to": "./public"
-      },
-      {
-        "from": "./src/images",
-        "to": "./images"
-      },
-      {
-        "from": "./src/sounds",
-        "to": "./sounds"
       }
     ],
     "win": {
       "target": [
         "nsis"
       ],
-      "icon": "src/images/wc3_auto_balancer_v2.png"
+      "icon": "buildResources/images/wc3_auto_balancer_v2.png"
     },
     "nsis": {
-      "installerIcon": "src/images/wc3_auto_balancer_v1.ico",
-      "uninstallerIcon": "src/images/wc3_auto_balancer_v1.ico",
+      "installerIcon": "buildResources/images/wc3_auto_balancer_v1.ico",
+      "uninstallerIcon": "buildResources/images/wc3_auto_balancer_v1.ico",
       "artifactName": "WC3-Multi-Tool-Setup-${version}.${ext}",
       "uninstallDisplayName": "WC3 Multi-Tool",
-      "include": "src/installer.nsh",
+      "include": "buildResources/installer.nsh",
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "removeDefaultUninstallWelcomePage": true
     },
     "portable": {
       "artifactName": "WC3_Multi-Tool_Setup_portable.exe",
@@ -85,102 +94,66 @@
       }
     ]
   },
-  "author": "Trenchguns",
-  "license": "UNLICENSED",
-  "config": {
-    "forge": {
-      "packagerConfig": {},
-      "makers": [
-        {
-          "name": "@electron-forge/maker-squirrel",
-          "config": {
-            "name": "WC3 Multi Tool"
-          }
-        },
-        {
-          "name": "@electron-forge/maker-zip",
-          "platforms": [
-            "darwin"
-          ]
-        },
-        {
-          "name": "@electron-forge/maker-deb",
-          "config": {}
-        },
-        {
-          "name": "@electron-forge/maker-rpm",
-          "config": {}
-        }
-      ]
-    }
-  },
-  "overrides": {
-    "@nut-tree/nut-js": {
-      "jpeg-js": "0.4.4"
-    }
-  },
   "devDependencies": {
-    "@electron-forge/cli": "^6.0.0-beta.64",
-    "@rollup/plugin-commonjs": "^21.1.0",
-    "@rollup/plugin-json": "^4.1.0",
-    "@rollup/plugin-node-resolve": "^13.3.0",
-    "@rollup/plugin-typescript": "^8.4.0",
-    "@tsconfig/svelte": "^2.0.1",
-    "@types/better-sqlite3": "^7.6.0",
-    "@types/discord-rpc": "^4.0.3",
-    "@types/node": "^18.7.14",
-    "@types/node-fetch": "^2.6.2",
-    "@types/request": "^2.48.8",
-    "@types/sound-play": "^1.1.0",
-    "@types/validator": "^13.7.6",
-    "@types/ws": "^8.5.3",
-    "concurrently": "^6.5.1",
-    "electron": "^19.1.8",
-    "electron-builder": "^24.0.0",
-    "electron-reload": "^2.0.0-alpha.1",
-    "rollup": "^2.79.0",
-    "rollup-plugin-css-only": "^3.1.0",
-    "rollup-plugin-livereload": "^2.0.5",
-    "rollup-plugin-svelte": "^7.1.0",
-    "rollup-plugin-terser": "^7.0.2",
-    "svelte": "^3.49.0",
-    "svelte-preprocess": "^4.10.7",
-    "typescript": "^4.8.2"
+    "@crxjs/vite-plugin": "^2.0.0-beta.23",
+    "@svelte-plugins/tooltips": "^3.0.1",
+    "@sveltejs/vite-plugin-svelte": "^3.1.0",
+    "@tsconfig/svelte": "^5.0.4",
+    "@types/audio-play": "^2.3.2",
+    "@types/better-sqlite3": "^7.6.10",
+    "@types/discord-rpc": "^4.0.8",
+    "@types/node": "^20.12.8",
+    "@types/ws": "^8.5.10",
+    "@typescript-eslint/eslint-plugin": "^7.8.0",
+    "@typescript-eslint/parser": "^7.8.0",
+    "@zerodevx/svelte-toast": "^0.9.5",
+    "autoprefixer": "^10.4.19",
+    "basic-ftp": "^5.0.5",
+    "cross-env": "^7.0.3",
+    "drizzle-kit": "^0.20.17",
+    "electron": "^29.3.1",
+    "electron-builder": "^24.13.3",
+    "eslint": "^8.57.0",
+    "eslint-plugin-drizzle": "^0.2.3",
+    "eslint-plugin-svelte": "^2.38.0",
+    "nano-staged": "^0.8.0",
+    "postcss": "^8.4.38",
+    "simple-git-hooks": "^2.11.1",
+    "svelte": "^4.2.15",
+    "svelte-check": "^3.7.1",
+    "tailwindcss": "^3.4.3",
+    "tslib": "^2.6.2",
+    "typescript": "^5.4.5",
+    "unplugin-auto-expose": "^0.3.0",
+    "vite": "^5.2.11",
+    "vite-plugin-dts": "^3.9.0"
   },
   "dependencies": {
-    "@discordjs/rest": "^1.1.0",
-    "@nut-tree/nl-matcher": "^1.0.4",
-    "@nut-tree/nut-js": "^2.2.0",
-    "better-sqlite3": "^7.6.2",
-    "bufferutil": "^4.0.6",
-    "cross-fetch": "^3.1.5",
-    "discord-api-types": "^0.36.3",
+    "@iamtraction/google-translate": "^2.0.1",
+    "@nut-tree/bolt": "^2.1.3",
+    "@nut-tree/element-inspector": "^0.1.5",
+    "@nut-tree/nl-matcher": "^3.0.2",
+    "@nut-tree/nut-js": "^4.2.0",
+    "audio-loader": "^1.0.3",
+    "audio-play": "^2.3.1",
+    "better-sqlite3": "^9.6.0",
     "discord-rpc": "^4.0.1",
-    "discord.js": "^14.3.0",
-    "electron-log": "^4.4.8",
-    "electron-store": "^8.1.0",
-    "electron-updater": "^5.2.1",
+    "discord.js": "^14.15.2",
+    "dotenv": "^16.4.5",
+    "drizzle-orm": "^0.30.10",
+    "electron-log": "^5.1.2",
+    "electron-store": "^9.0.0",
+    "electron-updater": "^6.1.8",
     "fast-geoip": "^1.1.88",
-    "firebase": "^9.9.3",
-    "form-data": "^2.5.1",
-    "https": "^1.0.0",
-    "js-combinatorics": "^2.1.1",
+    "js-combinatorics": "^2.1.2",
     "languagedetect": "^2.0.0",
-    "mariadb": "^3.0.1",
-    "mysql2": "^2.3.3",
-    "nanoid": "^3.3.4",
-    "node-abi": "^3.24.0",
-    "node-window-manager": "^2.2.4",
-    "obs-websocket-js": "^4.0.3",
-    "public-ip": "^4.0.4",
-    "sequelize": "^6.29.0",
+    "npm": "^10.6.0",
+    "obs-websocket-js": "^5.0.5",
+    "sequelize": "^6.37.3",
     "socket.io-client": "^2.5.0",
-    "sound-play": "^1.1.0",
-    "sqlite3": "^5.1.5",
-    "translate": "^1.4.1",
-    "translate-google": "^1.5.0",
+    "type-fest": "^4.18.1",
     "w3gjs": "^2.5.0",
-    "wc3mt-lobby-container": "^1.1.0",
-    "ws": "^8.8.1"
+    "wc3mt-lobby-container": "^1.1.5",
+    "ws": "^8.17.0"
   }
 }
