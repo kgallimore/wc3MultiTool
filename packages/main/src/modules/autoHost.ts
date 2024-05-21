@@ -648,10 +648,10 @@ class AutoHost extends ModuleBase {
       return false;
     }
     this.verbose('Turning off all OpenVPN connections');
-    //exec(`"${this.settings.values.autoHost.openVPNPath}" --command disconnect_all`);
+    exec(`"${this.settings.values.autoHost.openVPNPath}" --command disconnect_all`);
     this.clientState.values.vpnActive = false;
-    // Only allow 5 seconds since no vpn may be active anyways.
-    return await this.checkForIPChange(18);
+    // Only allow 6 seconds since no vpn may be active anyways.
+    return await this.checkForIPChange(17);
   }
 
   async setVPNState(): Promise<boolean> {
