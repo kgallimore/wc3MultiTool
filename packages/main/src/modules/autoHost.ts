@@ -152,17 +152,19 @@ class AutoHost extends ModuleBase {
       });
     }
     if(updates.playerLeft){
-      const requestIndex = this.swapRequests.findIndex((data) => data.target === updates.playerLeft || data.user === updates.playerLeft);
-      if(requestIndex !== -1){
+      let requestIndex = this.swapRequests.findIndex((data) => data.target === updates.playerLeft || data.user === updates.playerLeft);
+      while(requestIndex !== -1){
         this.gameSocket.sendChatMessage(`Swap request between ${this.swapRequests[requestIndex].target} and ${this.swapRequests[requestIndex].user} cancelled.`);
         this.swapRequests.splice(requestIndex, 1);
+        requestIndex = this.swapRequests.findIndex((data) => data.target === updates.playerLeft || data.user === updates.playerLeft);
       }
     }
     if(updates.playerMoved){
-      const requestIndex = this.swapRequests.findIndex((data) => data.target === updates.playerMoved?.name || data.user === updates.playerMoved?.name);
+      let requestIndex = this.swapRequests.findIndex((data) => data.target === updates.playerMoved?.name || data.user === updates.playerMoved?.name);
       if(requestIndex !== -1){
         this.gameSocket.sendChatMessage(`Swap request between ${this.swapRequests[requestIndex].target} and ${this.swapRequests[requestIndex].user} cancelled.`);
         this.swapRequests.splice(requestIndex, 1);
+        requestIndex = this.swapRequests.findIndex((data) => data.target === updates.playerMoved?.name || data.user === updates.playerMoved?.name);
       }
     }
   }
@@ -279,6 +281,24 @@ class AutoHost extends ModuleBase {
         }
         if(targetPlayerName === sender) {
           this.gameSocket.sendChatMessage('You cannot swap with yourself.');
+          return;
+        }
+        let requestIndex = this.swapRequests.findIndex((data) => data.target === sender && data.user === targetPlayerName);
+        if(requestIndex != -1) {
+          this.gameSocket.sendChatMessage('Swap request approved.');
+          this.lobby.swapPlayers({players: [sender, targetPlayerName]});
+          this.swapRequests.splice(requestIndex, 1);
+          return;
+        }
+        requestIndex = this.swapRequests.findIndex((data) => data.user === sender);
+        if(requestIndex != -1) {
+          this.gameSocket.sendChatMessage(`Current swap request between ${this.swapRequests[requestIndex].target} and ${this.swapRequests[requestIndex].user} cancelled.`);
+          this.swapRequests.splice(requestIndex, 1);
+          return;
+        }
+        requestIndex = this.swapRequests.findIndex((data) => data.target === targetPlayerName);
+        if(requestIndex != -1) {
+          this.gameSocket.sendChatMessage(`The target player already has a pending swapreq with ${this.swapRequests[requestIndex].user}.`);
           return;
         }
         this.swapRequests.push({target: targetPlayerName, user: sender});
