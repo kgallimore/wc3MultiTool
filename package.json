@@ -1,6 +1,6 @@
 {
   "name": "wc3multitool",
-  "version": "3.0.2-alpha",
+  "version": "3.0.5-alpha",
   "description": "A multi-tool for Warcraft 3",
   "private": true,
   "type": "module",

@@ -12,18 +12,6 @@ import {useBolt} from '@nut-tree/bolt';
 import audioLoader from 'audio-loader';
 import playAudio from 'audio-play';
 
-import { migrateDB } from './migrate';
-
-/**
- * Prevent electron from running multiple instances.
- */
-const isSingleInstance = app.requestSingleInstanceLock();
-if (!isSingleInstance) {
-  app.quit();
-  process.exit(0);
-}
-migrateDB();
-
 import type {SettingsUpdates} from './globals/settings';
 import {settings} from './globals/settings';
 import type {GameState} from './globals/gameState';
@@ -56,12 +44,23 @@ import type {WindowSend, WindowReceive} from './utility';
 import type { banList, whiteList } from './schema';
 import type { InferSelectModel } from 'drizzle-orm';
 
-let browserWindow: BrowserWindow;
+
+
+/**
+ * Prevent electron from running multiple instances.
+ */
+const isSingleInstance = app.requestSingleInstanceLock();
+if (!isSingleInstance) {
+  app.quit();
+  process.exit(0);
+}
 
 log.initialize();
 log.errorHandler.startCatching();
 
-await settings.loadSettings();
+let browserWindow: BrowserWindow;
+
+
 
 autoUpdater.channel = settings.values.client.releaseChannel;
 autoUpdater.logger = log;

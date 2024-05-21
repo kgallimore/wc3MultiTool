@@ -75,6 +75,7 @@ declare global {
         window.api.shell((event.target as HTMLAnchorElement).href);
       }
     });
+    window.api.send('toMain', {messageType: 'init'});
   }
   window.api.receive('fromMain', (data: WindowReceive) => {
     if (data.globalUpdate) {

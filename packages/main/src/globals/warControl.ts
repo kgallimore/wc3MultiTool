@@ -13,13 +13,12 @@ import {
   getActiveWindow,
   mouse,
   centerOf,
-  Point,
   sleep,
   getWindows,
 } from '@nut-tree/nut-js';
 
 import {join} from 'path';
-import {windowElementDescribedBy} from '@nut-tree/element-inspector/win';
+import {windowElementDescribedBy, elements} from '@nut-tree/element-inspector/win';
 import {clipboard} from 'electron';
 import {promisify} from 'util';
 import * as child from 'child_process';
@@ -122,22 +121,20 @@ class WarControl extends Global {
       const targetRegion = {asia: 1, eu: 2, us: 3, usw: 3, kr: 1, '': 0}[region];
       try {
         if (targetRegion > 0 && gameState.values.selfRegion !== region) {
+          //Get current region by getting full title of text box
+          //await battleNetWindow.find(elements.textBox({title: new RegExp(/Region:/), type: 'TextBox'}))
           this.info(`Changing region to ${region}`);
-          const changeRegionPosition = (await battleNetWindow.find(windowElementDescribedBy({id: 'play-btn'})))?.region;
-          if(!changeRegionPosition) return false;
-          changeRegionPosition.left += changeRegionPosition.width * 0.9;
-          changeRegionPosition.width = changeRegionPosition.width * 0.1;
-          const changeRegionPositionCenter = await centerOf(changeRegionPosition);
-          await mouse.setPosition(changeRegionPositionCenter);
-          await mouse.leftClick();
-          const newRegionPosition = new Point(
-            changeRegionPositionCenter.x,
-            changeRegionPositionCenter.y -
-              changeRegionPosition.height * targetRegion -
-              changeRegionPosition.height / 2,
-          );
-          await mouse.setPosition(newRegionPosition);
-          await mouse.leftClick();
+          const changeRegionButton = await battleNetWindow.find(elements.menuItem({title: 'Regions', role: 'widget'}));
+          if(changeRegionButton.region){
+            mouse.setPosition(await centerOf(changeRegionButton.region));
+            await mouse.leftClick();
+          }
+          const targetRegionTitle = {asia: 'Asia', eu: 'Europe', us: 'Americas', usw: 'Americas', kr: 'Asia', '': 0}[region];
+          const regionButtons = await battleNetWindow.find(elements.menuItem({id: new RegExp(/DropdownMenu_7_\d/,'g'),type: 'MenuItem', role: 'menuitem', title: targetRegionTitle}));
+          if(regionButtons.region){
+            mouse.setPosition(await centerOf(regionButtons.region));
+            await mouse.leftClick();
+          }
           this.info(`Changed region to ${region}`);
         }
         const playButtonElement = await battleNetWindow.find(windowElementDescribedBy({id: 'play-btn-main'}));

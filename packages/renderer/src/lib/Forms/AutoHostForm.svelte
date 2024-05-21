@@ -5,6 +5,7 @@
   import {appSettings} from '../../stores/page';
   import {type WindowSend, getTargetRegion} from '../../../../main/src/utility';
   import type {AppSettings, SettingsKeys} from '../../../../main/src/globals/settings';
+  import {generateBotAnnouncement} from '../../../../main/src/utility';
   import SettingsTextInput from '../SettingsTextInput.svelte';
   export let onInputChange: (
     e:
@@ -49,24 +50,7 @@
     $appSettings.autoHost.regionChangeTimeNA,
   );
 
-  $: botAnnouncement = `Welcome. I am a bot. ${
-    $appSettings.elo.available && $appSettings.elo.type !== 'off'
-      ? `I will fetch ELO from ${$appSettings.elo.type}. ${
-          $appSettings.elo.balanceTeams ? 'I will try to balance teams before we start.' : ''
-        }`
-      : ''
-  }${
-    ($appSettings.elo.type === 'off' || !$appSettings.elo.balanceTeams) &&
-    $appSettings.autoHost.shufflePlayers
-      ? 'I will shuffle players before we start.'
-      : ''
-  } ${
-    ['smartHost', 'rapidHost'].includes($appSettings.autoHost.type)
-      ? $appSettings.autoHost.minPlayers < 1
-        ? 'I will start when slots are full.'
-        : 'I will start with ' + $appSettings.autoHost.minPlayers + ' players.'
-      : ''
-  } ${$appSettings.autoHost.voteStart ? ' You can vote start with ?votestart' : ''}`;
+  $: botAnnouncement = generateBotAnnouncement($appSettings)
 </script>
 
 <form
@@ -175,6 +159,29 @@
                 tooltipContent="Will allow users to vote to start the game."
                 on:change={onInputChange}
               />
+              {#if $appSettings.autoHost.voteStart}
+                <SettingsCheckbox
+                  frontFacingName="Require All Teams for Votestart"
+                  key="voteStartTeamFill"
+                  checked={$appSettings.autoHost.voteStartTeamFill}
+                  tooltipContent="Will require all teams to have at least 1 player before players can vote start."
+                  on:change={onInputChange}
+                />
+                <SettingsCheckbox
+                frontFacingName="Votestart Required"
+                key="voteStartRequired"
+                checked={$appSettings.autoHost.voteStartRequired}
+                tooltipContent="Lobby may only start by votestart"
+                on:change={onInputChange}
+              />
+              {/if}
+              <SettingsCheckbox
+              frontFacingName="Swap Requests"
+              key="swapRequests"
+              checked={$appSettings.autoHost.swapRequests}
+              tooltipContent="Will allow users to request to swap places."
+              on:change={onInputChange}
+            />
               {#if $appSettings.elo.type === 'off' || !$appSettings.elo.balanceTeams}
                 <SettingsCheckbox
                   frontFacingName="Shuffle Players"
@@ -184,15 +191,7 @@
                   on:change={onInputChange}
                 />
               {/if}
-              {#if $appSettings.autoHost.voteStart}
-                <SettingsCheckbox
-                  frontFacingName="Require All Teams for Votestart"
-                  key="voteStartTeamFill"
-                  checked={$appSettings.autoHost.voteStartTeamFill}
-                  tooltipContent="Will require all teams to have at least 1 player before players can vote start."
-                  on:change={onInputChange}
-                />
-              {/if}
+
               {#if $appSettings.autoHost.type === 'smartHost' && $appSettings.autoHost.moveToSpec && $appSettings.autoHost.observers}
                 <SettingsCheckbox
                   frontFacingName="Intrusive check"
@@ -318,7 +317,7 @@
             on:change={updateNumber}
           />
         </div>
-        {#if ['rapidHost', 'smartHost'].includes($appSettings.autoHost.type)}
+        {#if ['rapidHost', 'smartHost'].includes($appSettings.autoHost.type) && !$appSettings.autoHost.voteStartRequired}
           <div class="col">
             <SettingsTextInput
               type="number"

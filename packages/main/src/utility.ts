@@ -299,12 +299,16 @@ export type AdminCommands =
   | 'unperm'
   | 'autohost'
   | 'autostart'
-  | 'balance';
+  | 'balance'
+  | 'help';
+
+  export type AllCommands = AdminCommands | 'help';
+  export type AllRoles = AdminRoles | null;
 
 export const commands: Record<
-  AdminCommands,
+AllCommands,
   {
-    minPermissions: AdminRoles;
+    minPermissions: AllRoles;
     requiresHost: boolean;
     requiresLobby: boolean;
     description: string;
@@ -465,6 +469,12 @@ export const commands: Record<
     description: 'Swaps two players',
     arguments: '(name|slotNumber) (name|slotNumber)',
   },
+  help: {
+    minPermissions: null,
+    requiresHost: false,
+    requiresLobby: false,
+    description: 'Gets a list of all of your available commands',
+  },
 };
 export const commandArray = Object.entries(commands);
 
@@ -474,3 +484,41 @@ export const hierarchy: {[key: string]: number} = {
   swapper: 2,
   baswapper: 1,
 };
+
+export function generateBotAnnouncement(settings: AppSettings, statsAvailable: boolean = false) {
+  if (['rapidHost', 'smartHost'].includes(settings.autoHost.type)) {
+    if (settings.autoHost.announceIsBot) {
+      let text = 'Welcome. I am a bot.';
+      if (statsAvailable && settings.elo.type !== 'off') {
+        text += ' I will fetch ELO from ' + settings.elo.type + '.';
+        if (settings.elo.balanceTeams) {
+          text += ' I will try to balance teams before we start.';
+        }
+      }
+      if (
+        (settings.elo.type === 'off' || !settings.elo.balanceTeams) &&
+        settings.autoHost.shufflePlayers
+      ) {
+        text += ' I will shuffle players before we start.';
+      }
+      if (settings.autoHost.voteStartRequired) {
+        text += ' You must ?votestart to start the game.';
+      } else if (settings.autoHost.minPlayers > 0) {
+        text += ` I will start with ${settings.autoHost.minPlayers} players.`;
+      } else {
+        text += ' I will start when the lobby is full.';
+      }
+      if (settings.autoHost.swapRequests) {
+        text += ' You may ?swapreq to swap spots.';
+      }
+      if (settings.autoHost.regionChangeType != 'off') {
+        text += ' I switch regions.';
+      }
+      return text;
+    }
+    if (settings.autoHost.announceCustom && settings.autoHost.customAnnouncement) {
+      return settings.autoHost.customAnnouncement;
+    }
+  }
+  return '';
+}
