@@ -503,11 +503,16 @@ export function generateBotAnnouncement(settings: AppSettings, statsAvailable: b
       }
       if (settings.autoHost.voteStartRequired) {
         text += ' You must ?votestart to start the game.';
-      } else if (settings.autoHost.minPlayers > 0) {
+      } else {
+        if (settings.autoHost.minPlayers > 0) {
         text += ` I will start with ${settings.autoHost.minPlayers} players.`;
       } else {
         text += ' I will start when the lobby is full.';
       }
+      if(settings.autoHost.voteStart){
+        text += ' You may ?votestart to start the game.';
+      }
+    }
       if (settings.autoHost.swapRequests) {
         text += ' You may ?swapreq to swap spots.';
       }

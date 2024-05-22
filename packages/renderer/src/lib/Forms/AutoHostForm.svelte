@@ -341,7 +341,7 @@
               minlength={0}
               maxlength={30}
               value={$appSettings.autoHost.moveToTeam}
-              on:change={updateNumber}
+              on:change={onInputChange}
               on:keydown={e => {
                 if (e.key === 'Enter') {
                   onInputChange(e);
