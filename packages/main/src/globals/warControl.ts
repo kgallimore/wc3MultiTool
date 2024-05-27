@@ -118,9 +118,9 @@ class WarControl extends Global {
       await battleNetWindow.focus();
       await battleNetWindow.move({x: 0, y: 0});
       await sleep(100);
-      const findCloseNews = await battleNetWindow.find(windowElementDescribedBy({title: 'Close', type: 'Button'}));
-      if(findCloseNews.region){
-        await mouse.setPosition(await centerOf(findCloseNews.region));
+      const findCloseNews = await battleNetWindow.findAll(windowElementDescribedBy({title: 'Close', type: 'Button'}));
+      if(findCloseNews[0]?.region){
+        await mouse.setPosition(await centerOf(findCloseNews[0]?.region));
         await mouse.leftClick();
       }
       const targetRegion = {asia: 1, eu: 2, us: 3, usw: 3, kr: 1, '': 0}[region];
