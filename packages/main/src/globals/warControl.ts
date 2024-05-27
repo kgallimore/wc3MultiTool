@@ -118,6 +118,11 @@ class WarControl extends Global {
       await battleNetWindow.focus();
       await battleNetWindow.move({x: 0, y: 0});
       await sleep(100);
+      const findCloseNews = await battleNetWindow.find(windowElementDescribedBy({title: 'Close', type: 'Button'}));
+      if(findCloseNews.region){
+        await mouse.setPosition(await centerOf(findCloseNews.region));
+        await mouse.leftClick();
+      }
       const targetRegion = {asia: 1, eu: 2, us: 3, usw: 3, kr: 1, '': 0}[region];
       try {
         if (targetRegion > 0 && gameState.values.selfRegion !== region) {
@@ -126,13 +131,13 @@ class WarControl extends Global {
           this.info(`Changing region to ${region}`);
           const changeRegionButton = await battleNetWindow.find(elements.menuItem({title: 'Regions', role: 'widget'}));
           if(changeRegionButton.region){
-            mouse.setPosition(await centerOf(changeRegionButton.region));
+            await mouse.setPosition(await centerOf(changeRegionButton.region));
             await mouse.leftClick();
           }
           const targetRegionTitle = {asia: 'Asia', eu: 'Europe', us: 'Americas', usw: 'Americas', kr: 'Asia', '': 0}[region];
           const regionButtons = await battleNetWindow.find(elements.menuItem({id: new RegExp(/DropdownMenu_7_\d/,'g'),type: 'MenuItem', role: 'menuitem', title: targetRegionTitle}));
           if(regionButtons.region){
-            mouse.setPosition(await centerOf(regionButtons.region));
+            await mouse.setPosition(await centerOf(regionButtons.region));
             await mouse.leftClick();
           }
           this.info(`Changed region to ${region}`);
