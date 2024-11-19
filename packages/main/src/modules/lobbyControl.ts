@@ -855,7 +855,7 @@ export class LobbyControl extends Module {
     const swaps = generateAutoBalance(
       this.exportDataStructure('Self export 5', true),
       this.microLobby.nonSpecPlayers,
-      this.settings.values.elo.excludeHostFromSwap ? this.microLobby.lobbyStatic.playerHost : false,
+      this.settings.values.elo.excludeHostFromSwap ? this.microLobby.lobbyStatic.playerHost ?? false : false,
       this.microLobby.exportMin(),
     );
 
